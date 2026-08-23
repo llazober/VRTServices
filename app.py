@@ -484,10 +484,33 @@ def init_communications_table():
         if conn:
             conn.close()
 
+def init_webhook_debug_table():
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS webhook_debug_log (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    payload_json TEXT,
+                    sender_email TEXT,
+                    recipient_email TEXT,
+                    subject TEXT,
+                    body_text TEXT,
+                    customer_id INT,
+                    status TEXT
+                );
+            """)
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error initializing webhook_debug_log table: {e}")
+
 try:
     init_customer_table()
     init_checklist_table()
     init_communications_table()
+    init_webhook_debug_table()
 except Exception as e:
     print(f"Startup table init exception: {e}")
 
@@ -4059,8 +4082,29 @@ LAST_INBOUND_DEBUG = {}
 
 @app.get("/api/debug/last-inbound")
 async def get_last_inbound_debug():
-    """Diagnostic endpoint to inspect raw payload and extraction of the last received webhook."""
-    return LAST_INBOUND_DEBUG or {"status": "No inbound webhook received since server start."}
+    """Diagnostic endpoint to inspect raw payload and extraction of the last received webhooks from DB."""
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM webhook_debug_log ORDER BY id DESC LIMIT 5;")
+            rows = cur.fetchall()
+            conn.close()
+            if rows:
+                logs = []
+                for r in rows:
+                    row = dict(r)
+                    if row.get("created_at"):
+                        row["created_at"] = str(row["created_at"])
+                    try:
+                        if row.get("payload_json"):
+                            row["payload_json"] = json.loads(row["payload_json"])
+                    except Exception:
+                        pass
+                    logs.append(row)
+                return {"count": len(logs), "last_webhooks": logs}
+    except Exception as e:
+        print(f"Error reading webhook_debug_log: {e}")
+    return LAST_INBOUND_DEBUG or {"status": "No inbound webhook logged in database."}
 
 @app.post("/api/webhooks/resend-inbound")
 async def resend_inbound_webhook(request: Request):
@@ -4345,6 +4389,17 @@ async def resend_inbound_webhook(request: Request):
             "attachments_count": len(attachments) if 'attachments' in locals() else 0
         }
 
+        # Save persistent log to PostgreSQL table
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'SUCCESS');
+                """, (json.dumps(raw_body), sender_email, recipient_email, subject, body_text, customer_id))
+                conn.commit()
+        except Exception as e_db_log:
+            print(f"Error logging to webhook_debug_log DB table: {e_db_log}")
+
         if conn:
             conn.close()
         return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
@@ -4357,6 +4412,17 @@ async def resend_inbound_webhook(request: Request):
             "error": str(e),
             "raw_body": raw_body if 'raw_body' in locals() else None
         }
+        try:
+            db_c = get_db_connection()
+            with db_c.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO webhook_debug_log (payload_json, status)
+                    VALUES (%s, %s);
+                """, (json.dumps(raw_body) if 'raw_body' in locals() else "{}", f"ERROR: {str(e)}"))
+                db_c.commit()
+            db_c.close()
+        except Exception:
+            pass
         return {"status": "error", "message": str(e)}
 
 # ── Health / debug ─────────────────────────────────────────────────────────────
