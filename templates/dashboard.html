@@ -3211,9 +3211,19 @@
                 if (listBody) {
                     listBody.innerHTML = logs.map(item => {
                         const isOut = item.direction === 'OUTBOUND';
-                        const dirBadge = isOut 
-                            ? '<span style="background: rgba(6, 182, 212, 0.2); color: #06b6d4; border: 1px solid rgba(6, 182, 212, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">OUTBOUND SENT</span>'
-                            : '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span>';
+                        const isRead = item.is_read || item.status === 'READ';
+                        const readDateStr = item.read_at ? new Date(item.read_at).toLocaleString() : '';
+
+                        let dirBadge = '';
+                        if (isOut) {
+                            dirBadge = '<span style="background: rgba(6, 182, 212, 0.2); color: #06b6d4; border: 1px solid rgba(6, 182, 212, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">OUTBOUND SENT</span>';
+                        } else {
+                            const readBadge = isRead
+                                ? `<span style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;" title="Message opened by team">👁️ READ ${readDateStr ? '(' + readDateStr + ')' : ''}</span>`
+                                : `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">🟢 UNREAD</span>`;
+                            
+                            dirBadge = '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span> ' + readBadge;
+                        }
 
                         const dateStr = item.created_at ? new Date(item.created_at).toLocaleString() : '';
                         let atts = item.attachments_json || [];

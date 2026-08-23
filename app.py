@@ -472,9 +472,11 @@ def init_communications_table():
                     attachments_json  JSONB DEFAULT '[]'::jsonb,
                     status            VARCHAR(20) DEFAULT 'DELIVERED',
                     is_read           BOOLEAN DEFAULT FALSE,
+                    read_at           TIMESTAMP,
                     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 ALTER TABLE customer_communications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+                ALTER TABLE customer_communications ADD COLUMN IF NOT EXISTS read_at TIMESTAMP;
             """)
             conn.commit()
             print("Customer communications table initialized successfully.")
@@ -4256,6 +4258,8 @@ async def get_customer_communications(customer_id: int, request: Request):
                 row = dict(r)
                 if row.get("created_at"):
                     row["created_at"] = str(row["created_at"])
+                if row.get("read_at"):
+                    row["read_at"] = str(row["read_at"])
                 history.append(row)
 
             return {"communications": history}
@@ -4278,7 +4282,7 @@ async def mark_customer_communications_read(customer_id: int, request: Request):
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE customer_communications
-                SET is_read = TRUE, status = 'READ'
+                SET is_read = TRUE, status = 'READ', read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
                 WHERE customer_id = %s AND direction = 'INBOUND';
             """, (customer_id,))
             conn.commit()
@@ -4339,7 +4343,7 @@ async def mark_all_communications_read(request: Request):
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE customer_communications
-                SET is_read = TRUE, status = 'READ'
+                SET is_read = TRUE, status = 'READ', read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
                 WHERE direction = 'INBOUND' AND (is_read = FALSE OR is_read IS NULL);
             """)
             conn.commit()
