@@ -2815,6 +2815,8 @@
             if (extBtn) extBtn.href = inlineViewUrl;
             if (dlBtn) dlBtn.href = rawUrl || inlineViewUrl;
 
+            document.body.appendChild(modal);
+            modal.style.zIndex = '2147483649';
             modal.style.display = 'flex';
         }
 
