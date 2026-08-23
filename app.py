@@ -4140,6 +4140,12 @@ async def resend_inbound_webhook(request: Request):
         raw_body = await request.json()
         print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
 
+        # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
+        if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
+            data = raw_body["data"]
+        else:
+            data = raw_body if isinstance(raw_body, dict) else {}
+
         # 1. Filter out webhook status events (like email.sent, email.delivered, email.bounced)
         event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
         if event_type and event_type not in ["email.received", "inbound", "email_received"]:
@@ -4151,12 +4157,6 @@ async def resend_inbound_webhook(request: Request):
         if raw_subj.startswith("📩 New Reply Received") or "Datalazo CRM Alerts" in str(raw_body):
             print(f"[RESEND WEBHOOK IGNORED] Ignoring self-generated CRM alert email")
             return {"status": "ignored", "reason": "Self-generated CRM alert email"}
-
-        # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
-        if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
-            data = raw_body["data"]
-        else:
-            data = raw_body if isinstance(raw_body, dict) else {}
 
         def extract_email_str(val):
             if isinstance(val, list):
