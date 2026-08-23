@@ -1621,6 +1621,9 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
 
         user_parent_name = get_user_parent_name(username) or company_name or "VRT Services"
 
+        env_reply_to = (os.environ.get("RESEND_REPLY_TO_EMAIL") or "").strip()
+        ctx_reply_to = env_reply_to if env_reply_to and "receive.datalazo.net" not in env_reply_to.lower() else "crm@ostooechei.resend.app"
+
         return {
             "client_config": client_conf,
             "username": username,
@@ -1631,7 +1634,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_connected": qbo_connected,
             "qbo_realm_id": qbo_realm_id or "",
             "qbo_company_name": qbo_company_name or "",
-            "resend_reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
+            "resend_reply_to_email": ctx_reply_to
         }
     except Exception as e:
         import traceback
@@ -1647,7 +1650,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_connected": False,
             "qbo_realm_id": "",
             "qbo_company_name": "",
-            "resend_reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app",
+            "resend_reply_to_email": "crm@ostooechei.resend.app",
             "error": f"Context notice: {str(e)}"
         }
 
@@ -3835,7 +3838,11 @@ async def send_customer_email(customer_id: int, request: Request):
     body = await request.json()
     subject = (body.get("subject") or "").strip()
     message_text = (body.get("message") or "").strip()
-    default_reply_to = os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
+    env_reply_to = (os.environ.get("RESEND_REPLY_TO_EMAIL") or "").strip()
+    if env_reply_to and "receive.datalazo.net" not in env_reply_to.lower():
+        default_reply_to = env_reply_to
+    else:
+        default_reply_to = "crm@ostooechei.resend.app"
     custom_reply_to = (body.get("reply_to") or "").strip()
     if not custom_reply_to or "@" not in custom_reply_to:
         custom_reply_to = default_reply_to
@@ -3948,6 +3955,8 @@ async def send_customer_email(customer_id: int, request: Request):
     except urllib.error.HTTPError as he_err:
         err_text = he_err.read().decode("utf-8")
         print(f"Resend HTTP Error: {err_text}")
+        if "not verified" in err_text.lower():
+            err_text += " (Note: To send without domain verification, use 'crm@ostooechei.resend.app' as Reply-To, or add & verify your custom domain at https://resend.com/domains)"
         raise HTTPException(status_code=500, detail=f"Resend Email API error: {err_text}")
     except Exception as e:
         print(f"Error sending email to customer {customer_id}: {e}")
