@@ -4285,6 +4285,11 @@ def extract_attachments_from_mime(raw_mime_str: str) -> list:
     return attachments_found
 
 @app.post("/api/webhooks/resend-inbound")
+@app.post("/api/webhook/resend-inbound")
+@app.post("/api/webhooks/resend")
+@app.post("/api/webhook/resend")
+@app.post("/api/inbound")
+@app.post("/api/resend/inbound")
 async def resend_inbound_webhook(request: Request):
     """Public webhook receiver for customer reply emails forwarded from Resend."""
     global LAST_INBOUND_DEBUG
