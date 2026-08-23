@@ -4295,6 +4295,26 @@ async def resend_inbound_webhook(request: Request):
         else:
             data = raw_body if isinstance(raw_body, dict) else {}
 
+        # Immediately record raw webhook payload to DB for diagnostics
+        try:
+            conn_dbg = get_db_connection()
+            with conn_dbg.cursor() as cur_dbg:
+                cur_dbg.execute("""
+                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED');
+                """, (
+                    json.dumps(raw_body),
+                    str(data.get("from") or raw_body.get("from") or ""),
+                    str(data.get("to") or raw_body.get("to") or ""),
+                    str(data.get("subject") or raw_body.get("subject") or ""),
+                    str(data.get("text") or data.get("html") or ""),
+                    None
+                ))
+                conn_dbg.commit()
+            conn_dbg.close()
+        except Exception as e_dbg_init:
+            print(f"[WEBHOOK DB LOG INIT ERROR]: {e_dbg_init}")
+
         # 1. Filter out webhook status events (like email.sent, email.delivered, email.bounced)
         event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
         if event_type and event_type not in ["email.received", "inbound", "email_received"]:
