@@ -2888,7 +2888,10 @@
             if (titleEl) titleEl.textContent = `📧 Send Email — ${cust.legal_name || cust.display_name}`;
             if (subtitleEl) subtitleEl.textContent = `Customer #: ${cust.custumer_number || cust.customer_id} | Email: ${cust.email || 'Not configured'}`;
             if (toEl) toEl.value = cust.email || '';
-            const defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'crm@ostooechei.resend.app';
+            let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'crm@ostooechei.resend.app';
+            if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
+                defaultReplyTo = 'crm@ostooechei.resend.app';
+            }
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
 

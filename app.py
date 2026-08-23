@@ -3844,7 +3844,7 @@ async def send_customer_email(customer_id: int, request: Request):
     else:
         default_reply_to = "crm@ostooechei.resend.app"
     custom_reply_to = (body.get("reply_to") or "").strip()
-    if not custom_reply_to or "@" not in custom_reply_to:
+    if not custom_reply_to or "@" not in custom_reply_to or "receive.datalazo.net" in custom_reply_to.lower():
         custom_reply_to = default_reply_to
 
     if not subject or not message_text:
@@ -3864,6 +3864,8 @@ async def send_customer_email(customer_id: int, request: Request):
             raise HTTPException(status_code=400, detail=f"Customer '{cust['legal_name']}' does not have a valid email address configured.")
 
         clean_reply_to = parse_clean_email(custom_reply_to) or default_reply_to
+        if "receive.datalazo.net" in clean_reply_to.lower():
+            clean_reply_to = "crm@ostooechei.resend.app"
 
         parent_name = (cust.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
         sender_display_name = f"{parent_name} Portal" if "Portal" not in parent_name else parent_name
