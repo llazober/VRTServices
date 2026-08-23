@@ -2126,10 +2126,29 @@ async def view_pdf_proxy(key: str, request: Request):
 
     bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
     try:
-        s3_obj = client.get_object(Bucket=bucket, Key=key)
-        filename = os.path.basename(key)
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=key)
+            actual_key = key
+        except Exception as e_direct:
+            filename = os.path.basename(key)
+            parent_prefix = key.split('/')[0] if '/' in key else ""
+            actual_key = None
+            if parent_prefix:
+                list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
+                for item in list_res.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            if actual_key:
+                print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
+                s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
+            else:
+                raise e_direct
+
+        filename = os.path.basename(actual_key or key)
         content_type = s3_obj.get("ContentType") or "application/pdf"
-        if key.lower().endswith(".pdf"):
+        if (actual_key or key).lower().endswith(".pdf"):
             content_type = "application/pdf"
 
         headers = {
@@ -2290,6 +2309,19 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
             ACL='private'
         )
         client.delete_object(Bucket=bucket, Key=old_key)
+
+        # Update customer_communications attachments_json references if present
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE customer_communications 
+                    SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
+                    WHERE customer_id = %s AND attachments_json::text LIKE %s;
+                """, (old_key, new_key, customer_id, f"%{old_key}%"))
+                conn.commit()
+                print(f"[RENAME DB SYNC] Updated attachments_json '{old_key}' -> '{new_key}' for customer {customer_id}")
+        except Exception as e_db_up:
+            print(f"Notice updating customer_communications attachments_json on rename: {e_db_up}")
 
         print(f"[DO SPACES] Renamed file '{old_key}' -> '{new_key}' for customer {customer_id}")
         return {
