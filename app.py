@@ -4055,9 +4055,18 @@ async def get_unread_communications_summary(request: Request):
         if conn:
             conn.close()
 
+LAST_INBOUND_DEBUG = {}
+
+@app.get("/api/debug/last-inbound")
+async def get_last_inbound_debug():
+    """Diagnostic endpoint to inspect raw payload and extraction of the last received webhook."""
+    return LAST_INBOUND_DEBUG or {"status": "No inbound webhook received since server start."}
+
 @app.post("/api/webhooks/resend-inbound")
 async def resend_inbound_webhook(request: Request):
     """Public webhook receiver for customer reply emails forwarded from Resend."""
+    global LAST_INBOUND_DEBUG
+    fetch_logs = []
     try:
         raw_body = await request.json()
         print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
@@ -4324,13 +4333,30 @@ async def resend_inbound_webhook(request: Request):
             except Exception as e_alert:
                 print(f"[TEAM ALERT ERROR] Failed to send team email alert: {e_alert}")
 
+        LAST_INBOUND_DEBUG = {
+            "received_at": str(datetime.now()),
+            "raw_body": raw_body,
+            "data": data,
+            "sender_email": sender_email,
+            "recipient_email": recipient_email,
+            "subject": subject,
+            "extracted_body_text": body_text,
+            "customer_id": customer_id,
+            "attachments_count": len(attachments) if 'attachments' in locals() else 0
+        }
+
         if conn:
             conn.close()
-        return {"status": "success", "customer_id": customer_id}
+        return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
     except Exception as e:
         import traceback
         print(f"Error handling Resend Inbound Webhook: {e}")
         traceback.print_exc()
+        LAST_INBOUND_DEBUG = {
+            "received_at": str(datetime.now()),
+            "error": str(e),
+            "raw_body": raw_body if 'raw_body' in locals() else None
+        }
         return {"status": "error", "message": str(e)}
 
 # ── Health / debug ─────────────────────────────────────────────────────────────
