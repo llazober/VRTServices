@@ -4294,6 +4294,42 @@ async def mark_customer_communications_read(customer_id: int, request: Request):
         if conn:
             conn.close()
 
+@app.post("/api/communications/{comm_id}/mark-single-read")
+async def mark_single_communication_read(comm_id: int, request: Request):
+    """Marks a single inbound communication record as read with timestamp."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE customer_communications
+                SET is_read = TRUE, status = 'READ', read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+                WHERE id = %s AND direction = 'INBOUND'
+                RETURNING id, customer_id, read_at;
+            """, (comm_id,))
+            updated = cur.fetchone()
+            conn.commit()
+            if not updated:
+                return {"success": False, "message": "Communication not found or already read"}
+            
+            read_at_str = str(updated["read_at"]) if updated.get("read_at") else None
+            return {
+                "success": True, 
+                "comm_id": comm_id, 
+                "customer_id": updated["customer_id"], 
+                "read_at": read_at_str
+            }
+    except Exception as e:
+        print(f"Error marking communication {comm_id} read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.get("/api/communications/unread-summary")
 async def get_unread_communications_summary(request: Request):
     username = get_current_username(request)
