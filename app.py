@@ -4159,6 +4159,35 @@ async def get_last_inbound_debug():
 
     return debug_info or LAST_INBOUND_DEBUG or {"status": "No inbound webhook logged in database."}
 
+def extract_attachments_from_mime(raw_mime_str: str) -> list:
+    """Extract all attached files (filename, bytes) directly from a raw RFC-822 MIME email string."""
+    attachments_found = []
+    if not raw_mime_str or not isinstance(raw_mime_str, str) or len(raw_mime_str) < 20:
+        return attachments_found
+    try:
+        import email as _email_mod
+        msg = _email_mod.message_from_string(raw_mime_str)
+        if msg.is_multipart():
+            for part in msg.walk():
+                cdisp = str(part.get('Content-Disposition') or '')
+                filename = part.get_filename()
+                if not filename and 'attachment' in cdisp.lower():
+                    filename = "attached_file.pdf"
+                if filename:
+                    import html as _html_lib
+                    clean_fn = _html_lib.unescape(filename).strip('"\' \t\r\n')
+                    clean_fn = os.path.basename(clean_fn)
+                    payload_bytes = part.get_payload(decode=True)
+                    if payload_bytes and len(payload_bytes) > 0:
+                        attachments_found.append({
+                            "filename": clean_fn,
+                            "bytes": payload_bytes
+                        })
+                        print(f"[MIME ATTACHMENT EXTRACTED]: '{clean_fn}' ({len(payload_bytes)} bytes)")
+    except Exception as e_mime_att:
+        print(f"[MIME ATTACHMENT EXTRACTION ERROR]: {e_mime_att}")
+    return attachments_found
+
 @app.post("/api/webhooks/resend-inbound")
 async def resend_inbound_webhook(request: Request):
     """Public webhook receiver for customer reply emails forwarded from Resend."""
@@ -4302,7 +4331,10 @@ async def resend_inbound_webhook(request: Request):
         body_text = extract_email_body(raw_body if isinstance(raw_body, dict) else {}, data if isinstance(data, dict) else {})
         attachments = (
             data.get("attachments") or 
+            data.get("files") or 
+            data.get("documents") or 
             (raw_body.get("attachments") if isinstance(raw_body, dict) else None) or 
+            (raw_body.get("files") if isinstance(raw_body, dict) else None) or 
             (raw_body.get("data", {}).get("attachments") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or 
             []
         )
@@ -4314,7 +4346,12 @@ async def resend_inbound_webhook(request: Request):
             (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or
             (raw_body.get("data", {}).get("id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
         )
-        resend_key = os.environ.get("RESEND_API_KEY")
+        resend_key = (
+            os.environ.get("RESEND_API_KEY") or 
+            os.environ.get("RESEND_KEY") or 
+            os.environ.get("RESEND_TOKEN") or 
+            ""
+        ).strip()
         if email_id and resend_key:
             try:
                 for endpoint_url in [
@@ -4400,14 +4437,38 @@ async def resend_inbound_webhook(request: Request):
 
             # Process & Upload File Attachments if present
             saved_attachments = []
-            if attachments and isinstance(attachments, list):
-                client, err = get_s3_client()
-                if client:
-                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-                    clean_name = sanitize_folder_name(legal_name)
-                    p_prefix = f"{sanitize_folder_name(parent_name)}/{clean_name}/" if parent_name else f"{clean_name}/"
-                    target_folder = f"{p_prefix}Tax Documents/"
+            
+            # 1. Try extracting attachments directly from raw RFC-822 MIME string if present
+            mime_att_list = []
+            for obj in [data, raw_body, fetched_data if 'fetched_data' in locals() and isinstance(fetched_data, dict) else {}]:
+                if isinstance(obj, dict):
+                    raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
+                    if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
+                        mime_att_list = extract_attachments_from_mime(raw_mime)
+                        if mime_att_list:
+                            break
 
+            client, err = get_s3_client()
+            if client:
+                bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                clean_name = sanitize_folder_name(legal_name)
+                p_prefix = f"{sanitize_folder_name(parent_name)}/{clean_name}/" if parent_name else f"{clean_name}/"
+                target_folder = f"{p_prefix}Tax Documents/"
+
+                # First upload any MIME extracted binary files
+                if mime_att_list:
+                    for m_att in mime_att_list:
+                        m_name = m_att.get("filename") or "attached_file.pdf"
+                        m_bytes = m_att.get("bytes")
+                        if m_bytes:
+                            file_key = f"{target_folder}{m_name}"
+                            client.put_object(Bucket=bucket, Key=file_key, Body=m_bytes, ACL='private')
+                            if file_key not in saved_attachments:
+                                saved_attachments.append(file_key)
+                            print(f"[INBOUND MIME ATTACHMENT SAVED TO S3] Key: '{file_key}'")
+
+                # Next process structured attachment objects list
+                if attachments and isinstance(attachments, list):
                     for att in attachments:
                         file_bytes = None
                         att_name = "attached_file.pdf"
@@ -4492,10 +4553,11 @@ async def resend_inbound_webhook(request: Request):
                         if file_bytes:
                             file_key = f"{target_folder}{att_name}"
                             client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-                            saved_attachments.append(file_key)
-                            print(f"[INBOUND ATTACHMENT SAVED] Key: '{file_key}'")
-                else:
-                    print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
+                            if file_key not in saved_attachments:
+                                saved_attachments.append(file_key)
+                            print(f"[INBOUND ATTACHMENT SAVED TO S3] Key: '{file_key}'")
+            else:
+                print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
 
             # Log inbound communication as UNREAD
             with conn.cursor() as cur:
