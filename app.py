@@ -4352,6 +4352,7 @@ async def resend_inbound_webhook(request: Request):
             os.environ.get("RESEND_TOKEN") or 
             ""
         ).strip()
+        fetched_data = {}
         if email_id and resend_key:
             try:
                 for endpoint_url in [
@@ -4373,11 +4374,18 @@ async def resend_inbound_webhook(request: Request):
                             fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
                             print(f"[RESEND FETCHED EMAIL DETAILS from {endpoint_url}]: {json.dumps(fetched_data)}")
                             if isinstance(fetched_data, dict):
+                                target_dict = fetched_data.get("data") if isinstance(fetched_data.get("data"), dict) else fetched_data
                                 if not body_text:
-                                    fetched_body = extract_email_body({}, fetched_data)
+                                    fetched_body = extract_email_body({}, target_dict)
                                     if fetched_body:
                                         body_text = fetched_body
-                                fetched_att = fetched_data.get("attachments") or fetched_data.get("files") or []
+                                fetched_att = (
+                                    target_dict.get("attachments") or 
+                                    target_dict.get("files") or 
+                                    target_dict.get("documents") or 
+                                    fetched_data.get("attachments") or 
+                                    []
+                                )
                                 if fetched_att:
                                     attachments = fetched_att
                                 break

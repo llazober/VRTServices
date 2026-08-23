@@ -3030,8 +3030,12 @@
                             : '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span>';
 
                         const dateStr = item.created_at ? new Date(item.created_at).toLocaleString() : '';
-                        let attHtml = '';
-                        const atts = item.attachments_json || [];
+                        let atts = item.attachments_json || [];
+                        if (typeof atts === 'string') {
+                            try { atts = JSON.parse(atts); } catch(e) { atts = []; }
+                        }
+                        if (!Array.isArray(atts)) atts = [];
+
                         if (atts.length > 0) {
                             attHtml = '<div style="margin-top: 8px; font-size: 0.75rem; color: #38bdf8;"><strong>📎 Saved Attachments:</strong> ' + atts.map(a => `<a href="#" onclick="openPdfViewerModal(event, '${a}', '${a.split('/').pop()}'); return false;" style="color: #38bdf8; text-decoration: underline; margin-right: 8px;">${a.split('/').pop()}</a>`).join(' ') + '</div>';
                         }
