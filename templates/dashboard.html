@@ -2169,7 +2169,9 @@
 
             if (modalTbody) modalTbody.innerHTML = rowsHtml;
             if (pageTbody) pageTbody.innerHTML = rowsHtml;
-            checkUnreadCommunicationsAlerts();
+            if (typeof checkUnreadCommunicationsAlerts === 'function') {
+                checkUnreadCommunicationsAlerts();
+            }
         }
 
         async function initCustomerStorage(event, customerId) {
