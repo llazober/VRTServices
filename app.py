@@ -506,11 +506,36 @@ def init_webhook_debug_table():
     except Exception as e:
         print(f"Error initializing webhook_debug_log table: {e}")
 
+def cleanup_duplicate_communications():
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM customer_communications 
+                WHERE subject ILIKE '📩 New Reply Received%' OR sender_email ILIKE 'notification@datalazo.net';
+            """)
+            cur.execute("""
+                DELETE FROM customer_communications c1
+                USING customer_communications c2
+                WHERE c1.id > c2.id 
+                  AND c1.customer_id = c2.customer_id 
+                  AND c1.direction = 'INBOUND' 
+                  AND c2.direction = 'INBOUND'
+                  AND c1.subject = c2.subject
+                  AND (c1.created_at - c2.created_at) < INTERVAL '5 minutes';
+            """)
+            conn.commit()
+        conn.close()
+        print("Cleaned up duplicate communication logs successfully.")
+    except Exception as e:
+        print(f"Error cleaning up communications: {e}")
+
 try:
     init_customer_table()
     init_checklist_table()
     init_communications_table()
     init_webhook_debug_table()
+    cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
 
@@ -4115,6 +4140,18 @@ async def resend_inbound_webhook(request: Request):
         raw_body = await request.json()
         print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
 
+        # 1. Filter out webhook status events (like email.sent, email.delivered, email.bounced)
+        event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
+        if event_type and event_type not in ["email.received", "inbound", "email_received"]:
+            print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
+            return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
+
+        # 2. Filter out self-generated system notification alerts
+        raw_subj = str(data.get("subject") or raw_body.get("subject") or "").strip()
+        if raw_subj.startswith("📩 New Reply Received") or "Datalazo CRM Alerts" in str(raw_body):
+            print(f"[RESEND WEBHOOK IGNORED] Ignoring self-generated CRM alert email")
+            return {"status": "ignored", "reason": "Self-generated CRM alert email"}
+
         # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
         if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
             data = raw_body["data"]
@@ -4297,6 +4334,19 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] No matching customer found for sender: '{sender_email}', cust_ref: '{cust_number}', subject: '{subject}'")
 
         if customer_id:
+            # Deduplicate by subject + customer_id within the last 2 minutes
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id FROM customer_communications
+                    WHERE customer_id = %s AND direction = 'INBOUND' AND subject = %s
+                      AND created_at > (CURRENT_TIMESTAMP - INTERVAL '2 minutes');
+                """, (customer_id, subject))
+                if cur.fetchone():
+                    print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email for customer {customer_id} within 2 mins")
+                    if conn:
+                        conn.close()
+                    return {"status": "ignored", "reason": "Duplicate inbound email within 2 minutes"}
+
             # Process & Upload File Attachments if present
             saved_attachments = []
             if attachments and isinstance(attachments, list):
