@@ -3234,22 +3234,32 @@
                             attHtml = '<div style="margin-top: 8px; font-size: 0.75rem; color: #38bdf8;"><strong>📎 Saved Attachments:</strong> ' + atts.map(a => `<a href="#" onclick="openPdfViewerModal(event, '${a}', '${a.split('/').pop()}'); return false;" style="color: #38bdf8; text-decoration: underline; margin-right: 8px;">${a.split('/').pop()}</a>`).join(' ') + '</div>';
                         }
 
-                                return `
-                                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                ${dirBadge}
-                                                <strong style="font-size: 0.88rem; color: #fff;">${item.subject || '(No Subject)'}</strong>
-                                            </div>
-                                            <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
-                                        </div>
-                                        <div style="font-size: 0.78rem; color: #94a3b8;">
-                                            From: <span style="color: #cbd5e1;">${item.sender_email}</span> | To: <span style="color: #cbd5e1;">${item.recipient_email}</span> ${item.reply_to_email ? `| Reply-To: <span style="color: #facc15;">${item.reply_to_email}</span>` : ''}
-                                        </div>
-                                        <div style="white-space: pre-wrap; font-size: 0.85rem; color: #e2e8f0; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-top: 4px;">${displayBody}</div>
-                                        ${attHtml}
+                        const displayBody = (item.body_text && item.body_text.trim()) 
+                            ? item.body_text 
+                            : (atts && atts.length > 0)
+                                ? '<span style="color: #38bdf8; font-style: italic;">📎 Attachment received (no text message body provided).</span>'
+                                : '<span style="color: #64748b; font-style: italic;">(No text body in email)</span>';
+
+                        const cardBorder = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)';
+                        const cardBg = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.04)' : 'rgba(255,255,255,0.03)';
+                        const cardClickAttr = (!isOut && !isRead) ? `onclick="markSingleCommRead(event, ${item.id})"` : '';
+
+                        return `
+                            <div id="commCard-${item.id}" ${cardClickAttr} style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; ${ (!isOut && !isRead) ? 'cursor: pointer;' : '' } transition: all 0.2s;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        ${dirBadge}
+                                        <strong style="font-size: 0.88rem; color: #fff;">${item.subject || '(No Subject)'}</strong>
                                     </div>
-                                `;
+                                    <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: #94a3b8;">
+                                    From: <span style="color: #cbd5e1;">${item.sender_email}</span> | To: <span style="color: #cbd5e1;">${item.recipient_email}</span> ${item.reply_to_email ? `| Reply-To: <span style="color: #facc15;">${item.reply_to_email}</span>` : ''}
+                                </div>
+                                <div style="white-space: pre-wrap; font-size: 0.85rem; color: #e2e8f0; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-top: 4px;">${displayBody}</div>
+                                ${attHtml}
+                            </div>
+                        `;
                     }).join('');
                 }
             } catch (err) {
