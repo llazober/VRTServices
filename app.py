@@ -1512,7 +1512,7 @@ async def logout(request: Request, reason: str = ""):
 def get_user_email(username: str) -> str:
     """Fetch the email address for the logged in user or parent client organization."""
     if not username:
-        return os.environ.get("RESEND_TO_EMAIL") or "luisdat@gmail.com"
+        return os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net"
 
     user = get_client_user(username)
     if user:
@@ -1540,7 +1540,7 @@ def get_user_email(username: str) -> str:
     if "@" in str(username):
         return str(username).strip()
 
-    return os.environ.get("RESEND_TO_EMAIL") or "luisdat@gmail.com"
+    return os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net"
 
 # ── Protected routes ───────────────────────────────────────────────────────────
 def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
@@ -4336,7 +4336,7 @@ async def resend_inbound_webhook(request: Request):
             # Send instant email alert notification to team/staff
             try:
                 resend_key = os.environ.get("RESEND_API_KEY")
-                team_email = parse_clean_email(os.environ.get("RESEND_TO_EMAIL") or "luisdat@gmail.com")
+                team_email = parse_clean_email(os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net")
                 raw_from = os.environ.get("RESEND_FROM_EMAIL", "notification@datalazo.net")
                 clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
                 if "receive.datalazo.net" in clean_from.lower():
