@@ -4282,7 +4282,66 @@ def extract_attachments_from_mime(raw_mime_str: str) -> list:
                         print(f"[MIME ATTACHMENT EXTRACTED]: '{clean_fn}' ({len(payload_bytes)} bytes)")
     except Exception as e_mime_att:
         print(f"[MIME ATTACHMENT EXTRACTION ERROR]: {e_mime_att}")
-    return attachments_found
+def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend_key: str) -> bytes:
+    """Attempt downloading attachment binary bytes from all Resend API endpoints."""
+    if not resend_key:
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {resend_key.strip()}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    identifiers = [att_id, att_name]
+    for ident in identifiers:
+        if not ident:
+            continue
+        
+        urls_to_try = [
+            f"https://api.resend.com/emails/receiving/{email_id}/attachments/{ident}",
+            f"https://api.resend.com/emails/receiving/{email_id}/attachments/{ident}/download",
+            f"https://api.resend.com/emails/{email_id}/attachments/{ident}",
+            f"https://api.resend.com/emails/{email_id}/attachments/{ident}/download",
+            f"https://api.resend.com/attachments/{ident}",
+            f"https://api.resend.com/attachments/{ident}/download",
+            f"https://api.resend.com/emails/inbound/{email_id}/attachments/{ident}"
+        ]
+
+        for target_url in urls_to_try:
+            try:
+                req = urllib.request.Request(target_url, headers=headers, method="GET")
+                with urllib.request.urlopen(req) as resp:
+                    raw_resp = resp.read()
+                    if not raw_resp:
+                        continue
+                    
+                    try:
+                        resp_json = json.loads(raw_resp.decode("utf-8"))
+                        if isinstance(resp_json, dict):
+                            b64_str = resp_json.get("content") or resp_json.get("data") or resp_json.get("content_base64") or resp_json.get("file")
+                            if b64_str and isinstance(b64_str, str):
+                                import base64
+                                decoded = base64.b64decode(b64_str)
+                                if decoded and len(decoded) > 0:
+                                    print(f"[RESEND ATTACHMENT DOWNLOAD SUCCESS]: {len(decoded)} bytes from {target_url}")
+                                    return decoded
+                            
+                            download_url = resp_json.get("url") or resp_json.get("download_url") or resp_json.get("href")
+                            if download_url and isinstance(download_url, str):
+                                req_dl = urllib.request.Request(download_url, headers=headers, method="GET")
+                                with urllib.request.urlopen(req_dl) as resp_dl:
+                                    dl_bytes = resp_dl.read()
+                                    if dl_bytes and len(dl_bytes) > 0:
+                                        print(f"[RESEND ATTACHMENT DIRECT URL DOWNLOAD SUCCESS]: {len(dl_bytes)} bytes from {download_url}")
+                                        return dl_bytes
+                    except Exception:
+                        if raw_resp and len(raw_resp) > 50:
+                            print(f"[RESEND ATTACHMENT BINARY DIRECT SUCCESS]: {len(raw_resp)} bytes from {target_url}")
+                            return raw_resp
+            except Exception as e_try:
+                print(f"[RESEND ATTACHMENT FETCH NOTICE] {target_url}: {e_try}")
+    
+    return None
 
 @app.post("/api/webhooks/resend-inbound")
 @app.post("/api/webhook/resend-inbound")
@@ -4551,18 +4610,18 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] No matching customer found for sender: '{sender_email}', cust_ref: '{cust_number}', subject: '{subject}'")
 
         if customer_id:
-            # Deduplicate by subject + customer_id within the last 2 minutes
+            # Deduplicate by subject + customer_id within the last 10 seconds
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT id FROM customer_communications
                     WHERE customer_id = %s AND direction = 'INBOUND' AND subject = %s
-                      AND created_at > (CURRENT_TIMESTAMP - INTERVAL '2 minutes');
+                      AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
                 """, (customer_id, subject))
                 if cur.fetchone():
-                    print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email for customer {customer_id} within 2 mins")
+                    print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email for customer {customer_id} within 10 secs")
                     if conn:
                         conn.close()
-                    return {"status": "ignored", "reason": "Duplicate inbound email within 2 minutes"}
+                    return {"status": "ignored", "reason": "Duplicate inbound email within 10 seconds"}
 
             # Process & Upload File Attachments if present
             saved_attachments = []
@@ -4643,41 +4702,9 @@ async def resend_inbound_webhook(request: Request):
                                 except Exception:
                                     pass
 
-                        # Fallback: If content is missing inline, fetch binary attachment from Resend API using att_id and att_name
+                        # Fallback: Fetch attachment using helper function
                         if not file_bytes and email_id and resend_key:
-                            for item_identifier in [att_id, att_name]:
-                                if not item_identifier:
-                                    continue
-                                for att_url in [
-                                    f"https://api.resend.com/emails/receiving/{email_id}/attachments/{item_identifier}",
-                                    f"https://api.resend.com/emails/{email_id}/attachments/{item_identifier}",
-                                    f"https://api.resend.com/emails/inbound/{email_id}/attachments/{item_identifier}"
-                                ]:
-                                    try:
-                                        fetch_att_req = urllib.request.Request(
-                                            att_url,
-                                            headers={
-                                                "Authorization": f"Bearer {resend_key.strip()}",
-                                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                            },
-                                            method="GET"
-                                        )
-                                        with urllib.request.urlopen(fetch_att_req) as fetch_att_resp:
-                                            res_raw = fetch_att_resp.read()
-                                            try:
-                                                att_json = json.loads(res_raw.decode("utf-8"))
-                                                if isinstance(att_json, dict) and att_json.get("content"):
-                                                    import base64
-                                                    file_bytes = base64.b64decode(att_json["content"])
-                                            except Exception:
-                                                file_bytes = res_raw
-                                            if file_bytes:
-                                                print(f"[ATTACHMENT FETCH SUCCESS] Downloaded {len(file_bytes)} bytes from {att_url}")
-                                                break
-                                    except Exception as e_att_fetch:
-                                        print(f"[ATTACHMENT FETCH NOTICE] {att_url}: {e_att_fetch}")
-                                if file_bytes:
-                                    break
+                            file_bytes = download_resend_attachment(email_id, att_id, att_name, resend_key)
 
                         if file_bytes:
                             file_key = f"{target_folder}{att_name}"
