@@ -4279,7 +4279,7 @@ async def resend_inbound_webhook(request: Request):
             []
         )
 
-        # If body_text is empty, try fetching full email object from Resend API if email_id is present
+        # Always fetch full email object and attachments from Resend API if email_id is present
         email_id = (
             data.get("email_id") or data.get("id") or 
             (raw_body.get("email_id") if isinstance(raw_body, dict) else None) or
@@ -4287,11 +4287,11 @@ async def resend_inbound_webhook(request: Request):
             (raw_body.get("data", {}).get("id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
         )
         resend_key = os.environ.get("RESEND_API_KEY")
-        if email_id and resend_key and not body_text:
+        if email_id and resend_key:
             try:
                 for endpoint_url in [
-                    f"https://api.resend.com/emails/{email_id}",
                     f"https://api.resend.com/emails/receiving/{email_id}",
+                    f"https://api.resend.com/emails/{email_id}",
                     f"https://api.resend.com/emails/inbound/{email_id}"
                 ]:
                     try:
@@ -4308,11 +4308,13 @@ async def resend_inbound_webhook(request: Request):
                             fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
                             print(f"[RESEND FETCHED EMAIL DETAILS from {endpoint_url}]: {json.dumps(fetched_data)}")
                             if isinstance(fetched_data, dict):
-                                fetched_body = extract_email_body({}, fetched_data)
-                                if fetched_body:
-                                    body_text = fetched_body
-                                if not attachments and fetched_data.get("attachments"):
-                                    attachments = fetched_data.get("attachments")
+                                if not body_text:
+                                    fetched_body = extract_email_body({}, fetched_data)
+                                    if fetched_body:
+                                        body_text = fetched_body
+                                fetched_att = fetched_data.get("attachments") or fetched_data.get("files") or []
+                                if fetched_att:
+                                    attachments = fetched_att
                                 break
                     except Exception as e_ep:
                         print(f"[RESEND FETCH ENDPOINT NOTICE] {endpoint_url}: {e_ep}")
