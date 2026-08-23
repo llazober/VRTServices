@@ -4296,17 +4296,25 @@ async def get_unread_communications_summary(request: Request):
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    user_parent = get_user_parent_name(username) or "VRT Services"
+
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
+            if user_parent.lower() == "vrt services":
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '')"
+            else:
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s))"
+
+            cur.execute(f"""
                 SELECT c.customer_id, cust.legal_name, COUNT(*) as unread_count
                 FROM customer_communications c
                 JOIN customer cust ON c.customer_id = cust.id
                 WHERE c.direction = 'INBOUND' AND (c.is_read = FALSE OR c.is_read IS NULL)
+                AND {parent_filter}
                 GROUP BY c.customer_id, cust.legal_name;
-            """)
+            """, (user_parent,))
             rows = cur.fetchall()
             unread_map = {r["customer_id"]: r for r in rows}
             total_unread = sum(r["unread_count"] for r in rows)
@@ -4314,6 +4322,31 @@ async def get_unread_communications_summary(request: Request):
     except Exception as e:
         print(f"Error fetching unread communications summary: {e}")
         return {"total_unread": 0, "unread_by_customer": {}}
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/communications/mark-all-read")
+async def mark_all_communications_read(request: Request):
+    """Marks all inbound unread communication records as read."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE customer_communications
+                SET is_read = TRUE, status = 'READ'
+                WHERE direction = 'INBOUND' AND (is_read = FALSE OR is_read IS NULL);
+            """)
+            conn.commit()
+        return {"success": True, "message": "All unread messages marked as read."}
+    except Exception as e:
+        print(f"Error marking all communications read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()
