@@ -1409,6 +1409,7 @@
     <script>
         const CURRENT_PARENT_NAME = {{ (parent_name or company_name or 'VRT Services') | tojson | safe }};
         const CURRENT_USER_EMAIL = {{ (user_email or username or 'luisdat@gmail.com') | tojson | safe }};
+        const RESEND_REPLY_TO_EMAIL = {{ (resend_reply_to_email or 'crm@ostooechei.resend.app') | tojson | safe }};
 
         let currentCoaRecords = [];
         let currentParentMappings = [];
@@ -2887,7 +2888,7 @@
             if (titleEl) titleEl.textContent = `📧 Send Email — ${cust.legal_name || cust.display_name}`;
             if (subtitleEl) subtitleEl.textContent = `Customer #: ${cust.custumer_number || cust.customer_id} | Email: ${cust.email || 'Not configured'}`;
             if (toEl) toEl.value = cust.email || '';
-            const defaultReplyTo = (typeof CURRENT_USER_EMAIL !== 'undefined' && CURRENT_USER_EMAIL && CURRENT_USER_EMAIL.includes('@')) ? CURRENT_USER_EMAIL : 'luisdat@gmail.com';
+            const defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'crm@ostooechei.resend.app';
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
 

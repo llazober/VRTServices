@@ -1630,7 +1630,8 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "software_name": software_name or "",
             "qbo_connected": qbo_connected,
             "qbo_realm_id": qbo_realm_id or "",
-            "qbo_company_name": qbo_company_name or ""
+            "qbo_company_name": qbo_company_name or "",
+            "resend_reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
         }
     except Exception as e:
         import traceback
@@ -1646,6 +1647,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_connected": False,
             "qbo_realm_id": "",
             "qbo_company_name": "",
+            "resend_reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app",
             "error": f"Context notice: {str(e)}"
         }
 
@@ -3833,9 +3835,10 @@ async def send_customer_email(customer_id: int, request: Request):
     body = await request.json()
     subject = (body.get("subject") or "").strip()
     message_text = (body.get("message") or "").strip()
+    default_reply_to = os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
     custom_reply_to = (body.get("reply_to") or "").strip()
     if not custom_reply_to or "@" not in custom_reply_to:
-        custom_reply_to = get_user_email(username)
+        custom_reply_to = default_reply_to
 
     if not subject or not message_text:
         raise HTTPException(status_code=400, detail="Subject and message text are required.")
@@ -3853,7 +3856,7 @@ async def send_customer_email(customer_id: int, request: Request):
         if not recipient_email:
             raise HTTPException(status_code=400, detail=f"Customer '{cust['legal_name']}' does not have a valid email address configured.")
 
-        clean_reply_to = parse_clean_email(custom_reply_to) or parse_clean_email(get_user_email(username))
+        clean_reply_to = parse_clean_email(custom_reply_to) or default_reply_to
 
         parent_name = (cust.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
         sender_display_name = f"{parent_name} Portal" if "Portal" not in parent_name else parent_name
@@ -4263,7 +4266,8 @@ async def health_check():
             "status": resend_status,
             "detail": resend_detail,
             "from_email": from_email,
-            "to_email": to_email
+            "to_email": to_email,
+            "reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
         }
     }
 
