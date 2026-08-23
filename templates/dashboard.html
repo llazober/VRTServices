@@ -3187,6 +3187,7 @@
                 console.error("Error marking communications read:", e_mark);
             }
 
+            try {
                 const res = await fetch(`/api/customers/${cid}/communications`);
                 const data = await res.json();
                 const logs = data.communications || [];
