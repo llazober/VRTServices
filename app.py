@@ -4171,6 +4171,16 @@ async def resend_inbound_webhook(request: Request):
         raw_recipient = extract_email_str(data.get("to") or data.get("recipient"))
         recipient_email = parse_clean_email(raw_recipient) or raw_recipient
 
+        def clean_html_to_text(html_str: str) -> str:
+            if not html_str or not isinstance(html_str, str):
+                return ""
+            import html as _html_lib
+            text = re.sub(r'<(?:br|p|div|tr|h\d|li)[^>]*>', '\n', html_str, flags=re.IGNORECASE)
+            text = re.sub(r'<[^>]+>', '', text)
+            text = _html_lib.unescape(text)
+            text = re.sub(r'\n\s*\n', '\n\n', text).strip()
+            return text
+
         def extract_email_body(raw_b: dict, d: dict) -> str:
             # 1. Try MIME raw string parsing if present
             for obj in [d, raw_b]:
@@ -4209,33 +4219,31 @@ async def resend_inbound_webhook(request: Request):
                             if plain_body:
                                 return plain_body
                             if html_body:
-                                clean = re.sub(r'<(?:br|p|div|tr)[^>]*>', '\n', html_body, flags=re.IGNORECASE)
-                                clean = re.sub(r'<[^>]+>', '', clean)
-                                import html as _html_lib
-                                clean = _html_lib.unescape(clean)
-                                clean = re.sub(r'\n\s*\n', '\n\n', clean).strip()
-                                if clean:
-                                    return clean
+                                cleaned = clean_html_to_text(html_body)
+                                if cleaned:
+                                    return cleaned
                         except Exception as e_mime:
                             print(f"[MIME PARSE NOTICE]: {e_mime}")
 
-            # 2. Try direct key inspection
+            # 2. Check plain text fields first across objects
             for obj in [d, raw_b]:
                 if isinstance(obj, dict):
-                    for key in ["text", "plain", "text_body", "body_text", "snippet", "preview", "message", "body", "content"]:
+                    for key in ["text", "plain", "text_body", "body_text", "snippet", "preview"]:
                         val = obj.get(key)
                         if val and isinstance(val, str) and val.strip():
-                            if val.strip().startswith("<") and ">" in val:
-                                clean = re.sub(r'<(?:br|p|div|tr)[^>]*>', '\n', val, flags=re.IGNORECASE)
-                                clean = re.sub(r'<[^>]+>', '', clean)
-                                import html as _html_lib
-                                clean = _html_lib.unescape(clean).strip()
-                                if clean:
-                                    return clean
-                            else:
-                                return val.strip()
+                            return val.strip()
 
-            # 3. Recursive dictionary inspection
+            # 3. Check HTML fields next
+            for obj in [d, raw_b]:
+                if isinstance(obj, dict):
+                    for key in ["html", "html_body", "body", "content", "message"]:
+                        val = obj.get(key)
+                        if val and isinstance(val, str) and val.strip():
+                            cleaned = clean_html_to_text(val)
+                            if cleaned:
+                                return cleaned
+
+            # 4. Deep recursive inspection
             def search_dict(target, depth=0):
                 if depth > 4 or not isinstance(target, dict):
                     return ""
@@ -4244,11 +4252,9 @@ async def resend_inbound_webhook(request: Request):
                         continue
                     if isinstance(v, str) and len(v.strip()) > 0:
                         if k.lower() in ["text", "plain", "html", "body", "content", "message", "snippet", "preview"]:
-                            clean = re.sub(r'<[^>]+>', '', v)
-                            import html as _html_lib
-                            clean = _html_lib.unescape(clean).strip()
-                            if clean:
-                                return clean
+                            cleaned = clean_html_to_text(v)
+                            if cleaned:
+                                return cleaned
                     elif isinstance(v, dict):
                         res = search_dict(v, depth + 1)
                         if res:
@@ -4269,23 +4275,33 @@ async def resend_inbound_webhook(request: Request):
         attachments = data.get("attachments") or []
 
         # If body_text is empty, try fetching full email object from Resend API if email_id is present
-        email_id = data.get("email_id") or data.get("id") or (raw_body.get("email_id") if isinstance(raw_body, dict) else None)
+        email_id = (
+            data.get("email_id") or data.get("id") or 
+            (raw_body.get("email_id") if isinstance(raw_body, dict) else None) or
+            (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or
+            (raw_body.get("data", {}).get("id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
+        )
         resend_key = os.environ.get("RESEND_API_KEY")
         if email_id and resend_key and not body_text:
             try:
-                for endpoint_url in [f"https://api.resend.com/emails/{email_id}", f"https://api.resend.com/emails/receiving/{email_id}"]:
+                for endpoint_url in [
+                    f"https://api.resend.com/emails/{email_id}",
+                    f"https://api.resend.com/emails/receiving/{email_id}",
+                    f"https://api.resend.com/emails/inbound/{email_id}"
+                ]:
                     try:
                         fetch_req = urllib.request.Request(
                             endpoint_url,
                             headers={
                                 "Authorization": f"Bearer {resend_key.strip()}",
-                                "Content-Type": "application/json"
+                                "Content-Type": "application/json",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                             },
                             method="GET"
                         )
                         with urllib.request.urlopen(fetch_req) as fetch_resp:
                             fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
-                            print(f"[RESEND FETCHED EMAIL DETAILS]: {json.dumps(fetched_data)}")
+                            print(f"[RESEND FETCHED EMAIL DETAILS from {endpoint_url}]: {json.dumps(fetched_data)}")
                             if isinstance(fetched_data, dict):
                                 fetched_body = extract_email_body({}, fetched_data)
                                 if fetched_body:
