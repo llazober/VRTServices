@@ -1417,6 +1417,7 @@
         let historySortKey = 'accountNumber';
         let historySortOrder = 'asc';
         let supportAttachedFile = null;
+        var currentUnreadMap = {};
 
         document.addEventListener('DOMContentLoaded', () => {
             const toggleBtn = document.getElementById('toggleSidebar');
@@ -2141,7 +2142,7 @@
                     </td>
                     <td style="padding: 12px 16px; font-weight: 700; color: #fff;">
                         ${c.legal_name}
-                        <span class="unread-reply-dot" id="unreadDot-${c.id}" data-cid="${c.id}" style="display: ${ (currentUnreadMap && currentUnreadMap[c.id] && currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; width: 10px; height: 10px; background-color: #22c55e; border-radius: 50%; margin-left: 6px; box-shadow: 0 0 10px #22c55e; vertical-align: middle;" title="New unread reply received!"></span>
+                        <span class="unread-reply-dot" id="unreadDot-${c.id}" data-cid="${c.id}" style="display: ${ (window.currentUnreadMap && window.currentUnreadMap[c.id] && window.currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; width: 10px; height: 10px; background-color: #22c55e; border-radius: 50%; margin-left: 6px; box-shadow: 0 0 10px #22c55e; vertical-align: middle;" title="New unread reply received!"></span>
                         <br><a href="#" onclick="openCustomerStorageModal(event, ${c.id}); return false;" style="font-size: 0.68rem; color: #38bdf8; text-decoration: underline; font-family: monospace; font-weight: 700;" title="Open customer files in CRM storage modal">📂 ${c.do_folder_path || 'Storage Folder'}</a>
                     </td>
                     <td style="padding: 12px 16px; color: #94a3b8;">${c.display_name || '—'}</td>
@@ -2158,7 +2159,7 @@
                     <td style="padding: 12px 16px; text-align: right; white-space: nowrap;">
                         <button onclick="openCustomerChecklistModal(event, ${c.id})" style="padding: 5px 12px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="View & Manage Monthly Bookkeeping Workflow Checklist">📋 Checklist</button>
                         <button onclick="openSendCustomerEmailModal(event, ${c.id})" style="padding: 5px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="Send Email Message to Customer">📧 Email</button>
-                        <button onclick="openCustomerCommsHistoryModal(${c.id})" style="padding: 5px 12px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="View Outbound Emails & Customer Replies">💬 History <span class="unread-history-badge" id="unreadHistoryDot-${c.id}" data-cid="${c.id}" style="display: ${ (currentUnreadMap && currentUnreadMap[c.id] && currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; background: #22c55e; color: #000; font-size: 0.65rem; padding: 1px 5px; border-radius: 10px; margin-left: 4px; font-weight: 900;">NEW</span></button>
+                        <button onclick="openCustomerCommsHistoryModal(${c.id})" style="padding: 5px 12px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="View Outbound Emails & Customer Replies">💬 History <span class="unread-history-badge" id="unreadHistoryDot-${c.id}" data-cid="${c.id}" style="display: ${ (window.currentUnreadMap && window.currentUnreadMap[c.id] && window.currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; background: #22c55e; color: #000; font-size: 0.65rem; padding: 1px 5px; border-radius: 10px; margin-left: 4px; font-weight: 900;">NEW</span></button>
                         <button onclick="openCustomerStorageModal(event, ${c.id})" style="padding: 5px 12px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="Open customer storage file manager">📂 Open Folder</button>
                         <button onclick="initCustomerStorage(event, ${c.id})" style="padding: 5px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;" title="Initialize Storage Folders">${c.do_storage_status === 'Initialized' ? '⚡ Re-Init' : '☁️ Init Storage'}</button>
                         <button onclick="editCustomerRecord(${c.id})" style="padding: 5px 12px; background: rgba(225, 0, 255, 0.15); border: 1px solid rgba(225, 0, 255, 0.35); color: #e100ff; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
@@ -3112,8 +3113,6 @@
                 }
             }
         }
-
-        let currentUnreadMap = {};
 
         async function checkUnreadCommunicationsAlerts() {
             try {
