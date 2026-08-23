@@ -4157,7 +4157,73 @@ async def get_last_inbound_debug():
         print(f"Error in debug endpoint: {e}")
         debug_info["endpoint_err"] = str(e)
 
-    return debug_info or LAST_INBOUND_DEBUG or {"status": "No inbound webhook logged in database."}
+@app.get("/api/debug/test-resend-fetch")
+async def test_resend_fetch_debug():
+    """Live diagnostic endpoint to test Resend API key & fetch responses for recent emails."""
+    resend_key = (
+        os.environ.get("RESEND_API_KEY") or 
+        os.environ.get("RESEND_KEY") or 
+        os.environ.get("RESEND_TOKEN") or 
+        ""
+    ).strip()
+    
+    result = {
+        "resend_key_configured": bool(resend_key),
+        "resend_key_prefix": (resend_key[:6] + "...") if resend_key else "NONE",
+        "api_responses": {}
+    }
+    
+    if not resend_key:
+        result["error"] = "RESEND_API_KEY environment variable is not configured on the server."
+        return result
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT payload_json FROM webhook_debug_log ORDER BY id DESC LIMIT 5;")
+            rows = cur.fetchall()
+            conn.close()
+            
+            email_ids = []
+            for r in rows:
+                try:
+                    payload = json.loads(r["payload_json"])
+                    if isinstance(payload, dict):
+                        d = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+                        eid = d.get("email_id") or d.get("id")
+                        if eid and eid not in email_ids:
+                            email_ids.append(eid)
+                except Exception:
+                    pass
+
+            result["found_email_ids"] = email_ids
+
+            for eid in email_ids[:2]:
+                for endpoint_url in [
+                    f"https://api.resend.com/emails/receiving/{eid}",
+                    f"https://api.resend.com/emails/{eid}"
+                ]:
+                    try:
+                        req = urllib.request.Request(
+                            endpoint_url,
+                            headers={
+                                "Authorization": f"Bearer {resend_key}",
+                                "Content-Type": "application/json",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                            },
+                            method="GET"
+                        )
+                        with urllib.request.urlopen(req) as resp:
+                            res_text = resp.read().decode("utf-8")
+                            result["api_responses"][endpoint_url] = json.loads(res_text)
+                    except urllib.error.HTTPError as he:
+                        result["api_responses"][endpoint_url] = f"HTTP {he.code}: {he.reason}"
+                    except Exception as ex:
+                        result["api_responses"][endpoint_url] = f"Error: {str(ex)}"
+    except Exception as e:
+        result["exception"] = str(e)
+
+    return result
 
 def extract_attachments_from_mime(raw_mime_str: str) -> list:
     """Extract all attached files (filename, bytes) directly from a raw RFC-822 MIME email string."""
