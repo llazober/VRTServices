@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Keys / credentials - NEVER commit these
+*.json
+!datalazo.config.json
+!requirements*.txt
+.env
+.env.*
+
+# Temp files
+*.csv
+*.png
+*.pdf
+scratch_*.js
+temp_*/
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,11 @@
+pymupdf
+pandas
+google-cloud-vision
+google-auth
+fastapi
+uvicorn
+python-multipart
+jinja2
+psycopg2-binary
+boto3
+python-dotenv
