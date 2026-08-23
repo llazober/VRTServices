@@ -4272,7 +4272,12 @@ async def resend_inbound_webhook(request: Request):
 
         subject = str(data.get("subject") or "").strip()
         body_text = extract_email_body(raw_body if isinstance(raw_body, dict) else {}, data if isinstance(data, dict) else {})
-        attachments = data.get("attachments") or []
+        attachments = (
+            data.get("attachments") or 
+            (raw_body.get("attachments") if isinstance(raw_body, dict) else None) or 
+            (raw_body.get("data", {}).get("attachments") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or 
+            []
+        )
 
         # If body_text is empty, try fetching full email object from Resend API if email_id is present
         email_id = (
@@ -4375,11 +4380,50 @@ async def resend_inbound_webhook(request: Request):
 
                     for att in attachments:
                         if isinstance(att, dict):
-                            att_name = att.get("filename") or "attached_file.pdf"
-                            att_content_b64 = att.get("content") or ""
+                            att_name = att.get("filename") or att.get("name") or "attached_file.pdf"
+                            att_content_b64 = att.get("content") or att.get("data") or ""
+                            att_id = att.get("id")
+                            file_bytes = None
+
                             if att_content_b64:
-                                import base64
-                                file_bytes = base64.b64decode(att_content_b64)
+                                try:
+                                    import base64
+                                    file_bytes = base64.b64decode(att_content_b64)
+                                except Exception as e_b64:
+                                    print(f"[ATTACHMENT B64 DECODE ERROR]: {e_b64}")
+
+                            # Fallback: If content is missing inline, fetch binary attachment from Resend API
+                            if not file_bytes and (att_id or att_name) and email_id and resend_key:
+                                for att_url in [
+                                    f"https://api.resend.com/emails/receiving/{email_id}/attachments/{att_id or att_name}",
+                                    f"https://api.resend.com/emails/{email_id}/attachments/{att_id or att_name}",
+                                    f"https://api.resend.com/emails/inbound/{email_id}/attachments/{att_id or att_name}"
+                                ]:
+                                    try:
+                                        fetch_att_req = urllib.request.Request(
+                                            att_url,
+                                            headers={
+                                                "Authorization": f"Bearer {resend_key.strip()}",
+                                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                            },
+                                            method="GET"
+                                        )
+                                        with urllib.request.urlopen(fetch_att_req) as fetch_att_resp:
+                                            res_raw = fetch_att_resp.read()
+                                            try:
+                                                att_json = json.loads(res_raw.decode("utf-8"))
+                                                if isinstance(att_json, dict) and att_json.get("content"):
+                                                    import base64
+                                                    file_bytes = base64.b64decode(att_json["content"])
+                                            except Exception:
+                                                file_bytes = res_raw
+                                            if file_bytes:
+                                                print(f"[ATTACHMENT FETCH SUCCESS] Downloaded {len(file_bytes)} bytes from {att_url}")
+                                                break
+                                    except Exception as e_att_fetch:
+                                        print(f"[ATTACHMENT FETCH NOTICE] {att_url}: {e_att_fetch}")
+
+                            if file_bytes:
                                 file_key = f"{target_folder}{att_name}"
                                 client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
                                 saved_attachments.append(file_key)
