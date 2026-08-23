@@ -4726,8 +4726,9 @@ async def resend_inbound_webhook(request: Request):
             client, err = get_s3_client()
             if client:
                 bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-                clean_name = sanitize_folder_name(legal_name)
-                p_prefix = f"{sanitize_folder_name(parent_name)}/{clean_name}/" if parent_name else f"{clean_name}/"
+                p_prefix = get_customer_root_folder_path(cust) if cust else (f"{sanitize_folder_name(parent_name)}/{sanitize_folder_name(legal_name)}/" if parent_name else f"{sanitize_folder_name(legal_name)}/")
+                if not p_prefix.endswith('/'):
+                    p_prefix += '/'
 
                 # Routing rule: For all customer business types, save incoming email attachments to the Inbox/ subfolder
                 target_folder = f"{p_prefix}Inbox/"
