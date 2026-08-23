@@ -1967,6 +1967,27 @@ async def get_customer_storage_files(customer_id: int, request: Request, prefix:
                     "is_folder": True
                 })
 
+        # Guarantee core standard folders are always present and visible in customer root
+        if current_prefix == root_folder_path:
+            existing_folder_names = {sf["name"].rstrip('/') for sf in subfolders}
+            is_individual = (cust.get("customer_type") or "").strip().lower() == "individual"
+            standard_folders = ["Inbox", "Tax Documents"] if is_individual else ["Inbox", "Bank Statements", "Check Images", "Tax Documents"]
+            
+            for std_f in standard_folders:
+                if std_f not in existing_folder_names:
+                    std_prefix = f"{root_folder_path}{std_f}/"
+                    subfolders.append({
+                        "name": std_f,
+                        "prefix": std_prefix,
+                        "is_folder": True
+                    })
+                    try:
+                        client.put_object(Bucket=bucket, Key=std_prefix, Body=b'')
+                    except Exception:
+                        pass
+
+            subfolders = sorted(subfolders, key=lambda x: x["name"].lower())
+
         files = []
         for obj in response.get('Contents', []):
             key = obj['Key']
@@ -2342,6 +2363,12 @@ async def move_customer_storage_file(customer_id: int, request: Request):
             ACL='private'
         )
         client.delete_object(Bucket=bucket, Key=source_key)
+
+        # Ensure target folder placeholder key is preserved
+        try:
+            client.put_object(Bucket=bucket, Key=target_folder_key, Body=b'')
+        except Exception:
+            pass
 
         try:
             with conn.cursor() as cur:
