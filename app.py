@@ -4157,6 +4157,10 @@ async def get_last_inbound_debug():
         print(f"Error in debug endpoint: {e}")
         debug_info["endpoint_err"] = str(e)
 
+    if not debug_info:
+        debug_info = {"status": "No webhooks or inbound communications recorded yet in DB."}
+    return debug_info
+
 @app.get("/api/debug/test-resend-fetch")
 async def test_resend_fetch_debug():
     """Live diagnostic endpoint to test Resend API key & fetch responses for recent emails."""
