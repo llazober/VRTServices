@@ -2590,7 +2590,7 @@
         let pendingMoveSourceKey = null;
         let pendingMoveFileName = null;
 
-        function openMoveFileModal(event, sourceKey, fileName) {
+        async function openMoveFileModal(event, sourceKey, fileName) {
             if (event) {
                 event.stopPropagation();
                 if (event.preventDefault) event.preventDefault();
@@ -2603,19 +2603,9 @@
             const nameEl = document.getElementById('moveFileTargetName');
             if (nameEl) nameEl.textContent = fileName;
 
-            const rootPath = (currentStorageRootFolder || '').replace(/\/$/, '') + '/';
             const selectEl = document.getElementById('moveFileFolderSelect');
             if (selectEl) {
-                selectEl.innerHTML = `
-                    <option value="Inbox/">📥 Inbox (Received Attachments)</option>
-                    <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
-                    <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
-                    <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
-                    <option value="Bank Statements/">📁 Bank Statements</option>
-                    <option value="Check Images/">📁 Check Images</option>
-                    <option value="custom">✏️ Enter Custom Folder Path...</option>
-                `;
-                selectEl.value = "Inbox/";
+                selectEl.innerHTML = `<option value="">⌛ Loading available folders...</option>`;
             }
 
             const customGroup = document.getElementById('moveFileCustomGroup');
@@ -2626,6 +2616,33 @@
                 document.body.appendChild(modal);
                 modal.style.zIndex = '2147483649';
                 modal.style.display = 'flex';
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/folders`);
+                const data = await res.json();
+                if (res.ok && data.folders && selectEl) {
+                    let optionsHtml = `<option value="">🏠 Customer Root (${data.parent_name ? data.parent_name + ' / ' : ''}${data.customer_name})</option>`;
+                    data.folders.forEach(fPath => {
+                        let icon = '📁';
+                        if (fPath.toLowerCase().startsWith('inbox')) icon = '📥';
+                        else if (fPath.toLowerCase().startsWith('tax')) icon = '📂';
+                        else if (fPath.toLowerCase().startsWith('bank')) icon = '📊';
+                        else if (fPath.toLowerCase().startsWith('check')) icon = '🧾';
+
+                        optionsHtml += `<option value="${fPath}">${icon} ${fPath}</option>`;
+                    });
+                    optionsHtml += `<option value="custom">✏️ Enter Custom Folder Path...</option>`;
+                    selectEl.innerHTML = optionsHtml;
+
+                    if (data.folders.includes('Inbox/')) {
+                        selectEl.value = 'Inbox/';
+                    } else if (data.folders.length > 0) {
+                        selectEl.value = data.folders[0];
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching folders for move modal:", err);
             }
         }
 

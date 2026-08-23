@@ -2019,6 +2019,76 @@ async def get_customer_storage_files(customer_id: int, request: Request, prefix:
         if conn:
             conn.close()
 
+@app.get("/api/customers/{customer_id}/storage/folders")
+async def get_customer_storage_folders(customer_id: int, request: Request):
+    """Returns a list of all existing subfolders under the customer's root path in DigitalOcean Spaces."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            if not cust:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+        root_folder = get_customer_root_folder_path(cust)
+        if not root_folder.endswith('/'):
+            root_folder += '/'
+
+        client, err = get_s3_client()
+        if not client:
+            raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+
+        response = client.list_objects_v2(Bucket=bucket, Prefix=root_folder)
+
+        folder_set = set()
+        is_individual = (cust.get("customer_type") or "").strip().lower() == "individual"
+        if is_individual:
+            folder_set.add("Inbox/")
+            folder_set.add("Tax Documents/")
+        else:
+            folder_set.add("Inbox/")
+            folder_set.add("Bank Statements/")
+            folder_set.add("Check Images/")
+            folder_set.add("Tax Documents/")
+
+        for obj in response.get('Contents', []):
+            key = obj['Key']
+            if key.startswith(root_folder):
+                rel_path = key[len(root_folder):]
+                if not rel_path:
+                    continue
+                parts = rel_path.split('/')
+                cur_acc = ""
+                for idx, part in enumerate(parts):
+                    if idx < len(parts) - 1 or key.endswith('/'):
+                        if part:
+                            cur_acc += part + "/"
+                            folder_set.add(cur_acc)
+
+        sorted_folders = sorted(list(folder_set))
+        return {
+            "customer_id": customer_id,
+            "root_folder": root_folder,
+            "parent_name": cust.get("parent_name") or "VRT Services",
+            "customer_name": cust.get("legal_name"),
+            "folders": sorted_folders
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error fetching customer storage folders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.get("/api/storage/view-pdf")
 async def view_pdf_proxy(key: str, request: Request):
     """Streams a PDF document from DigitalOcean Spaces with inline Content-Disposition for in-app modal previewing."""
