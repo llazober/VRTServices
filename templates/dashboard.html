@@ -2468,7 +2468,7 @@
                     e.stopPropagation();
                     const key = btn.getAttribute('data-key');
                     const name = btn.getAttribute('data-name');
-                    moveStorageFile(e, key, name);
+                    openMoveFileModal(e, key, name);
                 });
             });
             tbody.querySelectorAll('.storage-delete-file-btn').forEach(btn => {
@@ -2587,58 +2587,109 @@
             }
         }
 
-        async function moveStorageFile(event, sourceKey, fileName) {
+        let pendingMoveSourceKey = null;
+        let pendingMoveFileName = null;
+
+        function openMoveFileModal(event, sourceKey, fileName) {
             if (event) {
                 event.stopPropagation();
                 if (event.preventDefault) event.preventDefault();
             }
             if (!sourceKey || !fileName || !currentStorageCustomerId) return;
 
-            const rootPath = (currentStorageRootPath || '').replace(/\/$/, '') + '/';
-            const currentDir = sourceKey.substring(0, sourceKey.lastIndexOf('/') + 1);
+            pendingMoveSourceKey = sourceKey;
+            pendingMoveFileName = fileName;
 
-            let defaultChoices = ['Tax Documents/', 'Tax Documents/Tax Year 2025/', 'Tax Documents/Tax Year 2026/', 'Bookkeeping/', 'Permanent Legal Files/'];
-            
-            let promptMsg = `🚚 Move '${fileName}' to another folder.\n\nEnter destination folder path relative to customer root (or enter number 1-${defaultChoices.length}):\n\n`;
-            defaultChoices.forEach((f, idx) => {
-                promptMsg += `${idx + 1}. ${f}\n`;
-            });
-            promptMsg += `\nDestination folder:`;
+            const nameEl = document.getElementById('moveFileTargetName');
+            if (nameEl) nameEl.textContent = fileName;
 
-            const input = prompt(promptMsg, "Tax Documents/Tax Year 2026/");
-            if (input === null) return;
-            let choice = input.trim();
-            if (!choice) return;
-
-            const choiceNum = parseInt(choice, 10);
-            if (!isNaN(choiceNum) && choiceNum >= 1 && choiceNum <= defaultChoices.length) {
-                choice = defaultChoices[choiceNum - 1];
+            const rootPath = (currentStorageRootFolder || '').replace(/\/$/, '') + '/';
+            const selectEl = document.getElementById('moveFileFolderSelect');
+            if (selectEl) {
+                selectEl.innerHTML = `
+                    <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
+                    <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
+                    <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
+                    <option value="Bookkeeping/">📁 Bookkeeping</option>
+                    <option value="Permanent Legal Files/">📁 Permanent Legal Files</option>
+                    <option value="custom">✏️ Enter Custom Folder Path...</option>
+                `;
+                selectEl.value = "Tax Documents/Tax Year 2026/";
             }
 
-            if (!choice.endsWith('/')) choice += '/';
+            const customGroup = document.getElementById('moveFileCustomGroup');
+            if (customGroup) customGroup.style.display = 'none';
 
-            let targetFolderKey = choice;
-            if (!choice.startsWith(rootPath) && rootPath) {
-                targetFolderKey = rootPath + choice.replace(/^\//, '');
+            let modal = document.getElementById('moveFileModal');
+            if (modal) {
+                document.body.appendChild(modal);
+                modal.style.zIndex = '2147483649';
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeMoveFileModal() {
+            let modal = document.getElementById('moveFileModal');
+            if (modal) modal.style.display = 'none';
+            pendingMoveSourceKey = null;
+            pendingMoveFileName = null;
+        }
+
+        function handleMoveFolderSelectChange(val) {
+            const customGroup = document.getElementById('moveFileCustomGroup');
+            if (customGroup) {
+                customGroup.style.display = (val === 'custom') ? 'block' : 'none';
+            }
+        }
+
+        async function confirmSubmitMoveFile() {
+            if (!pendingMoveSourceKey || !currentStorageCustomerId) return;
+
+            const selectEl = document.getElementById('moveFileFolderSelect');
+            const customInputEl = document.getElementById('moveFileCustomInput');
+            let chosenFolder = selectEl ? selectEl.value : '';
+
+            if (chosenFolder === 'custom') {
+                chosenFolder = customInputEl ? customInputEl.value.trim() : '';
+                if (!chosenFolder) {
+                    alert('Please enter a custom folder path');
+                    return;
+                }
             }
 
-            if (targetFolderKey === currentDir) {
-                alert("File is already in this folder.");
-                return;
+            if (!chosenFolder) return;
+            if (!chosenFolder.endsWith('/')) chosenFolder += '/';
+
+            const rootPath = (currentStorageRootFolder || '').replace(/\/$/, '') + '/';
+            let targetFolderKey = chosenFolder;
+            if (!chosenFolder.startsWith(rootPath) && rootPath) {
+                targetFolderKey = rootPath + chosenFolder.replace(/^\//, '');
+            }
+
+            const submitBtn = document.getElementById('submitMoveFileBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '🚚 Moving...';
             }
 
             try {
                 const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/move-file`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source_key: sourceKey, target_folder_key: targetFolderKey })
+                    body: JSON.stringify({ source_key: pendingMoveSourceKey, target_folder_key: targetFolderKey })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || data.message || 'Move file failed');
 
+                closeMoveFileModal();
                 await refreshCurrentStorageFolder();
             } catch (err) {
                 alert(`❌ Move File Error: ${err.message}`);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚚 Move File Now';
+                }
             }
         }
 
@@ -3855,8 +3906,50 @@
     </div>
 </div>`;
 
+            const moveFileModalHtml = `
+<div id="moveFileModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483649; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 20px; max-width: 520px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.8); gap: 16px; color: #fff; overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.3rem;">🚚</span>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fbbf24; margin: 0;">Move File to Folder</h3>
+            </div>
+            <button onclick="closeMoveFileModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+        </div>
+
+        <div style="padding: 0 20px; display: flex; flex-direction: column; gap: 14px;">
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">File to Move:</label>
+                <div id="moveFileTargetName" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #38bdf8; font-weight: 700;">-</div>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Select Destination Folder:</label>
+                <select id="moveFileFolderSelect" onchange="handleMoveFolderSelectChange(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fbbf24; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
+                    <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
+                    <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
+                    <option value="Bookkeeping/">📁 Bookkeeping</option>
+                    <option value="Permanent Legal Files/">📁 Permanent Legal Files</option>
+                    <option value="custom">✏️ Enter Custom Folder Path...</option>
+                </select>
+            </div>
+
+            <div id="moveFileCustomGroup" style="display: none;">
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Custom Subfolder Path:</label>
+                <input type="text" id="moveFileCustomInput" placeholder="e.g. Tax Documents/Tax Year 2026/" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; font-weight: 600;">
+            </div>
+        </div>
+
+        <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeMoveFileModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Cancel</button>
+            <button type="button" id="submitMoveFileBtn" onclick="confirmSubmitMoveFile()" style="padding: 8px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);">🚚 Move File Now</button>
+        </div>
+    </div>
+</div>`;
+
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml;
+            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
