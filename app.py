@@ -3613,6 +3613,8 @@ async def support_submit(
         "support@datalazo.net"
     )
     clean_from = parse_clean_email(raw_from) or "support@datalazo.net"
+    if "receive.datalazo.net" in clean_from.lower():
+        clean_from = "support@datalazo.net"
     from_email = clean_from
         
     raw_to = (
@@ -3905,6 +3907,8 @@ async def send_customer_email(customer_id: int, request: Request):
             "notification@datalazo.net"
         )
         clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
+        if "receive.datalazo.net" in clean_from.lower():
+            clean_from = "notification@datalazo.net"
         from_email = clean_from
 
         if not resend_key:
@@ -4136,6 +4140,8 @@ async def resend_inbound_webhook(request: Request):
                 team_email = parse_clean_email(os.environ.get("RESEND_TO_EMAIL") or "luisdat@gmail.com")
                 raw_from = os.environ.get("RESEND_FROM_EMAIL", "notification@datalazo.net")
                 clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
+                if "receive.datalazo.net" in clean_from.lower():
+                    clean_from = "notification@datalazo.net"
 
                 if resend_key:
                     att_note = f"\n\n📎 {len(saved_attachments)} File Attachment(s) Saved to CRM Storage!" if saved_attachments else ""
@@ -4253,6 +4259,8 @@ async def health_check():
     )
     if from_email:
         from_email = from_email.strip().strip('\'"')
+        if "receive.datalazo.net" in from_email.lower():
+            from_email = from_email.lower().replace("receive.datalazo.net", "datalazo.net")
         
     to_email = (
         os.environ.get("RESEND_TO_EMAIL") or
