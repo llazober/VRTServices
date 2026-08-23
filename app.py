@@ -2214,6 +2214,90 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
         if conn:
             conn.close()
 
+@app.post("/api/customers/{customer_id}/storage/move-file")
+async def move_customer_storage_file(customer_id: int, request: Request):
+    """Moves a file in customer storage to a new target folder by copying to target_key and deleting source_key."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    source_key = (data.get("source_key") or "").strip()
+    target_folder_key = (data.get("target_folder_key") or "").strip()
+
+    if not source_key or not target_folder_key:
+        raise HTTPException(status_code=400, detail="source_key and target_folder_key are required")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            if not cust:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+        root_folder = get_customer_root_folder_path(cust).rstrip('/')
+
+        if not source_key.startswith(root_folder):
+            raise HTTPException(status_code=403, detail="Forbidden: Cannot move file outside customer storage root")
+
+        if not target_folder_key.startswith(root_folder):
+            raise HTTPException(status_code=403, detail="Forbidden: Cannot move file to folder outside customer storage root")
+
+        if not target_folder_key.endswith('/'):
+            target_folder_key += '/'
+
+        filename = os.path.basename(source_key.rstrip('/'))
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid source file key")
+
+        new_key = f"{target_folder_key}{filename}"
+
+        if source_key == new_key:
+            return {"success": True, "message": "Source and destination are identical"}
+
+        client, err = get_s3_client()
+        if not client:
+            raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+
+        client.copy_object(
+            Bucket=bucket,
+            CopySource={'Bucket': bucket, 'Key': source_key},
+            Key=new_key,
+            ACL='private'
+        )
+        client.delete_object(Bucket=bucket, Key=source_key)
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE customer_communications 
+                    SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
+                    WHERE customer_id = %s AND attachments_json::text LIKE %s;
+                """, (source_key, new_key, customer_id, f"%{source_key}%"))
+                conn.commit()
+        except Exception as e_db_up:
+            print(f"Notice updating customer_communications attachments_json: {e_db_up}")
+
+        print(f"[DO SPACES] Moved file '{source_key}' -> '{new_key}' for customer {customer_id}")
+        return {
+            "success": True,
+            "source_key": source_key,
+            "new_key": new_key,
+            "message": f"File moved to '{target_folder_key}' successfully"
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error moving file in storage: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.post("/api/customers/{customer_id}/storage/mkdir")
 async def create_customer_storage_folder(customer_id: int, request: Request):
     """Creates a new folder (empty object with trailing slash) at the specified path inside the customer's storage root."""

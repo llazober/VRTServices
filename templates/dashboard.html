@@ -2401,6 +2401,7 @@
                             <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
                                 ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : ''}
                                 <button class="storage-rename-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Rename file">✏️ Rename</button>
+                                <button class="storage-move-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Move file to another folder">🚚 Move</button>
                                 <a href="${f.url}" target="_blank" download style="padding: 4px 10px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-decoration: none; margin-right: 6px; display: inline-block;">📥 Download</a>
                                 <button class="storage-delete-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete file">🗑️</button>
                             </td>
@@ -2460,6 +2461,14 @@
                     const key = btn.getAttribute('data-key');
                     const name = btn.getAttribute('data-name');
                     renameStorageFile(e, key, name);
+                });
+            });
+            tbody.querySelectorAll('.storage-move-file-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    moveStorageFile(e, key, name);
                 });
             });
             tbody.querySelectorAll('.storage-delete-file-btn').forEach(btn => {
@@ -2575,6 +2584,61 @@
                 await refreshCurrentStorageFolder();
             } catch (err) {
                 alert(`❌ Rename Error: ${err.message}`);
+            }
+        }
+
+        async function moveStorageFile(event, sourceKey, fileName) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            if (!sourceKey || !fileName || !currentStorageCustomerId) return;
+
+            const rootPath = (currentStorageRootPath || '').replace(/\/$/, '') + '/';
+            const currentDir = sourceKey.substring(0, sourceKey.lastIndexOf('/') + 1);
+
+            let defaultChoices = ['Tax Documents/', 'Tax Documents/Tax Year 2025/', 'Tax Documents/Tax Year 2026/', 'Bookkeeping/', 'Permanent Legal Files/'];
+            
+            let promptMsg = `🚚 Move '${fileName}' to another folder.\n\nEnter destination folder path relative to customer root (or enter number 1-${defaultChoices.length}):\n\n`;
+            defaultChoices.forEach((f, idx) => {
+                promptMsg += `${idx + 1}. ${f}\n`;
+            });
+            promptMsg += `\nDestination folder:`;
+
+            const input = prompt(promptMsg, "Tax Documents/Tax Year 2026/");
+            if (input === null) return;
+            let choice = input.trim();
+            if (!choice) return;
+
+            const choiceNum = parseInt(choice, 10);
+            if (!isNaN(choiceNum) && choiceNum >= 1 && choiceNum <= defaultChoices.length) {
+                choice = defaultChoices[choiceNum - 1];
+            }
+
+            if (!choice.endsWith('/')) choice += '/';
+
+            let targetFolderKey = choice;
+            if (!choice.startsWith(rootPath) && rootPath) {
+                targetFolderKey = rootPath + choice.replace(/^\//, '');
+            }
+
+            if (targetFolderKey === currentDir) {
+                alert("File is already in this folder.");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/move-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_key: sourceKey, target_folder_key: targetFolderKey })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || 'Move file failed');
+
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Move File Error: ${err.message}`);
             }
         }
 
