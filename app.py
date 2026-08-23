@@ -4081,8 +4081,33 @@ async def resend_inbound_webhook(request: Request):
         raw_recipient = extract_email_str(data.get("to") or data.get("recipient"))
         recipient_email = parse_clean_email(raw_recipient) or raw_recipient
 
+        def extract_email_body(d: dict) -> str:
+            if not isinstance(d, dict):
+                return ""
+            for key in ["text", "plain", "text_body", "body_text"]:
+                val = d.get(key)
+                if val and isinstance(val, str) and val.strip():
+                    return val.strip()
+            for key in ["html", "html_body", "body", "content"]:
+                val = d.get(key)
+                if val and isinstance(val, str) and val.strip():
+                    import html as _html_lib
+                    clean = re.sub(r'<(?:br|p|div|tr)[^>]*>', '\n', val, flags=re.IGNORECASE)
+                    clean = re.sub(r'<[^>]+>', '', clean)
+                    clean = _html_lib.unescape(clean)
+                    clean = re.sub(r'\n\s*\n', '\n\n', clean).strip()
+                    if clean:
+                        return clean
+            for key in ["body", "payload", "content", "email"]:
+                val = d.get(key)
+                if isinstance(val, dict):
+                    extracted = extract_email_body(val)
+                    if extracted:
+                        return extracted
+            return ""
+
         subject = str(data.get("subject") or "").strip()
-        body_text = str(data.get("text") or data.get("html") or "").strip()
+        body_text = extract_email_body(data)
         attachments = data.get("attachments") or []
 
         # Parse customer reference code from subject e.g. [Ref: CUST-1001] or [Ref: 1001]
