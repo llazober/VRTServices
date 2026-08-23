@@ -4170,6 +4170,7 @@ async def test_resend_fetch_debug():
     result = {
         "resend_key_configured": bool(resend_key),
         "resend_key_prefix": (resend_key[:6] + "...") if resend_key else "NONE",
+        "resend_api_list": {},
         "api_responses": {}
     }
     
@@ -4177,14 +4178,38 @@ async def test_resend_fetch_debug():
         result["error"] = "RESEND_API_KEY environment variable is not configured on the server."
         return result
 
+    # 1. Query Resend API list emails
+    try:
+        list_req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            method="GET"
+        )
+        with urllib.request.urlopen(list_req) as list_resp:
+            list_text = list_resp.read().decode("utf-8")
+            result["resend_api_list"] = json.loads(list_text)
+    except urllib.error.HTTPError as he:
+        result["resend_api_list"] = f"HTTP {he.code}: {he.reason}"
+    except Exception as ex:
+        result["resend_api_list"] = f"Error: {str(ex)}"
+
+    # 2. Extract IDs from DB logs & API list
+    email_ids = []
+    if isinstance(result["resend_api_list"], dict) and isinstance(result["resend_api_list"].get("data"), list):
+        for item in result["resend_api_list"]["data"]:
+            if isinstance(item, dict) and item.get("id"):
+                email_ids.append(item["id"])
+
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT payload_json FROM webhook_debug_log ORDER BY id DESC LIMIT 5;")
             rows = cur.fetchall()
             conn.close()
-            
-            email_ids = []
             for r in rows:
                 try:
                     payload = json.loads(r["payload_json"])
@@ -4195,33 +4220,34 @@ async def test_resend_fetch_debug():
                             email_ids.append(eid)
                 except Exception:
                     pass
+    except Exception as e_db:
+        result["db_error"] = str(e_db)
 
-            result["found_email_ids"] = email_ids
+    result["found_email_ids"] = email_ids
 
-            for eid in email_ids[:2]:
-                for endpoint_url in [
-                    f"https://api.resend.com/emails/receiving/{eid}",
-                    f"https://api.resend.com/emails/{eid}"
-                ]:
-                    try:
-                        req = urllib.request.Request(
-                            endpoint_url,
-                            headers={
-                                "Authorization": f"Bearer {resend_key}",
-                                "Content-Type": "application/json",
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                            },
-                            method="GET"
-                        )
-                        with urllib.request.urlopen(req) as resp:
-                            res_text = resp.read().decode("utf-8")
-                            result["api_responses"][endpoint_url] = json.loads(res_text)
-                    except urllib.error.HTTPError as he:
-                        result["api_responses"][endpoint_url] = f"HTTP {he.code}: {he.reason}"
-                    except Exception as ex:
-                        result["api_responses"][endpoint_url] = f"Error: {str(ex)}"
-    except Exception as e:
-        result["exception"] = str(e)
+    # 3. Query individual email endpoints for found IDs
+    for eid in email_ids[:3]:
+        for endpoint_url in [
+            f"https://api.resend.com/emails/receiving/{eid}",
+            f"https://api.resend.com/emails/{eid}"
+        ]:
+            try:
+                req = urllib.request.Request(
+                    endpoint_url,
+                    headers={
+                        "Authorization": f"Bearer {resend_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
+                    method="GET"
+                )
+                with urllib.request.urlopen(req) as resp:
+                    res_text = resp.read().decode("utf-8")
+                    result["api_responses"][endpoint_url] = json.loads(res_text)
+            except urllib.error.HTTPError as he:
+                result["api_responses"][endpoint_url] = f"HTTP {he.code}: {he.reason}"
+            except Exception as ex:
+                result["api_responses"][endpoint_url] = f"Error: {str(ex)}"
 
     return result
 
