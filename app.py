@@ -4381,11 +4381,16 @@ async def resend_inbound_webhook(request: Request):
                     target_folder = f"{p_prefix}Tax Documents/"
 
                     for att in attachments:
+                        file_bytes = None
+                        att_name = "attached_file.pdf"
+                        att_id = None
+                        att_url_direct = None
+
                         if isinstance(att, dict):
-                            att_name = att.get("filename") or att.get("name") or "attached_file.pdf"
+                            att_name = att.get("filename") or att.get("name") or att.get("title") or "attached_file.pdf"
                             att_content_b64 = att.get("content") or att.get("data") or ""
                             att_id = att.get("id")
-                            file_bytes = None
+                            att_url_direct = att.get("url") or att.get("download_url") or att.get("href") or att.get("content_url")
 
                             if att_content_b64:
                                 try:
@@ -4394,12 +4399,41 @@ async def resend_inbound_webhook(request: Request):
                                 except Exception as e_b64:
                                     print(f"[ATTACHMENT B64 DECODE ERROR]: {e_b64}")
 
-                            # Fallback: If content is missing inline, fetch binary attachment from Resend API
-                            if not file_bytes and (att_id or att_name) and email_id and resend_key:
+                            # Direct download URL from attachment object
+                            if not file_bytes and att_url_direct:
+                                try:
+                                    dir_req = urllib.request.Request(
+                                        att_url_direct,
+                                        headers={
+                                            "Authorization": f"Bearer {resend_key.strip()}" if resend_key else "",
+                                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                        },
+                                        method="GET"
+                                    )
+                                    with urllib.request.urlopen(dir_req) as dir_resp:
+                                        file_bytes = dir_resp.read()
+                                        print(f"[ATTACHMENT DIRECT URL SUCCESS] Downloaded {len(file_bytes)} bytes from {att_url_direct}")
+                                except Exception as e_dir:
+                                    print(f"[ATTACHMENT DIRECT URL NOTICE] {att_url_direct}: {e_dir}")
+                        elif isinstance(att, str):
+                            att_name = att.split('/')[-1] or "attached_file.pdf"
+                            if att.startswith("http://") or att.startswith("https://"):
+                                try:
+                                    dir_req = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                                    with urllib.request.urlopen(dir_req) as dir_resp:
+                                        file_bytes = dir_resp.read()
+                                except Exception:
+                                    pass
+
+                        # Fallback: If content is missing inline, fetch binary attachment from Resend API using att_id and att_name
+                        if not file_bytes and email_id and resend_key:
+                            for item_identifier in [att_id, att_name]:
+                                if not item_identifier:
+                                    continue
                                 for att_url in [
-                                    f"https://api.resend.com/emails/receiving/{email_id}/attachments/{att_id or att_name}",
-                                    f"https://api.resend.com/emails/{email_id}/attachments/{att_id or att_name}",
-                                    f"https://api.resend.com/emails/inbound/{email_id}/attachments/{att_id or att_name}"
+                                    f"https://api.resend.com/emails/receiving/{email_id}/attachments/{item_identifier}",
+                                    f"https://api.resend.com/emails/{email_id}/attachments/{item_identifier}",
+                                    f"https://api.resend.com/emails/inbound/{email_id}/attachments/{item_identifier}"
                                 ]:
                                     try:
                                         fetch_att_req = urllib.request.Request(
@@ -4424,12 +4458,16 @@ async def resend_inbound_webhook(request: Request):
                                                 break
                                     except Exception as e_att_fetch:
                                         print(f"[ATTACHMENT FETCH NOTICE] {att_url}: {e_att_fetch}")
+                                if file_bytes:
+                                    break
 
-                            if file_bytes:
-                                file_key = f"{target_folder}{att_name}"
-                                client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-                                saved_attachments.append(file_key)
-                                print(f"[INBOUND ATTACHMENT SAVED] Key: '{file_key}'")
+                        if file_bytes:
+                            file_key = f"{target_folder}{att_name}"
+                            client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+                            saved_attachments.append(file_key)
+                            print(f"[INBOUND ATTACHMENT SAVED] Key: '{file_key}'")
+                else:
+                    print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
 
             # Log inbound communication as UNREAD
             with conn.cursor() as cur:
