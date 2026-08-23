@@ -4107,29 +4107,57 @@ LAST_INBOUND_DEBUG = {}
 
 @app.get("/api/debug/last-inbound")
 async def get_last_inbound_debug():
-    """Diagnostic endpoint to inspect raw payload and extraction of the last received webhooks from DB."""
+    """Diagnostic endpoint to inspect raw payload and extraction of last received webhooks and communications."""
+    debug_info = {}
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM webhook_debug_log ORDER BY id DESC LIMIT 5;")
-            rows = cur.fetchall()
-            conn.close()
-            if rows:
-                logs = []
-                for r in rows:
-                    row = dict(r)
-                    if row.get("created_at"):
-                        row["created_at"] = str(row["created_at"])
-                    try:
-                        if row.get("payload_json"):
-                            row["payload_json"] = json.loads(row["payload_json"])
-                    except Exception:
-                        pass
-                    logs.append(row)
-                return {"count": len(logs), "last_webhooks": logs}
+            # 1. Fetch from webhook_debug_log
+            try:
+                cur.execute("SELECT * FROM webhook_debug_log ORDER BY id DESC LIMIT 5;")
+                rows = cur.fetchall()
+                if rows:
+                    logs = []
+                    for r in rows:
+                        row = dict(r)
+                        if row.get("created_at"):
+                            row["created_at"] = str(row["created_at"])
+                        try:
+                            if row.get("payload_json"):
+                                row["payload_json"] = json.loads(row["payload_json"])
+                        except Exception:
+                            pass
+                        logs.append(row)
+                    debug_info["last_webhook_logs"] = logs
+            except Exception as e_w:
+                debug_info["webhook_log_err"] = str(e_w)
+
+            # 2. Fetch last 5 INBOUND records from customer_communications
+            try:
+                cur.execute("""
+                    SELECT id, customer_id, sender_email, recipient_email, subject, body_text, attachments_json, status, created_at 
+                    FROM customer_communications 
+                    WHERE direction = 'INBOUND' 
+                    ORDER BY id DESC LIMIT 5;
+                """)
+                comm_rows = cur.fetchall()
+                if comm_rows:
+                    comms = []
+                    for r in comm_rows:
+                        row = dict(r)
+                        if row.get("created_at"):
+                            row["created_at"] = str(row["created_at"])
+                        comms.append(row)
+                    debug_info["last_inbound_communications"] = comms
+            except Exception as e_c:
+                debug_info["comm_fetch_err"] = str(e_c)
+
+        conn.close()
     except Exception as e:
-        print(f"Error reading webhook_debug_log: {e}")
-    return LAST_INBOUND_DEBUG or {"status": "No inbound webhook logged in database."}
+        print(f"Error in debug endpoint: {e}")
+        debug_info["endpoint_err"] = str(e)
+
+    return debug_info or LAST_INBOUND_DEBUG or {"status": "No inbound webhook logged in database."}
 
 @app.post("/api/webhooks/resend-inbound")
 async def resend_inbound_webhook(request: Request):
