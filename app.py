@@ -4059,16 +4059,33 @@ async def get_unread_communications_summary(request: Request):
 async def resend_inbound_webhook(request: Request):
     """Public webhook receiver for customer reply emails forwarded from Resend."""
     try:
-        data = await request.json()
-        raw_sender = (data.get("from") or "").strip()
+        raw_body = await request.json()
+        print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
+
+        # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
+        if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
+            data = raw_body["data"]
+        else:
+            data = raw_body if isinstance(raw_body, dict) else {}
+
+        def extract_email_str(val):
+            if isinstance(val, list):
+                val = val[0] if len(val) > 0 else ""
+            if isinstance(val, dict):
+                val = val.get("email") or val.get("address") or str(val)
+            return str(val or "").strip()
+
+        raw_sender = extract_email_str(data.get("from") or data.get("sender"))
         sender_email = parse_clean_email(raw_sender) or raw_sender
-        raw_recipient = (data.get("to") or "").strip()
+
+        raw_recipient = extract_email_str(data.get("to") or data.get("recipient"))
         recipient_email = parse_clean_email(raw_recipient) or raw_recipient
-        subject = (data.get("subject") or "").strip()
-        body_text = (data.get("text") or data.get("html") or "").strip()
+
+        subject = str(data.get("subject") or "").strip()
+        body_text = str(data.get("text") or data.get("html") or "").strip()
         attachments = data.get("attachments") or []
 
-        # Parse customer reference code from subject e.g. [Ref: CUST-1001]
+        # Parse customer reference code from subject e.g. [Ref: CUST-1001] or [Ref: 1001]
         m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', subject, re.IGNORECASE)
         cust_number = m.group(1).strip() if m else None
 
@@ -4090,13 +4107,18 @@ async def resend_inbound_webhook(request: Request):
                 cust = None
 
             if not cust and sender_email:
-                cur.execute("SELECT id, legal_name, parent_name FROM customer WHERE email ILIKE %s OR email ILIKE %s;", (sender_email, f"%{sender_email}%"))
+                cur.execute("""
+                    SELECT id, legal_name, parent_name FROM customer 
+                    WHERE email ILIKE %s OR email ILIKE %s;
+                """, (sender_email, f"%{sender_email}%"))
                 cust = cur.fetchone()
 
             if cust:
                 customer_id = cust["id"]
                 legal_name = cust["legal_name"]
                 parent_name = cust.get("parent_name")
+            else:
+                print(f"[RESEND INBOUND WARNING] No matching customer found for sender: '{sender_email}', cust_ref: '{cust_number}', subject: '{subject}'")
 
         if customer_id:
             # Process & Upload File Attachments if present
@@ -4110,15 +4132,16 @@ async def resend_inbound_webhook(request: Request):
                     target_folder = f"{p_prefix}Tax Documents/"
 
                     for att in attachments:
-                        att_name = att.get("filename") or "attached_file.pdf"
-                        att_content_b64 = att.get("content") or ""
-                        if att_content_b64:
-                            import base64
-                            file_bytes = base64.b64decode(att_content_b64)
-                            file_key = f"{target_folder}{att_name}"
-                            client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-                            saved_attachments.append(file_key)
-                            print(f"[INBOUND ATTACHMENT SAVED] Key: '{file_key}'")
+                        if isinstance(att, dict):
+                            att_name = att.get("filename") or "attached_file.pdf"
+                            att_content_b64 = att.get("content") or ""
+                            if att_content_b64:
+                                import base64
+                                file_bytes = base64.b64decode(att_content_b64)
+                                file_key = f"{target_folder}{att_name}"
+                                client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+                                saved_attachments.append(file_key)
+                                print(f"[INBOUND ATTACHMENT SAVED] Key: '{file_key}'")
 
             # Log inbound communication as UNREAD
             with conn.cursor() as cur:
@@ -4178,10 +4201,13 @@ async def resend_inbound_webhook(request: Request):
             except Exception as e_alert:
                 print(f"[TEAM ALERT ERROR] Failed to send team email alert: {e_alert}")
 
-        conn.close()
+        if conn:
+            conn.close()
         return {"status": "success", "customer_id": customer_id}
     except Exception as e:
+        import traceback
         print(f"Error handling Resend Inbound Webhook: {e}")
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 # ── Health / debug ─────────────────────────────────────────────────────────────
