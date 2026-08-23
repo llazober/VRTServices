@@ -736,6 +736,7 @@ def init_customer_do_folders(customer_id: int, legal_name: str, year: int = None
     if is_individual:
         folders_to_create = [
             root_path,
+            f"{root_path}Inbox/",
             f"{root_path}Tax Documents/",
             f"{root_path}Tax Documents/Tax Year {year}/",
             f"{root_path}Tax Documents/Tax Year {year - 1}/",
@@ -744,6 +745,7 @@ def init_customer_do_folders(customer_id: int, legal_name: str, year: int = None
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         folders_to_create = [
             root_path,
+            f"{root_path}Inbox/",
             f"{root_path}Bank Statements/",
             f"{root_path}Bank Statements/Year {year}/",
             f"{root_path}Check Images/",
@@ -4727,14 +4729,8 @@ async def resend_inbound_webhook(request: Request):
                 clean_name = sanitize_folder_name(legal_name)
                 p_prefix = f"{sanitize_folder_name(parent_name)}/{clean_name}/" if parent_name else f"{clean_name}/"
 
-                # Routing rule:
-                # If customer_type is 'Individual', documents go to Tax Documents/
-                # If customer_type is NOT 'Individual' (e.g. Business, LLC, Corporation), all documents go directly to Customer Root!
-                is_individual = (customer_type.strip().lower() == "individual")
-                if is_individual:
-                    target_folder = f"{p_prefix}Tax Documents/"
-                else:
-                    target_folder = p_prefix
+                # Routing rule: For all customer business types, save incoming email attachments to the Inbox/ subfolder
+                target_folder = f"{p_prefix}Inbox/"
 
                 # First upload any MIME extracted binary files
                 if mime_att_list:

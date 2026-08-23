@@ -2607,14 +2607,15 @@
             const selectEl = document.getElementById('moveFileFolderSelect');
             if (selectEl) {
                 selectEl.innerHTML = `
+                    <option value="Inbox/">📥 Inbox (Received Attachments)</option>
                     <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
                     <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
                     <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
-                    <option value="Bookkeeping/">📁 Bookkeeping</option>
-                    <option value="Permanent Legal Files/">📁 Permanent Legal Files</option>
+                    <option value="Bank Statements/">📁 Bank Statements</option>
+                    <option value="Check Images/">📁 Check Images</option>
                     <option value="custom">✏️ Enter Custom Folder Path...</option>
                 `;
-                selectEl.value = "Tax Documents/Tax Year 2026/";
+                selectEl.value = "Inbox/";
             }
 
             const customGroup = document.getElementById('moveFileCustomGroup');
@@ -3926,11 +3927,12 @@
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Select Destination Folder:</label>
                 <select id="moveFileFolderSelect" onchange="handleMoveFolderSelectChange(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fbbf24; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="Inbox/">📥 Inbox (Received Attachments)</option>
                     <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
                     <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
                     <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
-                    <option value="Bookkeeping/">📁 Bookkeeping</option>
-                    <option value="Permanent Legal Files/">📁 Permanent Legal Files</option>
+                    <option value="Bank Statements/">📁 Bank Statements</option>
+                    <option value="Check Images/">📁 Check Images</option>
                     <option value="custom">✏️ Enter Custom Folder Path...</option>
                 </select>
             </div>
