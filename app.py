@@ -4672,7 +4672,7 @@ async def resend_inbound_webhook(request: Request):
                 cust_num_with_prefix = f"CUST-{cust_number}" if not cust_number.upper().startswith("CUST-") else cust_number
                 cust_num_raw = cust_number.replace("CUST-", "").replace("cust-", "")
                 cur.execute("""
-                    SELECT id, legal_name, parent_name FROM customer 
+                    SELECT id, legal_name, parent_name, customer_type FROM customer 
                     WHERE custumer_number ILIKE %s OR custumer_number ILIKE %s OR id::text = %s;
                 """, (cust_number, cust_num_with_prefix, cust_num_raw))
                 cust = cur.fetchone()
@@ -4681,7 +4681,7 @@ async def resend_inbound_webhook(request: Request):
 
             if not cust and sender_email:
                 cur.execute("""
-                    SELECT id, legal_name, parent_name FROM customer 
+                    SELECT id, legal_name, parent_name, customer_type FROM customer 
                     WHERE email ILIKE %s OR email ILIKE %s;
                 """, (sender_email, f"%{sender_email}%"))
                 cust = cur.fetchone()
@@ -4690,6 +4690,7 @@ async def resend_inbound_webhook(request: Request):
                 customer_id = cust["id"]
                 legal_name = cust["legal_name"]
                 parent_name = cust.get("parent_name")
+                customer_type = cust.get("customer_type") or ""
             else:
                 print(f"[RESEND INBOUND WARNING] No matching customer found for sender: '{sender_email}', cust_ref: '{cust_number}', subject: '{subject}'")
 
@@ -4725,7 +4726,15 @@ async def resend_inbound_webhook(request: Request):
                 bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
                 clean_name = sanitize_folder_name(legal_name)
                 p_prefix = f"{sanitize_folder_name(parent_name)}/{clean_name}/" if parent_name else f"{clean_name}/"
-                target_folder = f"{p_prefix}Tax Documents/"
+
+                # Routing rule:
+                # If customer_type is 'Individual', documents go to Tax Documents/
+                # If customer_type is NOT 'Individual' (e.g. Business, LLC, Corporation), all documents go directly to Customer Root!
+                is_individual = (customer_type.strip().lower() == "individual")
+                if is_individual:
+                    target_folder = f"{p_prefix}Tax Documents/"
+                else:
+                    target_folder = p_prefix
 
                 # First upload any MIME extracted binary files
                 if mime_att_list:
