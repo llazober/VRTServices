@@ -4084,7 +4084,7 @@ async def resend_inbound_webhook(request: Request):
         def extract_email_body(d: dict) -> str:
             if not isinstance(d, dict):
                 return ""
-            for key in ["text", "plain", "text_body", "body_text"]:
+            for key in ["text", "plain", "text_body", "body_text", "snippet", "preview"]:
                 val = d.get(key)
                 if val and isinstance(val, str) and val.strip():
                     return val.strip()
@@ -4098,7 +4098,7 @@ async def resend_inbound_webhook(request: Request):
                     clean = re.sub(r'\n\s*\n', '\n\n', clean).strip()
                     if clean:
                         return clean
-            for key in ["body", "payload", "content", "email"]:
+            for key in ["body", "payload", "content", "email", "data"]:
                 val = d.get(key)
                 if isinstance(val, dict):
                     extracted = extract_email_body(val)
@@ -4109,6 +4109,36 @@ async def resend_inbound_webhook(request: Request):
         subject = str(data.get("subject") or "").strip()
         body_text = extract_email_body(data)
         attachments = data.get("attachments") or []
+
+        # If body_text is empty, try fetching full email object from Resend API if email_id is present
+        email_id = data.get("email_id") or data.get("id") or (raw_body.get("email_id") if isinstance(raw_body, dict) else None)
+        resend_key = os.environ.get("RESEND_API_KEY")
+        if email_id and resend_key and not body_text:
+            try:
+                for endpoint_url in [f"https://api.resend.com/emails/{email_id}", f"https://api.resend.com/emails/receiving/{email_id}"]:
+                    try:
+                        fetch_req = urllib.request.Request(
+                            endpoint_url,
+                            headers={
+                                "Authorization": f"Bearer {resend_key.strip()}",
+                                "Content-Type": "application/json"
+                            },
+                            method="GET"
+                        )
+                        with urllib.request.urlopen(fetch_req) as fetch_resp:
+                            fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
+                            print(f"[RESEND FETCHED EMAIL DETAILS]: {json.dumps(fetched_data)}")
+                            if isinstance(fetched_data, dict):
+                                fetched_body = extract_email_body(fetched_data)
+                                if fetched_body:
+                                    body_text = fetched_body
+                                if not attachments and fetched_data.get("attachments"):
+                                    attachments = fetched_data.get("attachments")
+                                break
+                    except Exception as e_ep:
+                        print(f"[RESEND FETCH ENDPOINT NOTICE] {endpoint_url}: {e_ep}")
+            except Exception as e_fetch:
+                print(f"[RESEND FETCH ERROR]: {e_fetch}")
 
         # Parse customer reference code from subject e.g. [Ref: CUST-1001] or [Ref: 1001]
         m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', subject, re.IGNORECASE)
