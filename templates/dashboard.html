@@ -3036,6 +3036,7 @@
                         }
                         if (!Array.isArray(atts)) atts = [];
 
+                        let attHtml = '';
                         if (atts.length > 0) {
                             attHtml = '<div style="margin-top: 8px; font-size: 0.75rem; color: #38bdf8;"><strong>📎 Saved Attachments:</strong> ' + atts.map(a => `<a href="#" onclick="openPdfViewerModal(event, '${a}', '${a.split('/').pop()}'); return false;" style="color: #38bdf8; text-decoration: underline; margin-right: 8px;">${a.split('/').pop()}</a>`).join(' ') + '</div>';
                         }
