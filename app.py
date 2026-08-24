@@ -2574,22 +2574,56 @@ async def delete_customer_storage_folder(customer_id: int, prefix: str, request:
             conn.close()
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
-def get_in_process_period():
+# ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
+def get_in_process_period(cur=None, customer_id=None, workflow_mode="bookkeeping"):
     import datetime
     now = datetime.datetime.now()
     first_of_current = now.replace(day=1)
     prev_month_date = first_of_current - datetime.timedelta(days=1)
-    return prev_month_date.strftime("%Y-%m"), prev_month_date.strftime("%B %Y")
+    
+    prev_slug = prev_month_date.strftime("%Y-%m")
+    prev_label = prev_month_date.strftime("%B %Y")
+    
+    current_slug = now.strftime("%Y-%m")
+    current_label = now.strftime("%B %Y")
+
+    if cur and customer_id:
+        cur.execute("""
+            SELECT * FROM customer_task_checklist
+            WHERE customer_id = %s AND period = %s;
+        """, (customer_id, prev_slug))
+        row = cur.fetchone()
+        if row:
+            if workflow_mode == "tax":
+                tax_complete = sum([
+                    bool(row.get("tax_docs_requested")),
+                    bool(row.get("tax_docs_received")),
+                    bool(row.get("tax_organizer")),
+                    bool(row.get("tax_preparation")),
+                    bool(row.get("tax_review")),
+                    bool(row.get("tax_client_signature")),
+                    bool(row.get("tax_efile")),
+                    bool(row.get("tax_accepted"))
+                ]) == 8
+                if tax_complete:
+                    return current_slug, current_label
+            else:
+                bk_complete = sum([
+                    bool(row.get("bank_statement_received")),
+                    bool(row.get("check_images_received")),
+                    bool(row.get("extraction_ai_categorization_done")),
+                    bool(row.get("accountant_reviewed"))
+                ]) == 4
+                if bk_complete:
+                    return current_slug, current_label
+
+    return prev_slug, prev_label
 
 @app.get("/api/customers/{customer_id}/checklist")
-async def get_customer_checklist(customer_id: int, period: str = None, request: Request = None):
+async def get_customer_checklist(customer_id: int, period: str = None, workflow_tab: str = "bookkeeping", request: Request = None):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    in_process_slug, in_process_label = get_in_process_period()
-    is_in_process_request = not period or period.strip() == "" or period.strip() == "in_process" or period.strip() == in_process_slug
-    effective_period = in_process_slug if is_in_process_request else period.strip()
 
     conn = None
     try:
@@ -2599,6 +2633,10 @@ async def get_customer_checklist(customer_id: int, period: str = None, request: 
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
+
+            in_process_slug, in_process_label = get_in_process_period(cur, customer_id, workflow_tab)
+            is_in_process_request = not period or period.strip() == "" or period.strip() == "in_process" or period.strip() == in_process_slug
+            effective_period = in_process_slug if is_in_process_request else period.strip()
 
             cur.execute(
                 "SELECT * FROM customer_task_checklist WHERE customer_id = %s AND period = %s;",
@@ -2692,30 +2730,12 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     data = await request.json()
-    in_process_slug, in_process_label = get_in_process_period()
     req_period = (data.get("period") or "").strip()
-    period = in_process_slug if (not req_period or req_period == "in_process") else req_period
-
+    workflow_mode = data.get("workflow_mode") or "bookkeeping"
     step_key = data.get("step_key")
     val = bool(data.get("value"))
     notes = data.get("notes")
     tax_notes = data.get("tax_notes")
-    workflow_mode = data.get("workflow_mode") or "bookkeeping"
-
-    col_map = {
-        "bank_statement_received": "bank_statement_received",
-        "check_images_received": "check_images_received",
-        "extraction_ai_categorization_done": "extraction_ai_categorization_done",
-        "accountant_reviewed": "accountant_reviewed",
-        "tax_docs_requested": "tax_docs_requested",
-        "tax_docs_received": "tax_docs_received",
-        "tax_organizer": "tax_organizer",
-        "tax_preparation": "tax_preparation",
-        "tax_review": "tax_review",
-        "tax_client_signature": "tax_client_signature",
-        "tax_efile": "tax_efile",
-        "tax_accepted": "tax_accepted"
-    }
 
     conn = None
     try:
@@ -2725,6 +2745,24 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
+
+            old_in_process_slug, old_in_process_label = get_in_process_period(cur, customer_id, workflow_mode)
+            period = old_in_process_slug if (not req_period or req_period == "in_process") else req_period
+
+            col_map = {
+                "bank_statement_received": "bank_statement_received",
+                "check_images_received": "check_images_received",
+                "extraction_ai_categorization_done": "extraction_ai_categorization_done",
+                "accountant_reviewed": "accountant_reviewed",
+                "tax_docs_requested": "tax_docs_requested",
+                "tax_docs_received": "tax_docs_received",
+                "tax_organizer": "tax_organizer",
+                "tax_preparation": "tax_preparation",
+                "tax_review": "tax_review",
+                "tax_client_signature": "tax_client_signature",
+                "tax_efile": "tax_efile",
+                "tax_accepted": "tax_accepted"
+            }
 
             # Ensure row exists
             cur.execute("""
@@ -2757,19 +2795,14 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
 
             conn.commit()
 
-        res = await get_customer_checklist(customer_id, period, request)
+            new_in_process_slug, new_in_process_label = get_in_process_period(cur, customer_id, workflow_mode)
+
+        res = await get_customer_checklist(customer_id, period, workflow_mode, request)
         
-        # Determine if period just reached 100%
-        if workflow_mode == "tax":
-            tax_complete = res.get("tax", {}).get("completed_count") == 8
-            if tax_complete and val:
-                res["just_archived"] = True
-                res["archived_message"] = f"🎉 {in_process_label} Tax Return Completed & Archived!"
-        else:
-            bk_complete = res.get("bookkeeping", {}).get("completed_count") == 4
-            if bk_complete and val:
-                res["just_archived"] = True
-                res["archived_message"] = f"🎉 {in_process_label} Bookkeeping Completed & Archived!"
+        # Determine if period just reached 100% and shifted
+        if val and old_in_process_slug != new_in_process_slug:
+            res["just_archived"] = True
+            res["archived_message"] = f"🎉 {old_in_process_label} Completed & Archived! In Process reset for {new_in_process_label}"
 
         return res
     except HTTPException as he:

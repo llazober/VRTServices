@@ -3771,7 +3771,7 @@
 
             const selectedPeriod = period || document.getElementById('checklistPeriodSelect')?.value || '';
             try {
-                const url = `/api/customers/${cid}/checklist` + (selectedPeriod ? `?period=${encodeURIComponent(selectedPeriod)}` : '');
+                const url = `/api/customers/${cid}/checklist?workflow_tab=${encodeURIComponent(activeWorkflowTab)}` + (selectedPeriod ? `&period=${encodeURIComponent(selectedPeriod)}` : '');
                 const res = await fetch(url);
                 const data = await res.json();
 
