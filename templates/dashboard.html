@@ -3928,7 +3928,7 @@
                 const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/reopen`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ period: currentChecklistPeriod })
+                    body: JSON.stringify({ period: currentChecklistPeriod, workflow_mode: activeWorkflowTab })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to reopen period');

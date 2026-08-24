@@ -2822,6 +2822,7 @@ async def reopen_customer_checklist(customer_id: int, request: Request):
 
     data = await request.json()
     period = (data.get("period") or "").strip()
+    workflow_mode = data.get("workflow_mode") or "bookkeeping"
     if not period:
         raise HTTPException(status_code=400, detail="Period is required")
 
@@ -2837,8 +2838,9 @@ async def reopen_customer_checklist(customer_id: int, request: Request):
             """, (customer_id, period))
             conn.commit()
 
-        return await get_customer_checklist(customer_id, period, request)
+        return await get_customer_checklist(customer_id=customer_id, period=period, workflow_tab=workflow_mode, request=request)
     except Exception as e:
+        print(f"Error reopening customer checklist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
