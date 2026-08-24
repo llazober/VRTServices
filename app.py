@@ -4104,6 +4104,65 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
         if conn:
             conn.close()
 
+# ── AI RAG Assistant Endpoint ──────────────────────────────────────────
+@app.post("/api/chat")
+async def chat_ai_assistant(request: Request):
+    try:
+        body = await request.json()
+        user_message = (body.get("message") or "").strip()
+        parent_name = (body.get("parent_name") or get_current_username(request) or "VRT Services").strip()
+        customer_ref = (body.get("customer_ref") or "").strip()
+
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Message content is required.")
+
+        # Extract reference code from message if present e.g. "Check CUST-1001" or "CUST-1001" or "1001"
+        m_ref = re.search(r'(?:CUST-)?(\d+)', user_message, re.IGNORECASE)
+        if not customer_ref and m_ref and ("cust" in user_message.lower() or "status" in user_message.lower() or "progress" in user_message.lower() or "task" in user_message.lower() or "check" in user_message.lower()):
+            customer_ref = m_ref.group(1)
+
+        import rag_engine
+        tenant_slug = rag_engine.get_tenant_slug(parent_name)
+
+        status_info = None
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if customer_ref:
+                    status_info = rag_engine.get_customer_task_status(cur, customer_ref, parent_name)
+        except Exception as e_db:
+            print(f"[RAG DB NOTICE]: {e_db}")
+        finally:
+            if conn:
+                conn.close()
+
+        # Retrieve relevant passages from vector store / knowledge base
+        passages = rag_engine.retrieve_relevant_passages(user_message, tenant_slug, top_k=3)
+
+        # Synthesize response
+        ai_reply = rag_engine.synthesize_ai_response(
+            user_query=user_message,
+            parent_name=parent_name,
+            status_info=status_info,
+            passages=passages
+        )
+
+        return {
+            "success": True,
+            "reply": ai_reply,
+            "customer_ref": customer_ref,
+            "status_info": status_info,
+            "tenant": tenant_slug
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        import traceback
+        print(f"[RAG CHAT ERROR]: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ── Customer Email Communication & Inbound Webhooks ───────────────────────────
 @app.post("/api/customers/{customer_id}/send-email")
 async def send_customer_email(customer_id: int, request: Request):
