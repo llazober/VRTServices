@@ -4611,22 +4611,11 @@ async def get_customer_communications(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, legal_name, email FROM customer WHERE id = %s;", (customer_id,))
-            cust = cur.fetchone()
-            cust_email = parse_clean_email(cust.get("email") or "") if cust else None
-
-            if cust_email and len(cust_email) > 3:
-                cur.execute("""
-                    SELECT * FROM customer_communications
-                    WHERE customer_id = %s OR LOWER(sender_email) = LOWER(%s) OR LOWER(recipient_email) = LOWER(%s)
-                    ORDER BY created_at DESC;
-                """, (customer_id, cust_email, cust_email))
-            else:
-                cur.execute("""
-                    SELECT * FROM customer_communications
-                    WHERE customer_id = %s
-                    ORDER BY created_at DESC;
-                """, (customer_id,))
+            cur.execute("""
+                SELECT * FROM customer_communications
+                WHERE customer_id = %s
+                ORDER BY created_at DESC;
+            """, (customer_id,))
             records = cur.fetchall()
 
             history = []
@@ -5247,8 +5236,10 @@ async def resend_inbound_webhook(request: Request):
             except Exception as e_fetch:
                 print(f"[RESEND FETCH ERROR]: {e_fetch}")
 
-        # Parse customer reference code from subject e.g. [Ref: CUST-1001] or [Ref: 1001]
+        # Parse customer reference code from subject or body e.g. [Ref: CUST-1001] or [Ref: 1001]
         m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', subject, re.IGNORECASE)
+        if not m and body_text:
+            m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', body_text, re.IGNORECASE)
         cust_number = m.group(1).strip() if m else None
 
         conn = get_db_connection()
@@ -5268,20 +5259,13 @@ async def resend_inbound_webhook(request: Request):
             else:
                 cust = None
 
-            if not cust and sender_email:
-                cur.execute("""
-                    SELECT id, legal_name, parent_name, customer_type FROM customer 
-                    WHERE email ILIKE %s OR email ILIKE %s;
-                """, (sender_email, f"%{sender_email}%"))
-                cust = cur.fetchone()
-
             if cust:
                 customer_id = cust["id"]
                 legal_name = cust["legal_name"]
                 parent_name = cust.get("parent_name")
                 customer_type = cust.get("customer_type") or ""
             else:
-                print(f"[RESEND INBOUND WARNING] No matching customer found for sender: '{sender_email}', cust_ref: '{cust_number}', subject: '{subject}'")
+                print(f"[RESEND INBOUND WARNING] No matching customer ID found for ref: '{cust_number}', subject: '{subject}'. Skipping unlinked email.")
 
         if customer_id:
             # Deduplicate by subject + customer_id within the last 10 seconds
