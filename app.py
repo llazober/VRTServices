@@ -1387,7 +1387,7 @@ async def login_page(request: Request, error: str = "", username: str = ""):
     if current_username:
         allowed, _ = is_user_allowed_on_site(current_username, request)
         if allowed:
-            return RedirectResponse("/", status_code=302)
+            return RedirectResponse("/dashboard", status_code=302)
         else:
             token = request.cookies.get(COOKIE_NAME)
             if token:
@@ -1707,6 +1707,15 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
         }
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/home", response_class=HTMLResponse)
+async def read_home_page(request: Request):
+    username = get_current_username(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="home.html",
+        context={"username": username}
+    )
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def read_dashboard(request: Request, msg: str = "", error: str = ""):
     try:

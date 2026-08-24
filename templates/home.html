@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to VRT Services — Enterprise ERP & CRM Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --card-bg: rgba(22, 26, 37, 0.65);
+            --card-hover: rgba(30, 36, 51, 0.85);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(127, 0, 255, 0.3);
+            --primary-grad: linear-gradient(135deg, #7f00ff, #e100ff);
+            --cyan-grad: linear-gradient(135deg, #00f2fe, #4facfe);
+            --emerald-grad: linear-gradient(135deg, #10b981, #059669);
+            --text-main: #f5f6fa;
+            --text-muted: #94a3b8;
+            --accent-glow: rgba(225, 0, 255, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 15% 20%, rgba(127, 0, 255, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 85% 75%, rgba(0, 242, 254, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* ── Header Bar ─────────────────────────────────────────────── */
+        header.top-bar {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: var(--primary-grad);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .logo-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: #ffffff;
+        }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-header-login {
+            padding: 10px 24px;
+            background: var(--cyan-grad);
+            color: #0b0c10;
+            font-weight: 800;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 0.88rem;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-header-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 242, 254, 0.45);
+        }
+
+        /* ── Main Container & Hero ───────────────────────────────────── */
+        main.main-content {
+            flex: 1;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 32px 80px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            background: rgba(127, 0, 255, 0.15);
+            border: 1px solid rgba(225, 0, 255, 0.3);
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #e100ff;
+            margin-bottom: 28px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(127, 0, 255, 0.2);
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        .hero-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3.8rem;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.03em;
+            max-width: 900px;
+            animation: fadeInUp 0.7s ease-out;
+        }
+
+        .hero-title span {
+            background: linear-gradient(135deg, #00f2fe, #e100ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            max-width: 720px;
+            margin-bottom: 40px;
+            font-weight: 400;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .hero-buttons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 64px;
+            animation: fadeInUp 0.9s ease-out;
+        }
+
+        .btn-primary-portal {
+            padding: 16px 36px;
+            background: linear-gradient(135deg, #7f00ff, #e100ff);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 800;
+            border-radius: 14px;
+            text-decoration: none;
+            box-shadow: 0 10px 30px rgba(127, 0, 255, 0.4);
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary-portal:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(225, 0, 255, 0.55);
+        }
+
+        .btn-secondary-portal {
+            padding: 16px 32px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-radius: 14px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary-portal:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* ── Feature Cards Grid ──────────────────────────────────────── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            width: 100%;
+            margin-bottom: 64px;
+            text-align: left;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 28px 24px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .feature-card:hover {
+            background: var(--card-hover);
+            border-color: var(--border-glow);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(127, 0, 255, 0.15);
+        }
+
+        .feature-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .feature-card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .feature-card-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* ── Stats Bar ────────────────────────────────────────────────── */
+        .stats-bar {
+            width: 100%;
+            background: rgba(15, 21, 35, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 28px 40px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+            backdrop-filter: blur(16px);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00f2fe, #7f00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        /* ── Footer ──────────────────────────────────────────────────── */
+        footer.bottom-footer {
+            width: 100%;
+            border-top: 1px solid var(--border-color);
+            padding: 24px 32px;
+            text-align: center;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            background: rgba(11, 12, 16, 0.9);
+            z-index: 10;
+        }
+
+        /* ── Keyframe Animations ─────────────────────────────────────── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.6rem;
+            }
+            .hero-subtitle {
+                font-size: 1rem;
+            }
+            .hero-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            .btn-primary-portal, .btn-secondary-portal {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Top Header Bar -->
+    <header class="top-bar">
+        <a href="/" class="brand-logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+                </svg>
+            </div>
+            <div class="logo-text">
+                <span class="brand-title">VRT SERVICES</span>
+                <span class="brand-sub">Enterprise ERP Portal</span>
+            </div>
+        </a>
+
+        <div class="nav-actions">
+            {% if username and username != 'user' %}
+                <a href="/dashboard" class="btn-header-login">
+                    ⚡ Go to Dashboard
+                </a>
+            {% else %}
+                <a href="/login" class="btn-header-login">
+                    🚀 Log In
+                </a>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Main Content Hero Section -->
+    <main class="main-content">
+        <div class="hero-badge">
+            ✨ VRT SERVICES ENTERPRISE PORTAL
+        </div>
+
+        <h1 class="hero-title">
+            Welcome to <span>VRT Services</span>
+        </h1>
+
+        <p class="hero-subtitle">
+            Next-generation ERP & CRM platform for automated bank statement OCR extraction, client communication management, and secure financial document processing.
+        </p>
+
+        <div class="hero-buttons">
+            {% if username and username != 'user' %}
+                <a href="/dashboard" class="btn-primary-portal">
+                    ⚡ Open Dashboard
+                </a>
+            {% else %}
+                <a href="/login" class="btn-primary-portal">
+                    🚀 Access Portal / Login
+                </a>
+            {% endif %}
+            <a href="/ocr" class="btn-secondary-portal">
+                📄 Bank Statement OCR
+            </a>
+        </div>
+
+        <!-- Feature Grid -->
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.3);">
+                    📄
+                </div>
+                <h3 class="feature-card-title">Bank Statement OCR</h3>
+                <p class="feature-card-desc">
+                    Extract transactions from PDF & image bank statements automatically. Instant reconciliation and export formatted CSVs for QuickBooks.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon" style="color: #e100ff; border-color: rgba(225, 0, 255, 0.3);">
+                    👥
+                </div>
+                <h3 class="feature-card-title">Customer CRM Portal</h3>
+                <p class="feature-card-desc">
+                    Comprehensive customer profiles, custom client reference tags, and automated cloud folder setup for seamlessly managing client assets.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                    💬
+                </div>
+                <h3 class="feature-card-title">Client Email System</h3>
+                <p class="feature-card-desc">
+                    Send outbound emails with automatic reference tagging and receive inbound client replies directly inside the CRM.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.3);">
+                    🔒
+                </div>
+                <h3 class="feature-card-title">Cloud Document Storage</h3>
+                <p class="feature-card-desc">
+                    Direct Integration with DigitalOcean Spaces for encrypted file uploads, subfolder organization, and quick document downloads.
+                </p>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-value">99.9%</div>
+                <div class="stat-label">Extraction Accuracy</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">Multi-Tenant</div>
+                <div class="stat-label">Client Segregation</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">QBO Ready</div>
+                <div class="stat-label">Seamless Integration</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bottom-footer">
+        © 2026 VRT Services Enterprise ERP. All rights reserved. Powered by Datalazo OCR.
+    </footer>
+
+</body>
+
+</html>
