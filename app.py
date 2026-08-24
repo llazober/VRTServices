@@ -4209,6 +4209,56 @@ async def get_knowledge_doc(request: Request, path: str = ""):
         content = f.read()
     return {"success": True, "path": path, "content": content}
 
+@app.post("/api/knowledge/save")
+async def save_knowledge_doc(request: Request):
+    import rag_engine
+    body = await request.json()
+    rel_path = (body.get("path") or "").strip()
+    content = body.get("content") or ""
+    if not rel_path or ".." in rel_path:
+        raise HTTPException(status_code=400, detail="Invalid document path.")
+    
+    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    
+    return {"success": True, "message": "Article saved successfully.", "path": rel_path}
+
+@app.post("/api/knowledge/create")
+async def create_knowledge_doc(request: Request):
+    import rag_engine
+    body = await request.json()
+    category_slug = (body.get("category_slug") or "vrt_services").strip()
+    title = (body.get("title") or "").strip()
+    content = body.get("content") or f"# {title}\n\nWrite article content here..."
+    
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required.")
+    
+    filename = re.sub(r'[^a-zA-Z0-9_-]', '_', title.lower()).strip('_') + ".md"
+    rel_path = f"{category_slug}/{filename}"
+    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
+    
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(content)
+        
+    return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
+
+@app.delete("/api/knowledge/delete")
+async def delete_knowledge_doc(request: Request, path: str = ""):
+    import rag_engine
+    if not path or ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid path.")
+    
+    full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
+    if os.path.exists(full_path):
+        os.remove(full_path)
+        return {"success": True, "message": "Article deleted successfully."}
+    else:
+        raise HTTPException(status_code=404, detail="File not found.")
+
 # ── Customer Email Communication & Inbound Webhooks ───────────────────────────
 @app.post("/api/customers/{customer_id}/send-email")
 async def send_customer_email(customer_id: int, request: Request):
