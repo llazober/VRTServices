@@ -3301,6 +3301,9 @@
             modal.style.display = 'none';
             modal.style.opacity = '0';
             currentChecklistCustomerId = null;
+            if (typeof fetchPendingWorkload === 'function') {
+                fetchPendingWorkload();
+            }
         }
 
         // --- Customer Email Communication Functions ---
@@ -3944,6 +3947,10 @@
                 if (!res.ok) throw new Error(data.detail || 'Failed to update checklist step');
 
                 renderChecklistUI(data);
+
+                if (typeof fetchPendingWorkload === 'function') {
+                    fetchPendingWorkload();
+                }
 
                 if (data.just_archived) {
                     alert(data.archived_message || '🎉 Workflow Completed & Archived!');
