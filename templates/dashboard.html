@@ -3681,21 +3681,56 @@
                     ? '<span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.72rem;">Individual</span>'
                     : '<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.72rem;">Business</span>';
 
+                let bkProgressPercent = item.bk ? (item.bk.progress_percent || 0) : 0;
+                let taxProgressPercent = item.tax ? (item.tax.progress_percent || 0) : 0;
+
                 let wfHtml = '';
                 let missingBadges = '';
-                let progressPercent = 0;
+                let progressCellHtml = '';
 
-                if (isInd || (item.tax && item.tax.has_pending && (!item.bk || !item.bk.has_pending))) {
-                    wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Return (In Process 2025)</span>`;
+                if (isInd) {
+                    wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Preparation</span>`;
                     missingBadges = (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
-                    progressPercent = item.tax.progress_percent || 0;
+                    progressCellHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 140px;">
+                            <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.74rem;">
+                                <span>📑 Tax Return:</span>
+                                <span>${taxProgressPercent}%</span>
+                            </div>
+                            <div style="width: 130px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #f43f5e, #fb7185); border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    wfHtml = `<span style="color: #38bdf8; font-weight: 700;">📊 Bookkeeping (In Process)</span>`;
-                    missingBadges = ((item.bk ? item.bk.missing_steps : []) || []).map(s => `<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
-                    if (item.tax && item.tax.has_pending) {
-                        missingBadges += ' ' + (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ Tax: ${s}</span>`).join(' ');
-                    }
-                    progressPercent = item.bk ? (item.bk.progress_percent || 0) : 0;
+                    wfHtml = `<span style="color: #38bdf8; font-weight: 700;">📊 Bookkeeping</span> & <span style="color: #f87171; font-weight: 700;">📑 Tax Return</span>`;
+                    
+                    let bkBadges = ((item.bk ? item.bk.missing_steps : []) || []).map(s => `<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
+                    let taxBadges = (item.tax ? (item.tax.missing_steps || []) : []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ Tax: ${s}</span>`).join(' ');
+                    missingBadges = [bkBadges, taxBadges].filter(Boolean).join(' ');
+
+                    progressCellHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 6px; min-width: 150px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #38bdf8; font-size: 0.72rem; margin-bottom: 2px;">
+                                    <span>📊 Bookkeeping:</span>
+                                    <span>${bkProgressPercent}%</span>
+                                </div>
+                                <div style="width: 140px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${bkProgressPercent}%; height: 100%; background: linear-gradient(90deg, #00f2fe, #38bdf8); border-radius: 4px;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.72rem; margin-bottom: 2px;">
+                                    <span>📑 Tax Return:</span>
+                                    <span>${taxProgressPercent}%</span>
+                                </div>
+                                <div style="width: 140px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #7f00ff, #f43f5e); border-radius: 4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 }
 
                 return `
@@ -3707,12 +3742,7 @@
                         <td style="padding: 12px 18px;">${typeBadge}</td>
                         <td style="padding: 12px 18px;">${wfHtml}</td>
                         <td style="padding: 12px 18px; display: flex; gap: 6px; flex-wrap: wrap;">${missingBadges}</td>
-                        <td style="padding: 12px 18px;">
-                            <div style="font-weight: 700; color: #cbd5e1; font-size: 0.78rem; margin-bottom: 4px;">${progressPercent}% Complete</div>
-                            <div style="width: 100px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                                <div style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, #e100ff, #38bdf8); border-radius: 4px;"></div>
-                            </div>
-                        </td>
+                        <td style="padding: 12px 18px;">${progressCellHtml}</td>
                         <td style="padding: 12px 18px; text-align: right;">
                             <button onclick="openCustomerChecklistModal(event, ${item.customer_id}, '${item.period || ''}', '${item.customer_type || ''}')" style="padding: 6px 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; transition: all 0.2s ease;">
                                 📋 Open Checklist
