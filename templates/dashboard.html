@@ -3848,27 +3848,30 @@
             if (!select) return;
 
             let optionsHtml = '';
-            const inProcessLabel = (data && data.in_process_label) ? data.in_process_label : 'Current Month';
+            const inProcessLabel = (data && data.in_process_label) ? data.in_process_label : 'Current Period';
             const inProcessSlug = (data && data.in_process_period) ? data.in_process_period : 'in_process';
+            const historical = (data && data.historical_periods) ? data.historical_periods : [];
 
             if (activeWorkflowTab === 'tax') {
                 if (labelEl) labelEl.textContent = 'TAX YEAR:';
-                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (Tax Year 2025)</option>`;
-                const historical = (data && data.historical_periods) ? data.historical_periods : [];
+                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
                 if (historical.length > 0) {
                     optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Years ──</option>`;
                     historical.forEach(hp => {
-                        optionsHtml += `<option value="${hp}">📁 Tax Year ${hp}</option>`;
+                        const slug = typeof hp === 'object' ? hp.slug : hp;
+                        const label = typeof hp === 'object' ? hp.label : `Tax Year ${hp}`;
+                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
                     });
                 }
             } else {
                 if (labelEl) labelEl.textContent = 'PERIOD CYCLE:';
                 optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
-                const historical = (data && data.historical_periods) ? data.historical_periods : [];
                 if (historical.length > 0) {
                     optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Periods ──</option>`;
                     historical.forEach(hp => {
-                        optionsHtml += `<option value="${hp}">📁 Period ${hp}</option>`;
+                        const slug = typeof hp === 'object' ? hp.slug : hp;
+                        const label = typeof hp === 'object' ? hp.label : `Period ${hp}`;
+                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
                     });
                 }
             }

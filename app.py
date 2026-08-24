@@ -2575,6 +2575,29 @@ async def delete_customer_storage_folder(customer_id: int, prefix: str, request:
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
+def format_period_label(period_str, workflow_mode="bookkeeping"):
+    if not period_str:
+        return "Unknown Period"
+    try:
+        import datetime
+        now = datetime.datetime.now()
+        current_slug = now.strftime("%Y-%m")
+        if "-" in period_str:
+            parts = period_str.split("-")
+            year = int(parts[0])
+            month = int(parts[1])
+            date_obj = datetime.date(year, month, 1)
+            if workflow_mode == "tax":
+                if period_str == current_slug:
+                    return f"Tax Year {year}"
+                return f"Tax Year {year - 1}"
+            return date_obj.strftime("%B %Y")
+        elif len(period_str) == 4 and period_str.isdigit():
+            return f"Tax Year {period_str}"
+    except Exception:
+        pass
+    return period_str
+
 def get_in_process_period(cur=None, customer_id=None, workflow_mode="bookkeeping"):
     import datetime
     now = datetime.datetime.now()
@@ -2582,10 +2605,10 @@ def get_in_process_period(cur=None, customer_id=None, workflow_mode="bookkeeping
     prev_month_date = first_of_current - datetime.timedelta(days=1)
     
     prev_slug = prev_month_date.strftime("%Y-%m")
-    prev_label = prev_month_date.strftime("%B %Y")
+    prev_label = format_period_label(prev_slug, workflow_mode)
     
     current_slug = now.strftime("%Y-%m")
-    current_label = now.strftime("%B %Y")
+    current_label = format_period_label(current_slug, workflow_mode)
 
     if cur and customer_id:
         cur.execute("""
@@ -2656,14 +2679,21 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
                 )
                 row = cur.fetchone()
 
-            # Fetch list of all historical periods for this customer
+            # Fetch list of all historical periods for this customer with formatted labels
             cur.execute("""
                 SELECT DISTINCT period FROM customer_task_checklist
                 WHERE customer_id = %s AND period IS NOT NULL AND period != ''
                 ORDER BY period DESC;
             """, (customer_id,))
             archived_rows = cur.fetchall() or []
-            historical_periods = [r["period"] for r in archived_rows if r["period"] != in_process_slug]
+            historical_periods = []
+            for r in archived_rows:
+                p_slug = r["period"]
+                if p_slug != in_process_slug:
+                    historical_periods.append({
+                        "slug": p_slug,
+                        "label": format_period_label(p_slug, workflow_tab)
+                    })
 
         bk_steps = {
             "bank_statement_received": bool(row.get("bank_statement_received")) if row else False,
@@ -2797,14 +2827,14 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
 
             new_in_process_slug, new_in_process_label = get_in_process_period(cur, customer_id, workflow_mode)
 
-        res = await get_customer_checklist(customer_id, period, workflow_mode, request)
-        
-        # Determine if period just reached 100% and shifted
+        # If period just completed and shifted to next month, fetch the new In Process checklist
         if val and old_in_process_slug != new_in_process_slug:
+            res = await get_customer_checklist(customer_id, new_in_process_slug, workflow_mode, request)
             res["just_archived"] = True
             res["archived_message"] = f"🎉 {old_in_process_label} Completed & Archived! In Process reset for {new_in_process_label}"
-
-        return res
+            return res
+        else:
+            return await get_customer_checklist(customer_id, period, workflow_mode, request)
     except HTTPException as he:
         raise he
     except Exception as e:
