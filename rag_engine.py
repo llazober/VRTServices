@@ -18,10 +18,9 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load and chunk markdown files for a specific tenant and shared IRS tax knowledge."""
+    """Load and chunk markdown files strictly for a specific tenant."""
     chunks = []
     dirs_to_load = [
-        os.path.join(KB_DIR, "shared_irs_tax"),
         os.path.join(KB_DIR, tenant_slug)
     ]
     
