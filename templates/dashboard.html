@@ -3512,6 +3512,18 @@
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
 
+            const cust = (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+                ? currentCustomerRecords.find(c => c.id == cid)
+                : null;
+            const subtitleEl = document.getElementById('commsHistoryModalSubtitle');
+            if (subtitleEl) {
+                if (cust) {
+                    subtitleEl.innerHTML = `Customer: <strong style="color: #38bdf8;">${cust.legal_name || cust.display_name}</strong> (${cust.custumer_number ? 'Ref: ' + cust.custumer_number + ' | ' : ''}${cust.email ? 'Email: ' + cust.email : 'No email set'})`;
+                } else {
+                    subtitleEl.textContent = `Customer ID #${cid} — Email logs & received replies`;
+                }
+            }
+
             const listBody = document.getElementById('commsHistoryListBody');
             if (listBody) listBody.innerHTML = '<p style="text-align: center; color: #94a3b8;">Loading communications history...</p>';
 

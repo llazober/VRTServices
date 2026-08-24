@@ -4595,11 +4595,22 @@ async def get_customer_communications(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM customer_communications
-                WHERE customer_id = %s
-                ORDER BY created_at DESC;
-            """, (customer_id,))
+            cur.execute("SELECT id, legal_name, email FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            cust_email = parse_clean_email(cust.get("email") or "") if cust else None
+
+            if cust_email and len(cust_email) > 3:
+                cur.execute("""
+                    SELECT * FROM customer_communications
+                    WHERE customer_id = %s OR LOWER(sender_email) = LOWER(%s) OR LOWER(recipient_email) = LOWER(%s)
+                    ORDER BY created_at DESC;
+                """, (customer_id, cust_email, cust_email))
+            else:
+                cur.execute("""
+                    SELECT * FROM customer_communications
+                    WHERE customer_id = %s
+                    ORDER BY created_at DESC;
+                """, (customer_id,))
             records = cur.fetchall()
 
             history = []
