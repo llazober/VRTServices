@@ -2679,9 +2679,9 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
                 )
                 row = cur.fetchone()
 
-            # Fetch list of all historical periods for this customer with formatted labels
+            # Fetch list of all historical periods for this customer with formatted labels (strictly filtered by completed workflow)
             cur.execute("""
-                SELECT DISTINCT period FROM customer_task_checklist
+                SELECT * FROM customer_task_checklist
                 WHERE customer_id = %s AND period IS NOT NULL AND period != ''
                 ORDER BY period DESC;
             """, (customer_id,))
@@ -2690,10 +2690,34 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
             for r in archived_rows:
                 p_slug = r["period"]
                 if p_slug < in_process_slug:
-                    historical_periods.append({
-                        "slug": p_slug,
-                        "label": format_period_label(p_slug, workflow_tab)
-                    })
+                    if workflow_tab == "tax":
+                        tax_done = sum([
+                            bool(r.get("tax_docs_requested")),
+                            bool(r.get("tax_docs_received")),
+                            bool(r.get("tax_organizer")),
+                            bool(r.get("tax_preparation")),
+                            bool(r.get("tax_review")),
+                            bool(r.get("tax_client_signature")),
+                            bool(r.get("tax_efile")),
+                            bool(r.get("tax_accepted"))
+                        ]) == 8
+                        if tax_done:
+                            historical_periods.append({
+                                "slug": p_slug,
+                                "label": format_period_label(p_slug, workflow_tab)
+                            })
+                    else:
+                        bk_done = sum([
+                            bool(r.get("bank_statement_received")),
+                            bool(r.get("check_images_received")),
+                            bool(r.get("extraction_ai_categorization_done")),
+                            bool(r.get("accountant_reviewed"))
+                        ]) == 4
+                        if bk_done:
+                            historical_periods.append({
+                                "slug": p_slug,
+                                "label": format_period_label(p_slug, workflow_tab)
+                            })
 
         bk_steps = {
             "bank_statement_received": bool(row.get("bank_statement_received")) if row else False,
