@@ -4102,42 +4102,39 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            sql = """
-                SELECT DISTINCT ON (c.id)
-                       c.id, c.custumer_number, c.customer_type, c.legal_name, c.display_name, c.email, c.phone, c.status, c.parent_name,
-                       ch.period, ch.bank_statement_received, ch.check_images_received,
-                       ch.extraction_ai_categorization_done, ch.accountant_reviewed,
-                       ch.tax_docs_requested, ch.tax_docs_received, ch.tax_organizer,
-                       ch.tax_preparation, ch.tax_review, ch.tax_client_signature,
-                       ch.tax_efile, ch.tax_accepted, ch.notes, ch.tax_notes, ch.updated_at
-                FROM customer c
-                LEFT JOIN customer_task_checklist ch ON c.id = ch.customer_id
-            """
+            # Fetch all active customers
+            sql = "SELECT id, custumer_number, customer_type, legal_name, display_name, email, phone, status, parent_name FROM customer WHERE LOWER(status) = 'active'"
             params = []
-            where_clauses = ["LOWER(c.status) = 'active'"]
 
             if target_parent:
                 if target_parent.lower() == "vrt services":
-                    where_clauses.append("(LOWER(COALESCE(c.parent_name, '')) = LOWER(%s) OR c.parent_name IS NULL OR c.parent_name = '')")
+                    sql += " AND (LOWER(COALESCE(parent_name, '')) = LOWER(%s) OR parent_name IS NULL OR parent_name = '')"
                     params.append(target_parent)
                 else:
-                    where_clauses.append("(LOWER(COALESCE(c.parent_name, '')) = LOWER(%s))")
+                    sql += " AND (LOWER(COALESCE(parent_name, '')) = LOWER(%s))"
                     params.append(target_parent)
 
-            sql += " WHERE " + " AND ".join(where_clauses) + " ORDER BY c.id, ch.updated_at DESC NULLS LAST;"
+            sql += " ORDER BY id DESC;"
             cur.execute(sql, tuple(params))
-            records = cur.fetchall()
+            cust_records = cur.fetchall() or []
 
             pending_items = []
             bk_pending_count = 0
             tax_pending_count = 0
             total_customers_with_pending = set()
 
-            for r in records:
-                row = dict(r)
-                cust_id = row["id"]
-                c_type = (row.get("customer_type") or "Business").strip()
+            for cust in cust_records:
+                cust_id = cust["id"]
+                c_type = (cust.get("customer_type") or "Business").strip()
                 is_individual = c_type.lower() == "individual"
+
+                in_process_slug, in_process_label = get_in_process_period(cur, cust_id, "bookkeeping")
+
+                cur.execute("""
+                    SELECT * FROM customer_task_checklist
+                    WHERE customer_id = %s AND period = %s;
+                """, (cust_id, in_process_slug))
+                row = cur.fetchone() or {}
 
                 # Calculate Bookkeeping Steps (4 steps)
                 bk_total = 4
@@ -4200,11 +4197,11 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                     total_customers_with_pending.add(cust_id)
                     pending_items.append({
                         "customer_id": cust_id,
-                        "custumer_number": row.get("custumer_number"),
-                        "legal_name": row.get("legal_name"),
-                        "display_name": row.get("display_name"),
+                        "custumer_number": cust.get("custumer_number"),
+                        "legal_name": cust.get("legal_name"),
+                        "display_name": cust.get("display_name"),
                         "customer_type": c_type,
-                        "period": row.get("period") or "2026-04",
+                        "period": in_process_slug,
                         "is_individual": is_individual,
                         "bk": {
                             "completed_count": bk_completed,
