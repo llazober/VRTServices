@@ -4240,6 +4240,8 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                         "tax_period": tax_slug,
                         "is_individual": is_individual,
                         "bk": {
+                            "period_slug": bk_slug,
+                            "period_label": bk_label,
                             "completed_count": bk_completed,
                             "total_count": bk_total,
                             "progress_percent": bk_percent,
@@ -4247,6 +4249,8 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                             "has_pending": has_bk_pending
                         },
                         "tax": {
+                            "period_slug": tax_slug,
+                            "period_label": tax_label,
                             "completed_count": tax_completed,
                             "total_count": tax_total,
                             "progress_percent": tax_percent,

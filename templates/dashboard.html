@@ -3694,13 +3694,14 @@
                 if (isInd) {
                     wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Preparation</span>`;
                     missingBadges = (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
+                    const taxPeriodLabel = (item.tax && item.tax.period_label) ? item.tax.period_label : 'Tax Year';
                     progressCellHtml = `
-                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 140px;">
-                            <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.74rem;">
-                                <span>📑 Tax Return:</span>
+                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 170px;">
+                            <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.73rem;">
+                                <span>📑 Tax (${taxPeriodLabel}):</span>
                                 <span>${taxProgressPercent}%</span>
                             </div>
-                            <div style="width: 130px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                            <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
                                 <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #f43f5e, #fb7185); border-radius: 4px;"></div>
                             </div>
                         </div>
@@ -3712,23 +3713,26 @@
                     let taxBadges = (item.tax ? (item.tax.missing_steps || []) : []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ Tax: ${s}</span>`).join(' ');
                     missingBadges = [bkBadges, taxBadges].filter(Boolean).join(' ');
 
+                    const bkPeriodLabel = (item.bk && item.bk.period_label) ? item.bk.period_label : 'Current Period';
+                    const taxPeriodLabel = (item.tax && item.tax.period_label) ? item.tax.period_label : 'Tax Year';
+
                     progressCellHtml = `
-                        <div style="display: flex; flex-direction: column; gap: 6px; min-width: 150px;">
+                        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 170px;">
                             <div>
-                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #38bdf8; font-size: 0.72rem; margin-bottom: 2px;">
-                                    <span>📊 Bookkeeping:</span>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #38bdf8; font-size: 0.73rem; margin-bottom: 2px;">
+                                    <span>📊 Bk (${bkPeriodLabel}):</span>
                                     <span>${bkProgressPercent}%</span>
                                 </div>
-                                <div style="width: 140px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
                                     <div style="width: ${bkProgressPercent}%; height: 100%; background: linear-gradient(90deg, #00f2fe, #38bdf8); border-radius: 4px;"></div>
                                 </div>
                             </div>
                             <div>
-                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.72rem; margin-bottom: 2px;">
-                                    <span>📑 Tax Return:</span>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.73rem; margin-bottom: 2px;">
+                                    <span>📑 Tax (${taxPeriodLabel}):</span>
                                     <span>${taxProgressPercent}%</span>
                                 </div>
-                                <div style="width: 140px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
                                     <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #7f00ff, #f43f5e); border-radius: 4px;"></div>
                                 </div>
                             </div>
