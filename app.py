@@ -4606,9 +4606,15 @@ async def get_customer_communications(customer_id: int, request: Request):
             for r in records:
                 row = dict(r)
                 if row.get("created_at"):
-                    row["created_at"] = str(row["created_at"])
+                    val = row["created_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["created_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
                 if row.get("read_at"):
-                    row["read_at"] = str(row["read_at"])
+                    val = row["read_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["read_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
                 history.append(row)
 
             return {"communications": history}
@@ -4665,7 +4671,10 @@ async def mark_single_communication_read(comm_id: int, request: Request):
             if not updated:
                 return {"success": False, "message": "Communication not found or already read"}
             
-            read_at_str = str(updated["read_at"]) if updated.get("read_at") else None
+            read_at_val = updated.get("read_at")
+            if isinstance(read_at_val, datetime.datetime) and read_at_val.tzinfo is None:
+                read_at_val = read_at_val.replace(tzinfo=datetime.timezone.utc)
+            read_at_str = read_at_val.isoformat() if hasattr(read_at_val, "isoformat") else (str(read_at_val) if read_at_val else None)
             return {
                 "success": True, 
                 "comm_id": comm_id, 

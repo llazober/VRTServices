@@ -3471,6 +3471,36 @@
             }
         }
 
+        function formatEasternDateTime(dateInput) {
+            if (!dateInput) return '';
+            let d;
+            if (dateInput instanceof Date) {
+                d = dateInput;
+            } else {
+                let str = String(dateInput).trim();
+                if (!str) return '';
+                if (!str.includes('Z') && !str.includes('+') && !str.match(/-\d{2}:\d{2}$/)) {
+                    str = str.replace(' ', 'T') + 'Z';
+                }
+                d = new Date(str);
+            }
+            if (isNaN(d.getTime())) {
+                d = new Date(dateInput);
+            }
+            if (isNaN(d.getTime())) return String(dateInput);
+
+            return d.toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }) + ' ET';
+        }
+
         let activeHistoryCustomerId = null;
 
         async function openCustomerCommsHistoryModal(customerId) {
@@ -3507,7 +3537,7 @@
                     listBody.innerHTML = logs.map(item => {
                         const isOut = item.direction === 'OUTBOUND';
                         const isRead = item.is_read || item.status === 'READ';
-                        const readDateStr = item.read_at ? new Date(item.read_at).toLocaleString() : '';
+                        const readDateStr = item.read_at ? formatEasternDateTime(item.read_at) : '';
 
                         let dirBadge = '';
                         if (isOut) {
@@ -3520,7 +3550,7 @@
                             dirBadge = '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span> ' + readBadge;
                         }
 
-                        const dateStr = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+                        const dateStr = item.created_at ? formatEasternDateTime(item.created_at) : '';
                         let atts = item.attachments_json || [];
                         if (typeof atts === 'string') {
                             try { atts = JSON.parse(atts); } catch(e) { atts = []; }
@@ -3574,7 +3604,7 @@
                 const res = await fetch(`/api/communications/${commId}/mark-single-read`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok && data.success) {
-                    const readDateStr = data.read_at ? new Date(data.read_at).toLocaleString() : new Date().toLocaleString();
+                    const readDateStr = data.read_at ? formatEasternDateTime(data.read_at) : formatEasternDateTime(new Date());
                     if (badgeEl) {
                         badgeEl.innerHTML = `👁️ READ (${readDateStr})`;
                         badgeEl.style.background = 'rgba(34, 197, 94, 0.15)';
