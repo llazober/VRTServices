@@ -3685,17 +3685,17 @@
                 let missingBadges = '';
                 let progressPercent = 0;
 
-                if (isInd || (item.tax.has_pending && !item.bk.has_pending)) {
-                    wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Return (${item.period || '2025'})</span>`;
+                if (isInd || (item.tax && item.tax.has_pending && (!item.bk || !item.bk.has_pending))) {
+                    wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Return (In Process 2025)</span>`;
                     missingBadges = (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
                     progressPercent = item.tax.progress_percent || 0;
                 } else {
-                    wfHtml = `<span style="color: #38bdf8; font-weight: 700;">📊 Bookkeeping (${item.period || '2026-04'})</span>`;
-                    missingBadges = (item.bk.missing_steps || []).map(s => `<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
-                    if (item.tax.has_pending) {
+                    wfHtml = `<span style="color: #38bdf8; font-weight: 700;">📊 Bookkeeping (In Process)</span>`;
+                    missingBadges = ((item.bk ? item.bk.missing_steps : []) || []).map(s => `<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
+                    if (item.tax && item.tax.has_pending) {
                         missingBadges += ' ' + (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ Tax: ${s}</span>`).join(' ');
                     }
-                    progressPercent = item.bk.progress_percent || 0;
+                    progressPercent = item.bk ? (item.bk.progress_percent || 0) : 0;
                 }
 
                 return `
@@ -3781,19 +3781,21 @@
 
                 const titleEl = document.getElementById('checklistModalTitle');
                 const subtitleEl = document.getElementById('checklistModalSubtitle');
-                const periodSelectEl = document.getElementById('checklistPeriodSelect');
 
                 if (titleEl) titleEl.textContent = `📋 ${data.legal_name} — Workflow Checklist`;
                 if (subtitleEl) {
                     const labelText = activeWorkflowTab === 'tax' ? 'Tax Year' : 'Period Cycle';
-                    subtitleEl.textContent = `${labelText}: ${data.period} | Last Updated: ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'Just now'}`;
+                    const modeLabel = data.is_in_process ? `🔄 In Process (${data.in_process_label})` : `📁 Historical Archive (${data.period})`;
+                    subtitleEl.textContent = `${labelText}: ${modeLabel} | Last Updated: ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'Just now'}`;
                 }
 
-                // Dynamically populate period/year options if not built
-                if (periodSelectEl && (periodSelectEl.options.length <= 5 || (activeWorkflowTab === 'tax' && periodSelectEl.options[0]?.value.includes('-')) || (activeWorkflowTab === 'bookkeeping' && !periodSelectEl.options[0]?.value.includes('-')))) {
-                    populateChecklistPeriodDropdown(data.period);
-                } else if (periodSelectEl && data.period) {
-                    periodSelectEl.value = data.period;
+                // Populate period select options dynamically
+                populateChecklistPeriodDropdown(data);
+
+                // Hide/show Reopen button if viewing historical archive
+                const reopenBtn = document.getElementById('btnReopenChecklist');
+                if (reopenBtn) {
+                    reopenBtn.style.display = (!data.is_in_process) ? 'inline-block' : 'none';
                 }
 
                 renderChecklistUI(data);
@@ -3840,42 +3842,38 @@
             }
         }
 
-        function populateChecklistPeriodDropdown(targetPeriod) {
+        function populateChecklistPeriodDropdown(data) {
             const select = document.getElementById('checklistPeriodSelect');
             const labelEl = document.getElementById('checklistPeriodLabel');
             if (!select) return;
 
-            const now = new Date();
-            const currentYear = now.getFullYear();
             let optionsHtml = '';
+            const inProcessLabel = (data && data.in_process_label) ? data.in_process_label : 'Current Month';
+            const inProcessSlug = (data && data.in_process_period) ? data.in_process_period : 'in_process';
 
             if (activeWorkflowTab === 'tax') {
                 if (labelEl) labelEl.textContent = 'FOR YEAR:';
-                // Generate Tax Years (e.g. 2027 down to 2020)
-                for (let y = currentYear + 1; y >= currentYear - 5; y--) {
-                    const val = `${y}`;
-                    const label = `Tax Year ${y}`;
-                    optionsHtml += `<option value="${val}">${label}</option>`;
-                }
+                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (Tax Year 2025)</option>`;
+                optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Years ──</option>`;
+                const taxYears = ['2024', '2023', '2022', '2021', '2020'];
+                taxYears.forEach(y => {
+                    optionsHtml += `<option value="${y}">📁 Tax Year ${y}</option>`;
+                });
             } else {
                 if (labelEl) labelEl.textContent = 'PERIOD CYCLE:';
-                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                // Generate all 12 months for 2027, 2026, and 2025
-                for (let y = currentYear + 1; y >= currentYear - 1; y--) {
-                    for (let m = 12; m >= 1; m--) {
-                        const val = `${y}-${m.toString().padStart(2, '0')}`;
-                        const label = `${monthNames[m - 1]} ${y}`;
-                        optionsHtml += `<option value="${val}">${label}</option>`;
-                    }
+                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
+                const historical = (data && data.historical_periods) ? data.historical_periods : [];
+                if (historical.length > 0) {
+                    optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Periods ──</option>`;
+                    historical.forEach(hp => {
+                        optionsHtml += `<option value="${hp}">📁 Period ${hp}</option>`;
+                    });
                 }
             }
 
             select.innerHTML = optionsHtml;
-
-            if (targetPeriod) {
-                select.value = targetPeriod;
-            } else if (activeWorkflowTab === 'tax') {
-                select.value = '2025'; // Default Tax Year
+            if (data && data.period) {
+                select.value = data.period;
             }
         }
 
@@ -3903,15 +3901,40 @@
                     body: JSON.stringify({
                         period: currentChecklistPeriod,
                         step_key: stepKey,
-                        value: isChecked
+                        value: isChecked,
+                        workflow_mode: activeWorkflowTab
                     })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to update checklist step');
 
                 renderChecklistUI(data);
+
+                if (data.just_archived) {
+                    alert(data.archived_message || '🎉 Workflow Completed & Archived!');
+                    await loadCustomerChecklist(currentChecklistCustomerId, 'in_process');
+                }
             } catch (err) {
                 alert(`❌ Step Toggle Error: ${err.message}`);
+            }
+        }
+
+        async function reopenChecklistPeriod() {
+            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            if (!await showCustomConfirm('Re-open this period as In Process to make corrections?')) return;
+            try {
+                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/reopen`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period: currentChecklistPeriod })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to reopen period');
+
+                alert('↩️ Period re-opened as In Process!');
+                await loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
+            } catch (err) {
+                alert(`❌ Reopen Error: ${err.message}`);
             }
         }
 
@@ -4045,8 +4068,9 @@
             <div style="display: flex; align-items: center; gap: 10px;">
                 <label id="checklistPeriodLabel" style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; font-family: monospace;">PERIOD CYCLE:</label>
                 <select id="checklistPeriodSelect" onchange="loadCustomerChecklist(null, this.value)" style="padding: 6px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #38bdf8; font-weight: 700; font-size: 0.82rem; outline: none; cursor: pointer;">
-                    <option value="2026-04">April 2026</option>
+                    <option value="in_process">🔄 In Process</option>
                 </select>
+                <button id="btnReopenChecklist" onclick="reopenChecklistPeriod()" style="display: none; padding: 5px 12px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; border-radius: 8px; font-size: 0.76rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Re-open this period as In Process to make corrections">↩️ Re-open Period</button>
             </div>
             <div style="flex: 1; max-width: 320px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-family: monospace;">

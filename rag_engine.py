@@ -84,7 +84,7 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> 
     return [item[1] for item in scores[:top_k] if item[0] > 0.05]
 
 def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Optional[Dict[str, Any]]:
-    """Retrieve customer profile and task checklist progress from database."""
+    """Retrieve customer profile and task checklist progress from database with In Process fallback to last completed month."""
     if not customer_ref:
         return None
         
@@ -106,20 +106,30 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
         return None
 
     customer_id = cust["id"]
+    is_individual = (cust.get("customer_type") or "").lower() == "individual"
 
-    # Fetch checklist row
+    # Calculate active In Process target period (e.g. July 2026 when today is August 2026)
+    now = datetime.datetime.now()
+    first_of_current = now.replace(day=1)
+    prev_month_date = first_of_current - datetime.timedelta(days=1)
+    target_period = prev_month_date.strftime("%Y-%m")
+    target_period_label = prev_month_date.strftime("%B %Y")
+
+    # Fetch active In Process row
     cur.execute("""
         SELECT * FROM customer_task_checklist
-        WHERE customer_id = %s
+        WHERE customer_id = %s AND (period = %s OR period = 'in_process')
         ORDER BY id DESC LIMIT 1;
-    """, (customer_id,))
-    row = cur.fetchone() or {}
+    """, (customer_id, target_period))
+    active_row = cur.fetchone() or {}
 
-    task_definitions = [
+    bk_task_defs = [
         ("bank_statement_received", "Bank Statements Received", "Bookkeeping"),
         ("check_images_received", "Check Images Received", "Bookkeeping"),
         ("extraction_ai_categorization_done", "OCR Transaction Extraction", "Bookkeeping"),
-        ("accountant_reviewed", "Accountant Review", "Bookkeeping"),
+        ("accountant_reviewed", "Accountant Review", "Bookkeeping")
+    ]
+    tax_task_defs = [
         ("tax_docs_requested", "Tax Documents Requested", "Tax Return"),
         ("tax_docs_received", "Tax Documents Received", "Tax Return"),
         ("tax_organizer", "Tax Organizer Completed", "Tax Return"),
@@ -127,17 +137,34 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
         ("tax_review", "Tax Return Review", "Tax Return"),
         ("tax_client_signature", "Form 8879 Client Signature", "Tax Return"),
         ("tax_efile", "IRS E-Filing Transmitted", "Tax Return"),
-        ("tax_accepted", "IRS Return Accepted", "Tax Return"),
+        ("tax_accepted", "IRS Return Accepted", "Tax Return")
     ]
 
-    checklist = []
+    task_definitions = tax_task_defs if is_individual else (bk_task_defs + tax_task_defs)
+    active_completed = sum(1 for key, _, _ in task_definitions if active_row.get(key))
     total_tasks = len(task_definitions)
-    completed_tasks = 0
 
+    # Fallback to previous archived month if In Process hasn't started (0 completed tasks)
+    last_archived_info = None
+    if active_completed == 0:
+        cur.execute("""
+            SELECT * FROM customer_task_checklist
+            WHERE customer_id = %s AND period != %s AND period != 'in_process'
+            ORDER BY period DESC, id DESC LIMIT 1;
+        """, (customer_id, target_period))
+        prev_row = cur.fetchone()
+        if prev_row:
+            prev_completed = sum(1 for key, _, _ in task_definitions if prev_row.get(key))
+            last_archived_info = {
+                "period": prev_row.get("period"),
+                "completed_tasks": prev_completed,
+                "total_tasks": total_tasks,
+                "progress_percent": int((prev_completed / total_tasks * 100)) if total_tasks > 0 else 0
+            }
+
+    checklist = []
     for key, label, category in task_definitions:
-        is_done = bool(row.get(key, False))
-        if is_done:
-            completed_tasks += 1
+        is_done = bool(active_row.get(key, False))
         checklist.append({
             "item_key": key,
             "item_label": label,
@@ -145,18 +172,22 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
             "is_completed": is_done
         })
 
-    percent = int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0
+    percent = int((active_completed / total_tasks * 100)) if total_tasks > 0 else 0
 
     return {
         "customer_id": customer_id,
         "customer_number": cust.get("custumer_number") or f"CUST-{customer_id}",
         "legal_name": cust.get("legal_name"),
+        "customer_type": cust.get("customer_type"),
         "email": cust.get("email"),
         "parent_name": cust.get("parent_name"),
+        "active_period": target_period,
+        "active_period_label": target_period_label,
         "total_tasks": total_tasks,
-        "completed_tasks": completed_tasks,
+        "completed_tasks": active_completed,
         "progress_percent": percent,
-        "checklist": checklist
+        "checklist": checklist,
+        "last_archived_info": last_archived_info
     }
 
 def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optional[Dict] = None, passages: List[Dict] = None) -> str:
@@ -172,8 +203,16 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
     if status_info:
         context_str += f"\n--- LIVE CUSTOMER TASK STATUS ---\n"
         context_str += f"Customer: {status_info['legal_name']} ({status_info['customer_number']})\n"
-        context_str += f"Overall Progress: {status_info['progress_percent']}% ({status_info['completed_tasks']}/{status_info['total_tasks']} tasks completed)\n"
-        context_str += f"Task Checklist:\n"
+        context_str += f"Active In Process Period: {status_info['active_period_label']} ({status_info['active_period']})\n"
+        context_str += f"Current In Process Progress: {status_info['progress_percent']}% ({status_info['completed_tasks']}/{status_info['total_tasks']} tasks completed)\n"
+        
+        if status_info.get("completed_tasks", 0) == 0 and status_info.get("last_archived_info"):
+            prev = status_info["last_archived_info"]
+            context_str += f"NOTICE: Active period ({status_info['active_period_label']}) has not started yet (0% completed).\n"
+            context_str += f"Previous Period ({prev['period']}) Status: {prev['progress_percent']}% completed ({prev['completed_tasks']}/{prev['total_tasks']} tasks).\n"
+            context_str += f"Instruction for AI: State that current period ({status_info['active_period_label']}) is pending document upload, and answer that previous period ({prev['period']}) was completed.\n"
+        
+        context_str += f"Task Checklist for {status_info['active_period_label']}:\n"
         for item in status_info["checklist"]:
             status_symbol = "✅ DONE" if item["is_completed"] else "⏳ PENDING"
             context_str += f"- [{status_symbol}] {item['item_label']} ({item['category']})\n"

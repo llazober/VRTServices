@@ -2574,15 +2574,22 @@ async def delete_customer_storage_folder(customer_id: int, prefix: str, request:
             conn.close()
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
+def get_in_process_period():
+    import datetime
+    now = datetime.datetime.now()
+    first_of_current = now.replace(day=1)
+    prev_month_date = first_of_current - datetime.timedelta(days=1)
+    return prev_month_date.strftime("%Y-%m"), prev_month_date.strftime("%B %Y")
+
 @app.get("/api/customers/{customer_id}/checklist")
 async def get_customer_checklist(customer_id: int, period: str = None, request: Request = None):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    import datetime
-    if not period or not period.strip():
-        period = datetime.datetime.now().strftime("%Y-%m")
+    in_process_slug, in_process_label = get_in_process_period()
+    is_in_process_request = not period or period.strip() == "" or period.strip() == "in_process" or period.strip() == in_process_slug
+    effective_period = in_process_slug if is_in_process_request else period.strip()
 
     conn = None
     try:
@@ -2595,7 +2602,7 @@ async def get_customer_checklist(customer_id: int, period: str = None, request: 
 
             cur.execute(
                 "SELECT * FROM customer_task_checklist WHERE customer_id = %s AND period = %s;",
-                (customer_id, period)
+                (customer_id, effective_period)
             )
             row = cur.fetchone()
             if not row:
@@ -2603,13 +2610,22 @@ async def get_customer_checklist(customer_id: int, period: str = None, request: 
                     INSERT INTO customer_task_checklist (customer_id, period)
                     VALUES (%s, %s)
                     ON CONFLICT (customer_id, period) DO NOTHING;
-                """, (customer_id, period))
+                """, (customer_id, effective_period))
                 conn.commit()
                 cur.execute(
                     "SELECT * FROM customer_task_checklist WHERE customer_id = %s AND period = %s;",
-                    (customer_id, period)
+                    (customer_id, effective_period)
                 )
                 row = cur.fetchone()
+
+            # Fetch list of all historical periods for this customer
+            cur.execute("""
+                SELECT DISTINCT period FROM customer_task_checklist
+                WHERE customer_id = %s AND period IS NOT NULL AND period != ''
+                ORDER BY period DESC;
+            """, (customer_id,))
+            archived_rows = cur.fetchall() or []
+            historical_periods = [r["period"] for r in archived_rows if r["period"] != in_process_slug]
 
         bk_steps = {
             "bank_statement_received": bool(row.get("bank_statement_received")) if row else False,
@@ -2634,7 +2650,12 @@ async def get_customer_checklist(customer_id: int, period: str = None, request: 
         return {
             "customer_id": customer_id,
             "legal_name": cust.get("legal_name"),
-            "period": period,
+            "customer_type": cust.get("customer_type"),
+            "period": effective_period,
+            "is_in_process": effective_period == in_process_slug,
+            "in_process_period": in_process_slug,
+            "in_process_label": in_process_label,
+            "historical_periods": historical_periods,
             "bookkeeping": {
                 "steps": bk_steps,
                 "completed_count": bk_completed,
@@ -2671,12 +2692,15 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     data = await request.json()
-    import datetime
-    period = (data.get("period") or "").strip() or datetime.datetime.now().strftime("%Y-%m")
+    in_process_slug, in_process_label = get_in_process_period()
+    req_period = (data.get("period") or "").strip()
+    period = in_process_slug if (not req_period or req_period == "in_process") else req_period
+
     step_key = data.get("step_key")
     val = bool(data.get("value"))
     notes = data.get("notes")
     tax_notes = data.get("tax_notes")
+    workflow_mode = data.get("workflow_mode") or "bookkeeping"
 
     col_map = {
         "bank_statement_received": "bank_statement_received",
@@ -2733,11 +2757,55 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
 
             conn.commit()
 
-        return await get_customer_checklist(customer_id, period, request)
+        res = await get_customer_checklist(customer_id, period, request)
+        
+        # Determine if period just reached 100%
+        if workflow_mode == "tax":
+            tax_complete = res.get("tax", {}).get("completed_count") == 8
+            if tax_complete and val:
+                res["just_archived"] = True
+                res["archived_message"] = f"🎉 {in_process_label} Tax Return Completed & Archived!"
+        else:
+            bk_complete = res.get("bookkeeping", {}).get("completed_count") == 4
+            if bk_complete and val:
+                res["just_archived"] = True
+                res["archived_message"] = f"🎉 {in_process_label} Bookkeeping Completed & Archived!"
+
+        return res
     except HTTPException as he:
         raise he
     except Exception as e:
         print(f"Error toggling customer checklist step: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/customers/{customer_id}/checklist/reopen")
+async def reopen_customer_checklist(customer_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    period = (data.get("period") or "").strip()
+    if not period:
+        raise HTTPException(status_code=400, detail="Period is required")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Reopen step: uncheck last step so accountant can correct mistake
+            cur.execute("""
+                UPDATE customer_task_checklist
+                SET accountant_reviewed = FALSE, tax_accepted = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE customer_id = %s AND period = %s;
+            """, (customer_id, period))
+            conn.commit()
+
+        return await get_customer_checklist(customer_id, period, request)
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
