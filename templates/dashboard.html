@@ -3321,12 +3321,27 @@
         // --- Customer Email Communication Functions ---
         let currentEmailCustomerId = null;
 
-        function openSendCustomerEmailModal(event, customerId) {
+        async function openSendCustomerEmailModal(event, customerId) {
             if (event) event.stopPropagation();
-            const cust = currentCustomerRecords.find(c => c.id == customerId) || (rawWorkloadData.find(w => w.customer_id == customerId));
-            if (!cust) return;
+            const cid = customerId || currentChecklistCustomerId;
+            if (!cid) return;
 
-            currentEmailCustomerId = customerId;
+            let cust = (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+                ? currentCustomerRecords.find(c => c.id == cid)
+                : null;
+
+            if (!cust && typeof rawWorkloadData !== 'undefined' && Array.isArray(rawWorkloadData)) {
+                cust = rawWorkloadData.find(w => w.customer_id == cid || w.id == cid);
+            }
+
+            if (!cust) {
+                try {
+                    const res = await fetch(`/api/customers/${cid}`);
+                    if (res.ok) cust = await res.json();
+                } catch(e) {}
+            }
+
+            currentEmailCustomerId = cid;
             let modal = document.getElementById('sendCustomerEmailModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -3337,9 +3352,13 @@
             const replyToEl = document.getElementById('emailFormReplyTo');
             const tplEl = document.getElementById('emailFormTemplateSelect');
 
-            if (titleEl) titleEl.textContent = `📧 Send Email — ${cust.legal_name || cust.display_name}`;
-            if (subtitleEl) subtitleEl.textContent = `Customer #: ${cust.custumer_number || cust.customer_id} | Email: ${cust.email || 'Not configured'}`;
-            if (toEl) toEl.value = cust.email || '';
+            const custName = cust ? (cust.legal_name || cust.display_name || cust.customer_name) : `Customer #${cid}`;
+            const custNum = cust ? (cust.custumer_number || cust.customer_id || cust.id) : cid;
+            const custEmail = cust ? (cust.email || '') : '';
+
+            if (titleEl) titleEl.textContent = `📧 Send Email — ${custName}`;
+            if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Email: ${custEmail || 'Not configured'}`;
+            if (toEl) toEl.value = custEmail;
             let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'crm@ostooechei.resend.app';
             if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
                 defaultReplyTo = 'crm@ostooechei.resend.app';
@@ -3347,7 +3366,8 @@
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
 
-            applyEmailTemplate('custom', cust);
+            applyEmailTemplate('custom', cust || { legal_name: custName, custumer_number: custNum, email: custEmail });
+            modal.style.zIndex = '2147483648';
             modal.style.display = 'flex';
         }
 
@@ -4180,7 +4200,10 @@
                 <h3 id="checklistModalTitle" style="font-size: 1.2rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; font-family: 'Outfit', sans-serif;">📋 Customer Workflow Checklist</h3>
                 <p id="checklistModalSubtitle" style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px; font-family: monospace;"></p>
             </div>
-            <button onclick="closeCustomerChecklistModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="openSendCustomerEmailModal(event, currentChecklistCustomerId)" style="padding: 6px 14px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);" title="Send Email Message to Customer">📧 Send Email</button>
+                <button onclick="closeCustomerChecklistModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
         </div>
 
         <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); display: flex; gap: 10px; align-items: center;">
@@ -4373,7 +4396,10 @@
 
         <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #64748b;">
             <span>CRM Bookkeeping & Tax Workflow System</span>
-            <button onclick="closeCustomerChecklistModal()" style="padding: 6px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="openSendCustomerEmailModal(event, currentChecklistCustomerId)" style="padding: 6px 16px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Send Email Message to Customer">📧 Send Email</button>
+                <button onclick="closeCustomerChecklistModal()" style="padding: 6px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+            </div>
         </div>
     </div>
 </div>`;
