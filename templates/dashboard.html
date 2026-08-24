@@ -3852,13 +3852,15 @@
             const inProcessSlug = (data && data.in_process_period) ? data.in_process_period : 'in_process';
 
             if (activeWorkflowTab === 'tax') {
-                if (labelEl) labelEl.textContent = 'FOR YEAR:';
+                if (labelEl) labelEl.textContent = 'TAX YEAR:';
                 optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (Tax Year 2025)</option>`;
-                optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Years ──</option>`;
-                const taxYears = ['2024', '2023', '2022', '2021', '2020'];
-                taxYears.forEach(y => {
-                    optionsHtml += `<option value="${y}">📁 Tax Year ${y}</option>`;
-                });
+                const historical = (data && data.historical_periods) ? data.historical_periods : [];
+                if (historical.length > 0) {
+                    optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Years ──</option>`;
+                    historical.forEach(hp => {
+                        optionsHtml += `<option value="${hp}">📁 Tax Year ${hp}</option>`;
+                    });
+                }
             } else {
                 if (labelEl) labelEl.textContent = 'PERIOD CYCLE:';
                 optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
