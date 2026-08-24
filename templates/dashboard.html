@@ -3334,10 +3334,13 @@
                 cust = rawWorkloadData.find(w => w.customer_id == cid || w.id == cid);
             }
 
-            if (!cust) {
+            if (!cust || !cust.email) {
                 try {
                     const res = await fetch(`/api/customers/${cid}`);
-                    if (res.ok) cust = await res.json();
+                    if (res.ok) {
+                        const fetchedCust = await res.json();
+                        if (fetchedCust) cust = Object.assign({}, cust || {}, fetchedCust);
+                    }
                 } catch(e) {}
             }
 

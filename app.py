@@ -4241,9 +4241,12 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                     total_customers_with_pending.add(cust_id)
                     pending_items.append({
                         "customer_id": cust_id,
+                        "id": cust_id,
                         "custumer_number": cust.get("custumer_number"),
                         "legal_name": cust.get("legal_name"),
                         "display_name": cust.get("display_name"),
+                        "email": cust.get("email") or "",
+                        "phone": cust.get("phone") or "",
                         "customer_type": c_type,
                         "period": bk_slug,
                         "bk_period": bk_slug,
