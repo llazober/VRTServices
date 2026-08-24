@@ -681,11 +681,20 @@ def sanitize_folder_name(name: str) -> str:
 
 def get_customer_root_folder_path(cust: dict) -> str:
     """Returns stored do_folder_path or fallback path including parent_name if present."""
-    if cust and cust.get("do_folder_path"):
-        return cust["do_folder_path"]
-    p_name = (cust.get("parent_name") if cust else "") or ""
-    c_name = (cust.get("legal_name") if cust else "") or ""
-    if p_name and p_name.strip():
+    if not cust:
+        return ""
+    p_name = (cust.get("parent_name") or "").strip()
+    c_name = (cust.get("legal_name") or "").strip()
+    stored_path = (cust.get("do_folder_path") or "").strip()
+
+    if stored_path:
+        if not stored_path.endswith('/'):
+            stored_path += '/'
+        if p_name and not stored_path.lower().startswith(f"{sanitize_folder_name(p_name).lower()}/"):
+            stored_path = f"{sanitize_folder_name(p_name)}/{stored_path}"
+        return stored_path
+
+    if p_name:
         return f"{sanitize_folder_name(p_name)}/{sanitize_folder_name(c_name)}/"
     return f"{sanitize_folder_name(c_name)}/"
 
