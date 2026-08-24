@@ -4475,9 +4475,15 @@ async def send_customer_email(customer_id: int, request: Request):
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
-        recipient_email = parse_clean_email(cust.get("email") or "")
+        recipient_email = parse_clean_email(body.get("recipient_email") or body.get("to") or cust.get("email") or "")
         if not recipient_email:
             raise HTTPException(status_code=400, detail=f"Customer '{cust['legal_name']}' does not have a valid email address configured.")
+
+        if recipient_email and parse_clean_email(cust.get("email") or "") != recipient_email:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE customer SET email = %s WHERE id = %s;", (recipient_email, customer_id))
+                conn.commit()
+            cust["email"] = recipient_email
 
         clean_reply_to = parse_clean_email(custom_reply_to) or default_reply_to
         if "receive.datalazo.net" in clean_reply_to.lower():
