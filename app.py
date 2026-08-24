@@ -4163,6 +4163,52 @@ async def chat_ai_assistant(request: Request):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/knowledge/list")
+async def list_knowledge_docs(request: Request, parent_name: str = ""):
+    import rag_engine
+    tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
+    kb_base = rag_engine.KB_DIR
+
+    docs = []
+    categories = [
+        {"slug": tenant_slug, "name": "VRT Services Knowledge" if tenant_slug == "vrt_services" else "Datalazo LLC Knowledge", "icon": "🏢"},
+        {"slug": "shared_irs_tax", "name": "IRS Tax Publications", "icon": "🏛️"}
+    ]
+
+    for cat in categories:
+        cat_dir = os.path.join(kb_base, cat["slug"])
+        cat_items = []
+        if os.path.exists(cat_dir):
+            for file in sorted(os.listdir(cat_dir)):
+                if file.endswith(".md") or file.endswith(".txt"):
+                    rel_path = f"{cat['slug']}/{file}"
+                    title = file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+                    cat_items.append({
+                        "filename": file,
+                        "rel_path": rel_path,
+                        "title": title
+                    })
+        docs.append({
+            "category": cat["name"],
+            "slug": cat["slug"],
+            "icon": cat["icon"],
+            "items": cat_items
+        })
+
+    return {"success": True, "tenant": tenant_slug, "categories": docs}
+
+@app.get("/api/knowledge/doc")
+async def get_knowledge_doc(request: Request, path: str = ""):
+    import rag_engine
+    if not path or ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Knowledge document not found")
+    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+    return {"success": True, "path": path, "content": content}
+
 # ── Customer Email Communication & Inbound Webhooks ───────────────────────────
 @app.post("/api/customers/{customer_id}/send-email")
 async def send_customer_email(customer_id: int, request: Request):
