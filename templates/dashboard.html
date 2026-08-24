@@ -4741,6 +4741,21 @@
             if (modal.parentNode !== document.body) {
                 document.body.appendChild(modal);
             }
+
+            const catSelect = document.getElementById('createKbCategory');
+            if (catSelect) {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const isVrt = !parentName || parentName.toLowerCase().includes('vrt');
+                
+                catSelect.innerHTML = isVrt ? `
+                    <option value="vrt_services" style="background: #0f172a;">🏢 VRT Services Knowledge</option>
+                    <option value="shared_irs_tax" style="background: #0f172a;">🏛️ IRS Tax Publications Library</option>
+                ` : `
+                    <option value="datalazo_llc" style="background: #0f172a;">💻 Datalazo LLC Knowledge</option>
+                    <option value="shared_irs_tax" style="background: #0f172a;">🏛️ IRS Tax Publications Library</option>
+                `;
+            }
+
             modal.style.display = 'flex';
             modal.style.zIndex = '2147483647';
         };
@@ -4755,6 +4770,7 @@
             const titleInput = document.getElementById('createKbTitle');
             const contentInput = document.getElementById('createKbContent');
 
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             const catSlug = catSelect ? catSelect.value : 'vrt_services';
             const title = titleInput ? titleInput.value.trim() : '';
             const content = contentInput ? contentInput.value.trim() : '';
@@ -4768,7 +4784,7 @@
                 const res = await fetch('/api/knowledge/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category_slug: catSlug, title: title, content: content })
+                    body: JSON.stringify({ category_slug: catSlug, title: title, content: content, parent_name: parentName })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to create article');

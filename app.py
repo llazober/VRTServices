@@ -4215,9 +4215,17 @@ async def save_knowledge_doc(request: Request):
     body = await request.json()
     rel_path = (body.get("path") or "").strip()
     content = body.get("content") or ""
+    parent_name = (body.get("parent_name") or get_current_username(request) or "VRT Services").strip()
+    tenant_slug = rag_engine.get_tenant_slug(parent_name)
+
     if not rel_path or ".." in rel_path:
         raise HTTPException(status_code=400, detail="Invalid document path.")
     
+    # Enforce tenant isolation
+    target_cat = rel_path.split("/")[0] if "/" in rel_path else rel_path
+    if target_cat != tenant_slug and target_cat != "shared_irs_tax":
+        raise HTTPException(status_code=403, detail="Access denied: Cannot edit documents belonging to another organization.")
+
     full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
     with open(full_path, "w", encoding="utf-8") as f:
@@ -4229,7 +4237,13 @@ async def save_knowledge_doc(request: Request):
 async def create_knowledge_doc(request: Request):
     import rag_engine
     body = await request.json()
-    category_slug = (body.get("category_slug") or "vrt_services").strip()
+    parent_name = (body.get("parent_name") or get_current_username(request) or "VRT Services").strip()
+    tenant_slug = rag_engine.get_tenant_slug(parent_name)
+    
+    requested_cat = (body.get("category_slug") or tenant_slug).strip()
+    # Force requested category to active tenant unless it is shared_irs_tax
+    category_slug = requested_cat if requested_cat == "shared_irs_tax" else tenant_slug
+    
     title = (body.get("title") or "").strip()
     content = body.get("content") or f"# {title}\n\nWrite article content here..."
     
@@ -4247,11 +4261,16 @@ async def create_knowledge_doc(request: Request):
     return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
 
 @app.delete("/api/knowledge/delete")
-async def delete_knowledge_doc(request: Request, path: str = ""):
+async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
     import rag_engine
+    tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
     if not path or ".." in path:
         raise HTTPException(status_code=400, detail="Invalid path.")
     
+    target_cat = path.split("/")[0] if "/" in path else path
+    if target_cat != tenant_slug and target_cat != "shared_irs_tax":
+        raise HTTPException(status_code=403, detail="Access denied: Cannot delete documents belonging to another organization.")
+
     full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
     if os.path.exists(full_path):
         os.remove(full_path)
