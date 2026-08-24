@@ -4431,11 +4431,34 @@
     </div>
 
     <script>
-        function toggleAiChatDrawer() {
+        (function initAiDrawer() {
+            function moveDrawerToBody() {
+                const drawer = document.getElementById('aiChatDrawer');
+                const btn = document.getElementById('aiChatTriggerBtn');
+                if (drawer && drawer.parentNode !== document.body) {
+                    document.body.appendChild(drawer);
+                }
+                if (btn && btn.parentNode !== document.body) {
+                    document.body.appendChild(btn);
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', moveDrawerToBody);
+            } else {
+                moveDrawerToBody();
+            }
+        })();
+
+        window.toggleAiChatDrawer = function() {
             const drawer = document.getElementById('aiChatDrawer');
             if (!drawer) return;
-            if (drawer.style.display === 'none' || !drawer.style.display) {
+            if (drawer.parentNode !== document.body) {
+                document.body.appendChild(drawer);
+            }
+            const currDisplay = window.getComputedStyle(drawer).display;
+            if (currDisplay === 'none') {
                 drawer.style.display = 'flex';
+                drawer.style.zIndex = '2147483647';
                 setTimeout(() => {
                     const input = document.getElementById('aiChatInput');
                     if (input) input.focus();
@@ -4443,9 +4466,9 @@
             } else {
                 drawer.style.display = 'none';
             }
-        }
+        };
 
-        function renderAiMarkdown(text) {
+        window.renderAiMarkdown = function(text) {
             if (!text) return '';
             let html = String(text)
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -4456,9 +4479,9 @@
                 .replace(/\n\n/g, '<br><br>')
                 .replace(/\n/g, '<br>');
             return html;
-        }
+        };
 
-        async function submitAiChatMessage() {
+        window.submitAiChatMessage = async function() {
             const input = document.getElementById('aiChatInput');
             if (!input) return;
             const msg = input.value.trim();
@@ -4509,22 +4532,22 @@
                 aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
             }
             chatList.scrollTop = chatList.scrollHeight;
-        }
+        };
 
-        function sendAiQuickChip(text) {
+        window.sendAiQuickChip = function(text) {
             const input = document.getElementById('aiChatInput');
             if (input) {
                 input.value = text;
                 submitAiChatMessage();
             }
-        }
+        };
 
-        function handleAiInputKeyDown(e) {
+        window.handleAiInputKeyDown = function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 submitAiChatMessage();
             }
-        }
+        };
     </script>
 </body>
 
