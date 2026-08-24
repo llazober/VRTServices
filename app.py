@@ -4152,13 +4152,20 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                 c_type = (cust.get("customer_type") or "Business").strip()
                 is_individual = c_type.lower() == "individual"
 
-                in_process_slug, in_process_label = get_in_process_period(cur, cust_id, "bookkeeping")
+                bk_slug, bk_label = get_in_process_period(cur, cust_id, "bookkeeping")
+                tax_slug, tax_label = get_in_process_period(cur, cust_id, "tax")
 
                 cur.execute("""
                     SELECT * FROM customer_task_checklist
                     WHERE customer_id = %s AND period = %s;
-                """, (cust_id, in_process_slug))
-                row = cur.fetchone() or {}
+                """, (cust_id, bk_slug))
+                bk_row = cur.fetchone() or {}
+
+                cur.execute("""
+                    SELECT * FROM customer_task_checklist
+                    WHERE customer_id = %s AND period = %s;
+                """, (cust_id, tax_slug))
+                tax_row = cur.fetchone() or {}
 
                 # Calculate Bookkeeping Steps (4 steps)
                 bk_total = 4
@@ -4166,16 +4173,16 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                 bk_missing = []
 
                 if not is_individual:
-                    if row.get("bank_statement_received"): bk_completed += 1
+                    if bk_row.get("bank_statement_received"): bk_completed += 1
                     else: bk_missing.append("Bank Statement Received")
 
-                    if row.get("check_images_received"): bk_completed += 1
+                    if bk_row.get("check_images_received"): bk_completed += 1
                     else: bk_missing.append("Check Images Received")
 
-                    if row.get("extraction_ai_categorization_done"): bk_completed += 1
+                    if bk_row.get("extraction_ai_categorization_done"): bk_completed += 1
                     else: bk_missing.append("AI Categorization")
 
-                    if row.get("accountant_reviewed"): bk_completed += 1
+                    if bk_row.get("accountant_reviewed"): bk_completed += 1
                     else: bk_missing.append("Accountant Review")
                 
                 bk_percent = int((bk_completed / bk_total) * 100) if not is_individual else 100
@@ -4185,28 +4192,28 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                 tax_completed = 0
                 tax_missing = []
 
-                if row.get("tax_docs_requested"): tax_completed += 1
+                if tax_row.get("tax_docs_requested"): tax_completed += 1
                 else: tax_missing.append("Docs Requested")
 
-                if row.get("tax_docs_received"): tax_completed += 1
+                if tax_row.get("tax_docs_received"): tax_completed += 1
                 else: tax_missing.append("Docs Received")
 
-                if row.get("tax_organizer"): tax_completed += 1
+                if tax_row.get("tax_organizer"): tax_completed += 1
                 else: tax_missing.append("Tax Organizer")
 
-                if row.get("tax_preparation"): tax_completed += 1
+                if tax_row.get("tax_preparation"): tax_completed += 1
                 else: tax_missing.append("Preparation")
 
-                if row.get("tax_review"): tax_completed += 1
+                if tax_row.get("tax_review"): tax_completed += 1
                 else: tax_missing.append("Review")
 
-                if row.get("tax_client_signature"): tax_completed += 1
+                if tax_row.get("tax_client_signature"): tax_completed += 1
                 else: tax_missing.append("Client Signature")
 
-                if row.get("tax_efile"): tax_completed += 1
+                if tax_row.get("tax_efile"): tax_completed += 1
                 else: tax_missing.append("E-file")
 
-                if row.get("tax_accepted"): tax_completed += 1
+                if tax_row.get("tax_accepted"): tax_completed += 1
                 else: tax_missing.append("Accepted")
 
                 tax_percent = int((tax_completed / tax_total) * 100)
@@ -4225,7 +4232,9 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                         "legal_name": cust.get("legal_name"),
                         "display_name": cust.get("display_name"),
                         "customer_type": c_type,
-                        "period": in_process_slug,
+                        "period": bk_slug,
+                        "bk_period": bk_slug,
+                        "tax_period": tax_slug,
                         "is_individual": is_individual,
                         "bk": {
                             "completed_count": bk_completed,
