@@ -4218,8 +4218,10 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
 
                 tax_percent = int((tax_completed / tax_total) * 100)
 
+                prev_tax_slug_default, _ = get_in_process_period(None, None, "tax")
+
                 has_bk_pending = (not is_individual) and (bk_completed < bk_total)
-                has_tax_pending = (tax_completed < tax_total)
+                has_tax_pending = (tax_slug <= prev_tax_slug_default) and (tax_completed < tax_total)
 
                 if has_bk_pending: bk_pending_count += 1
                 if has_tax_pending: tax_pending_count += 1
