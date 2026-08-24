@@ -4116,9 +4116,9 @@ async def chat_ai_assistant(request: Request):
         if not user_message:
             raise HTTPException(status_code=400, detail="Message content is required.")
 
-        # Extract reference code from message if present e.g. "Check CUST-1001" or "CUST-1001" or "1001"
-        m_ref = re.search(r'(?:CUST-)?(\d+)', user_message, re.IGNORECASE)
-        if not customer_ref and m_ref and ("cust" in user_message.lower() or "status" in user_message.lower() or "progress" in user_message.lower() or "task" in user_message.lower() or "check" in user_message.lower()):
+        # Extract reference code from message if present e.g. "cust-4059", "CUST-1001", "4059"
+        m_ref = re.search(r'(?:CUST-?|\b)(\d{3,5})\b', user_message, re.IGNORECASE)
+        if not customer_ref and m_ref:
             customer_ref = m_ref.group(1)
 
         import rag_engine

@@ -98,7 +98,6 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
 
     cur.execute("""
         SELECT id, custumer_number, legal_name, display_name, email, parent_name, customer_type, created_at
-        SELECT id, custumer_number, legal_name, display_name, email, parent_name, customer_type, created_at
         FROM customer 
         WHERE (custumer_number ILIKE %s OR custumer_number ILIKE %s OR id::text = %s)
           AND (parent_name ILIKE %s OR parent_name ILIKE %s OR parent_name IS NULL OR parent_name = '');
@@ -109,23 +108,44 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
 
     customer_id = cust["id"]
 
-    # Fetch checklist items
+    # Fetch checklist row
     cur.execute("""
-        SELECT item_key, item_label, category, is_completed, updated_at
-        FROM customer_task_checklist
+        SELECT * FROM customer_task_checklist
         WHERE customer_id = %s
-        ORDER BY id ASC;
+        ORDER BY id DESC LIMIT 1;
     """, (customer_id,))
-    checklist = cur.fetchall() or []
+    row = cur.fetchone() or {}
 
-    # Fetch storage stats
-    cur.execute("""
-        SELECT COUNT(*) as file_count FROM webhook_debug_log WHERE customer_id = %s;
-    """, (customer_id,))
-    comm_row = cur.fetchone()
+    task_definitions = [
+        ("bank_statement_received", "Bank Statements Received", "Bookkeeping"),
+        ("check_images_received", "Check Images Received", "Bookkeeping"),
+        ("extraction_ai_categorization_done", "OCR Transaction Extraction", "Bookkeeping"),
+        ("accountant_reviewed", "Accountant Review", "Bookkeeping"),
+        ("tax_docs_requested", "Tax Documents Requested", "Tax Return"),
+        ("tax_docs_received", "Tax Documents Received", "Tax Return"),
+        ("tax_organizer", "Tax Organizer Completed", "Tax Return"),
+        ("tax_preparation", "Tax Return Preparation", "Tax Return"),
+        ("tax_review", "Tax Return Review", "Tax Return"),
+        ("tax_client_signature", "Form 8879 Client Signature", "Tax Return"),
+        ("tax_efile", "IRS E-Filing Transmitted", "Tax Return"),
+        ("tax_accepted", "IRS Return Accepted", "Tax Return"),
+    ]
 
-    total_tasks = len(checklist)
-    completed_tasks = sum(1 for item in checklist if item.get("is_completed"))
+    checklist = []
+    total_tasks = len(task_definitions)
+    completed_tasks = 0
+
+    for key, label, category in task_definitions:
+        is_done = bool(row.get(key, False))
+        if is_done:
+            completed_tasks += 1
+        checklist.append({
+            "item_key": key,
+            "item_label": label,
+            "category": category,
+            "is_completed": is_done
+        })
+
     percent = int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0
 
     return {
