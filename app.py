@@ -2689,7 +2689,7 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
             historical_periods = []
             for r in archived_rows:
                 p_slug = r["period"]
-                if p_slug != in_process_slug:
+                if p_slug < in_process_slug:
                     historical_periods.append({
                         "slug": p_slug,
                         "label": format_period_label(p_slug, workflow_tab)
