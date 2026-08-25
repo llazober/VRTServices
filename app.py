@@ -2568,6 +2568,50 @@ async def delete_customer_storage_file(customer_id: int, key: str, request: Requ
         if conn:
             conn.close()
 
+def sync_file_rename_in_communications(conn, customer_id: int, old_key: str, new_key: str):
+    """Syncs file rename/move across customer_communications (attachments_json, subject, body_text)."""
+    if not old_key or not new_key or old_key == new_key:
+        return
+    
+    old_filename = os.path.basename(old_key.rstrip('/'))
+    new_filename = os.path.basename(new_key.rstrip('/'))
+    
+    try:
+        with conn.cursor() as cur:
+            # 1. Update attachments_json replacing full file key path
+            cur.execute("""
+                UPDATE customer_communications 
+                SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
+                WHERE customer_id = %s AND attachments_json::text LIKE %s;
+            """, (old_key, new_key, customer_id, f"%{old_key}%"))
+
+            # 2. Update attachments_json replacing filename string / object property
+            if old_filename and new_filename and old_filename != new_filename:
+                cur.execute("""
+                    UPDATE customer_communications 
+                    SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
+                    WHERE customer_id = %s AND attachments_json::text LIKE %s;
+                """, (old_filename, new_filename, customer_id, f"%{old_filename}%"))
+
+                # 3. Update subject and body_text where old_filename appears
+                cur.execute("""
+                    UPDATE customer_communications 
+                    SET subject = REPLACE(subject, %s, %s),
+                        body_text = REPLACE(body_text, %s, %s)
+                    WHERE customer_id = %s AND (subject LIKE %s OR body_text LIKE %s);
+                """, (
+                    old_filename, new_filename,
+                    old_filename, new_filename,
+                    customer_id,
+                    f"%{old_filename}%", f"%{old_filename}%"
+                ))
+
+            conn.commit()
+            print(f"[RENAME DB SYNC SUCCESS] Updated customer_communications for customer {customer_id}: '{old_filename}' -> '{new_filename}'")
+    except Exception as e_db_up:
+        print(f"[RENAME DB SYNC ERROR]: {e_db_up}")
+
+
 @app.post("/api/customers/{customer_id}/storage/rename-file")
 async def rename_customer_storage_file(customer_id: int, request: Request):
     """Renames a file in customer storage by copying to new_key and deleting old_key."""
@@ -2607,31 +2651,24 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
 
         client, err = get_s3_client()
         if not client:
-            raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+            local_old_path = os.path.join("storage", old_key)
+            local_new_path = os.path.join("storage", new_key)
+            if os.path.exists(local_old_path):
+                os.makedirs(os.path.dirname(local_new_path), exist_ok=True)
+                os.rename(local_old_path, local_new_path)
+        else:
+            bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+            # Copy to new_key and delete old_key
+            client.copy_object(
+                Bucket=bucket,
+                CopySource={'Bucket': bucket, 'Key': old_key},
+                Key=new_key,
+                ACL='private'
+            )
+            client.delete_object(Bucket=bucket, Key=old_key)
 
-        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-
-        # Copy to new_key and delete old_key
-        client.copy_object(
-            Bucket=bucket,
-            CopySource={'Bucket': bucket, 'Key': old_key},
-            Key=new_key,
-            ACL='private'
-        )
-        client.delete_object(Bucket=bucket, Key=old_key)
-
-        # Update customer_communications attachments_json references if present
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE customer_communications 
-                    SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
-                    WHERE customer_id = %s AND attachments_json::text LIKE %s;
-                """, (old_key, new_key, customer_id, f"%{old_key}%"))
-                conn.commit()
-                print(f"[RENAME DB SYNC] Updated attachments_json '{old_key}' -> '{new_key}' for customer {customer_id}")
-        except Exception as e_db_up:
-            print(f"Notice updating customer_communications attachments_json on rename: {e_db_up}")
+        # Update customer_communications attachments_json, subject, and body_text
+        sync_file_rename_in_communications(conn, customer_id, old_key, new_key)
 
         print(f"[DO SPACES] Renamed file '{old_key}' -> '{new_key}' for customer {customer_id}")
         return {
@@ -2694,34 +2731,29 @@ async def move_customer_storage_file(customer_id: int, request: Request):
 
         client, err = get_s3_client()
         if not client:
-            raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+            local_old_path = os.path.join("storage", source_key)
+            local_new_path = os.path.join("storage", new_key)
+            if os.path.exists(local_old_path):
+                os.makedirs(os.path.dirname(local_new_path), exist_ok=True)
+                os.rename(local_old_path, local_new_path)
+        else:
+            bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
 
-        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+            client.copy_object(
+                Bucket=bucket,
+                CopySource={'Bucket': bucket, 'Key': source_key},
+                Key=new_key,
+                ACL='private'
+            )
+            client.delete_object(Bucket=bucket, Key=source_key)
 
-        client.copy_object(
-            Bucket=bucket,
-            CopySource={'Bucket': bucket, 'Key': source_key},
-            Key=new_key,
-            ACL='private'
-        )
-        client.delete_object(Bucket=bucket, Key=source_key)
+            # Ensure target folder placeholder key is preserved
+            try:
+                client.put_object(Bucket=bucket, Key=target_folder_key, Body=b'')
+            except Exception:
+                pass
 
-        # Ensure target folder placeholder key is preserved
-        try:
-            client.put_object(Bucket=bucket, Key=target_folder_key, Body=b'')
-        except Exception:
-            pass
-
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE customer_communications 
-                    SET attachments_json = REPLACE(attachments_json::text, %s, %s)::json 
-                    WHERE customer_id = %s AND attachments_json::text LIKE %s;
-                """, (source_key, new_key, customer_id, f"%{source_key}%"))
-                conn.commit()
-        except Exception as e_db_up:
-            print(f"Notice updating customer_communications attachments_json: {e_db_up}")
+        sync_file_rename_in_communications(conn, customer_id, source_key, new_key)
 
         print(f"[DO SPACES] Moved file '{source_key}' -> '{new_key}' for customer {customer_id}")
         return {
