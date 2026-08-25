@@ -1837,6 +1837,131 @@ async def portal_verify_customer(request: Request, customer_id: str = ""):
             conn.close()
 
 
+def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: str = "Inbox"):
+    """Sends email notification to customer's email and logs to customer_communications history table."""
+    try:
+        recipient_email = parse_clean_email(cust.get("email") or "")
+        if not recipient_email:
+            print(f"[PORTAL NOTIFY SKIPPED] Customer {cust.get('id')} has no email configured.")
+            return False
+
+        parent_name = (cust.get("parent_name") or "VRT Services").strip()
+        sender_display_name = f"{parent_name} Portal"
+        
+        raw_ref = str(cust.get('custumer_number') or cust.get('id')).strip()
+        cust_ref = raw_ref if raw_ref.upper().startswith("CUST-") else f"CUST-{raw_ref}"
+        ref_tag = f"[Ref: {cust_ref}]"
+        
+        subject = f"File Uploaded to {subfolder} Folder {ref_tag}"
+        
+        message_text = (
+            f"Hello {cust.get('legal_name') or 'Valued Client'},\n\n"
+            f"A new document has been successfully uploaded to your account's '{subfolder}/' folder:\n\n"
+            f"• File Name: {filename}\n"
+            f"• Destination: {subfolder}/ Folder\n"
+            f"• Account Ref: {cust_ref}\n\n"
+            f"Thank you for using the {parent_name} Client Portal."
+        )
+
+        formatted_html = f"""
+        <div style="font-family: 'Plus Jakarta Sans', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff;">
+            <div style="border-bottom: 2px solid #00f2fe; padding-bottom: 14px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+                <h2 style="color: #0f172a; margin: 0; font-size: 1.2rem;">{parent_name} Client Portal</h2>
+                <span style="background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 700;">DOCUMENT RECEIVED</span>
+            </div>
+            <p style="font-size: 0.95rem; color: #334155; margin-bottom: 16px;">
+                Hello <strong>{cust.get('legal_name') or 'Valued Client'}</strong>,
+            </p>
+            <p style="font-size: 0.92rem; color: #475569; margin-bottom: 20px;">
+                A new file has been uploaded to your secure account <strong>{subfolder}/</strong> folder:
+            </p>
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
+                <div style="font-size: 0.88rem; color: #1e293b; margin-bottom: 6px;">📄 <strong>File Name:</strong> {filename}</div>
+                <div style="font-size: 0.88rem; color: #1e293b; margin-bottom: 6px;">📁 <strong>Target Folder:</strong> {subfolder}/</div>
+                <div style="font-size: 0.88rem; color: #1e293b;">🏷️ <strong>Account Ref:</strong> {cust_ref}</div>
+            </div>
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 0.78rem; color: #94a3b8;">
+                <p style="margin: 0;">This is an automated notification log from your {parent_name} Client Portal.</p>
+                <p style="margin: 4px 0 0 0; font-family: monospace;">Ref: {cust_ref}</p>
+            </div>
+        </div>
+        """
+
+        resend_key = (
+            os.environ.get("RESEND_API_KEY") or
+            os.environ.get("RESEND_KEY") or
+            os.environ.get("RESEND_API_TOKEN") or
+            os.environ.get("RESEND_TOKEN")
+        )
+        if resend_key:
+            resend_key = resend_key.strip().strip('\'"')
+
+        raw_from = (
+            os.environ.get("RESEND_FROM_EMAIL") or
+            os.environ.get("FROM_EMAIL") or
+            "notification@datalazo.net"
+        )
+        clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
+        reply_to = "crm@ostooechei.resend.app"
+
+        if resend_key:
+            try:
+                payload = {
+                    "from": f"{sender_display_name} <{clean_from}>",
+                    "to": [recipient_email],
+                    "reply_to": reply_to,
+                    "subject": subject,
+                    "html": formatted_html,
+                    "text": message_text
+                }
+                req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {resend_key.strip()}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 CRM Portal Notify"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req) as response:
+                    res_body = response.read().decode("utf-8")
+                    print(f"[PORTAL EMAIL SENT] {recipient_email}: {res_body}")
+            except Exception as mail_err:
+                print(f"[WARNING sending email via Resend]: {mail_err}")
+
+        # Always log into customer_communications history table!
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO customer_communications (
+                        customer_id, direction, sender_email, recipient_email, reply_to_email,
+                        subject, body_text, status, created_at
+                    ) VALUES (
+                        %s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', CURRENT_TIMESTAMP
+                    );
+                """, (
+                    cust["id"],
+                    clean_from,
+                    recipient_email,
+                    reply_to,
+                    subject,
+                    message_text
+                ))
+                conn.commit()
+                print(f"[PORTAL HISTORY LOGGED] Saved upload notification for Customer {cust['id']} in customer_communications history table.")
+        finally:
+            if conn:
+                conn.close()
+
+        return True
+    except Exception as e:
+        print(f"[WARNING in send_portal_file_upload_notification]: {e}")
+        return False
+
+
 @app.post("/api/portal/upload")
 async def portal_upload_file(
     request: Request,
@@ -1893,9 +2018,13 @@ async def portal_upload_file(
             with open(local_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
+            
+            # Send email & log to customer history email log
+            send_portal_file_upload_notification(cust, filename, folder_name)
+
             return {
                 "status": "ok",
-                "message": f"File '{filename}' uploaded successfully to {folder_name} folder (Local Storage).",
+                "message": f"File '{filename}' uploaded successfully to {folder_name} folder (Local Storage). Email history logged.",
                 "file_key": local_path,
                 "customer_name": cust.get("legal_name")
             }
@@ -1903,9 +2032,12 @@ async def portal_upload_file(
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         client.upload_fileobj(file.file, bucket, file_key)
 
+        # Send email & log to customer history email log
+        send_portal_file_upload_notification(cust, filename, folder_name)
+
         return {
             "status": "ok",
-            "message": f"File '{filename}' uploaded successfully to {folder_name} folder.",
+            "message": f"File '{filename}' uploaded successfully to {folder_name} folder. Email history logged.",
             "file_key": file_key,
             "customer_name": cust.get("legal_name")
         }
