@@ -3626,11 +3626,21 @@
                         let attHtml = '';
                         if (atts.length > 0) {
                             attHtml = '<div style="margin-top: 8px; font-size: 0.75rem; color: #38bdf8;"><strong>📎 Saved Attachments:</strong> ' + atts.map(a => {
-                                const fileName = a.split('/').pop();
-                                const escKey = String(a).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                if (!a) return '';
+                                let filePath = '';
+                                let fileName = '';
+                                if (typeof a === 'object' && a !== null) {
+                                    filePath = a.file_key || a.path || a.filename || a.name || '';
+                                    fileName = a.filename || a.name || (filePath ? String(filePath).split('/').pop() : 'Attachment');
+                                } else {
+                                    filePath = String(a);
+                                    fileName = filePath.split('/').pop();
+                                }
+                                if (!filePath) filePath = fileName;
+                                const escKey = String(filePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                                 const escName = String(fileName).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                                 return `<a href="#" onclick="openPdfViewerModal(event, '${escKey}', '${escName}'); return false;" style="color: #38bdf8; text-decoration: underline; margin-right: 8px;">${fileName}</a>`;
-                            }).join(' ') + '</div>';
+                            }).filter(Boolean).join(' ') + '</div>';
                         }
 
                         const displayBody = (item.body_text && item.body_text.trim()) 

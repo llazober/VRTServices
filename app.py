@@ -1837,7 +1837,7 @@ async def portal_verify_customer(request: Request, customer_id: str = ""):
             conn.close()
 
 
-def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: str = "Inbox"):
+def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: str = "Inbox", file_key: str = ""):
     """Sends email notification to customer's email and logs to customer_communications history table."""
     try:
         recipient_email = parse_clean_email(cust.get("email") or "")
@@ -1943,6 +1943,7 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
                     f"• Destination: {subfolder}/\n"
                     f"• Email: {recipient_email or 'N/A'}"
                 )
+                att_payload = [{"filename": filename, "file_key": file_key}] if file_key else [{"filename": filename}]
                 cur.execute("""
                     INSERT INTO customer_communications (
                         customer_id, direction, sender_email, recipient_email, reply_to_email,
@@ -1957,7 +1958,7 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
                     reply_to,
                     inbound_subject,
                     inbound_body,
-                    json.dumps([{"filename": filename}])
+                    json.dumps(att_payload)
                 ))
                 conn.commit()
                 print(f"[PORTAL INBOUND HISTORY LOGGED] Saved unread INBOUND upload notification for Customer {cust['id']} in customer_communications history table.")
@@ -2029,7 +2030,7 @@ async def portal_upload_file(
                 f.write(content)
             
             # Send email & log to customer history email log
-            send_portal_file_upload_notification(cust, filename, folder_name)
+            send_portal_file_upload_notification(cust, filename, folder_name, file_key=local_path)
 
             return {
                 "status": "ok",
@@ -2042,7 +2043,7 @@ async def portal_upload_file(
         client.upload_fileobj(file.file, bucket, file_key)
 
         # Send email & log to customer history email log
-        send_portal_file_upload_notification(cust, filename, folder_name)
+        send_portal_file_upload_notification(cust, filename, folder_name, file_key=file_key)
 
         return {
             "status": "ok",
