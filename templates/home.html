@@ -680,15 +680,9 @@
         <ul class="nav-menu">
             <li><a href="#services" class="nav-link">Our Services</a></li>
             <li><a href="#workflow" class="nav-link">Filing Process</a></li>
-            <li><a href="#portal-cta" class="nav-link">Client Portal</a></li>
-            <li><span onclick="openKnowledgeBaseModal()" class="nav-link">Knowledge Base</span></li>
         </ul>
 
         <div class="nav-actions">
-            <button onclick="openKnowledgeBaseModal()" class="btn-kb-launcher">
-                <span>📖</span> <span>KB Library</span>
-            </button>
-
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-header-login">
                     Dashboard
@@ -725,10 +719,6 @@
                     Login
                 </a>
             {% endif %}
-
-            <button onclick="openKnowledgeBaseModal()" class="btn-secondary-action">
-                <span>📖</span> <span>Explore Tax Guides & FAQ</span>
-            </button>
 
             <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
                 <span>✨</span> <span>AI Tax Assistant</span>
@@ -960,29 +950,7 @@
             </div>
         </section>
 
-        <!-- Portal CTA Banner -->
-        <section id="portal-cta" style="width: 100%;">
-            <div class="portal-cta-banner">
-                <h2 class="portal-cta-title">Ready to File or Check Your Tax Status?</h2>
-                <p class="portal-cta-desc">
-                    Log in to your secure VRT Services Client Portal to manage documents, review filing checklists, or consult our AI Assistant using your Customer Reference Code (<code>CUST-XXXX</code>).
-                </p>
-                <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
-                    {% if username and username != 'user' %}
-                        <a href="/dashboard" class="btn-primary-portal">
-                            Dashboard
-                        </a>
-                    {% else %}
-                        <a href="/login" class="btn-primary-portal">
-                            Login
-                        </a>
-                    {% endif %}
-                    <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
-                        <span>✨</span> <span>Ask AI Tax Assistant</span>
-                    </button>
-                </div>
-            </div>
-        </section>
+
 
     </main>
 
