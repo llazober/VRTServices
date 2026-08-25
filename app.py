@@ -1930,28 +1930,37 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
             except Exception as mail_err:
                 print(f"[WARNING sending email via Resend]: {mail_err}")
 
-        # Always log into customer_communications history table!
+        # Log as INBOUND communication record so it triggers notification alert on CRM panel!
         conn = None
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
+                inbound_subject = f"📎 Client Uploaded Document: {filename} {ref_tag}"
+                inbound_body = (
+                    f"Client uploaded new file '{filename}' directly to the '{subfolder}/' folder via Client Portal.\n\n"
+                    f"• Account: {cust.get('legal_name') or 'Client'} ({cust_ref})\n"
+                    f"• File Name: {filename}\n"
+                    f"• Destination: {subfolder}/\n"
+                    f"• Email: {recipient_email or 'N/A'}"
+                )
                 cur.execute("""
                     INSERT INTO customer_communications (
                         customer_id, direction, sender_email, recipient_email, reply_to_email,
-                        subject, body_text, status, created_at
+                        subject, body_text, status, is_read, attachments_json, created_at
                     ) VALUES (
-                        %s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', CURRENT_TIMESTAMP
+                        %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, %s, CURRENT_TIMESTAMP
                     );
                 """, (
                     cust["id"],
-                    clean_from,
-                    recipient_email,
+                    recipient_email or "client-portal@datalazo.net",
                     reply_to,
-                    subject,
-                    message_text
+                    reply_to,
+                    inbound_subject,
+                    inbound_body,
+                    json.dumps([{"filename": filename}])
                 ))
                 conn.commit()
-                print(f"[PORTAL HISTORY LOGGED] Saved upload notification for Customer {cust['id']} in customer_communications history table.")
+                print(f"[PORTAL INBOUND HISTORY LOGGED] Saved unread INBOUND upload notification for Customer {cust['id']} in customer_communications history table.")
         finally:
             if conn:
                 conn.close()
