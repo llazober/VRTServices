@@ -1083,10 +1083,16 @@
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Customer ID or Reference Tag</label>
-                    <input type="text" id="portalCustomerIdInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. CUST-1001 or 1001" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 14px 16px; color: #fff; font-size: 0.95rem; font-weight: 600; outline: none;">
-                    <div id="portalAuthError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 8px 12px; border-radius: 8px; font-weight: 600;"></div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Customer ID or Reference Tag</label>
+                        <input type="text" id="portalCustomerIdInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. CUST-1001 or 4059" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Registered Email Address</label>
+                        <input type="email" id="portalEmailInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. client@example.com" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
+                    </div>
+                    <div id="portalAuthError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
                 </div>
 
                 <button id="btnPortalAuthSubmit" onclick="submitClientPortalAuth()" style="background: linear-gradient(135deg, #00f2fe, #2563eb); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; padding: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 242, 254, 0.3); transition: all 0.25s ease; width: 100%; margin-top: 6px;">
@@ -1680,7 +1686,10 @@
         window.resetClientPortalModal = function() {
             PORTAL_CURRENT_CUSTOMER = null;
             PORTAL_SELECTED_FILES = [];
-            document.getElementById('portalCustomerIdInput').value = '';
+            const cidEl = document.getElementById('portalCustomerIdInput');
+            const emailEl = document.getElementById('portalEmailInput');
+            if (cidEl) cidEl.value = '';
+            if (emailEl) emailEl.value = '';
             document.getElementById('portalAuthError').style.display = 'none';
             document.getElementById('portalFileList').innerHTML = '';
             document.getElementById('portalFilesContainer').style.display = 'none';
@@ -1696,32 +1705,40 @@
         };
 
         window.submitClientPortalAuth = async function() {
-            const input = document.getElementById('portalCustomerIdInput');
+            const cidInput = document.getElementById('portalCustomerIdInput');
+            const emailInput = document.getElementById('portalEmailInput');
             const errEl = document.getElementById('portalAuthError');
             const btn = document.getElementById('btnPortalAuthSubmit');
-            if (!input) return;
+            if (!cidInput || !emailInput) return;
 
-            const cid = input.value.trim();
+            const cid = cidInput.value.trim();
+            const email = emailInput.value.trim();
+
             if (!cid) {
                 errEl.innerText = 'Please enter your Customer ID or reference code.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!email) {
+                errEl.innerText = 'Please enter the email address registered with your account.';
                 errEl.style.display = 'block';
                 return;
             }
 
             errEl.style.display = 'none';
             btn.disabled = true;
-            btn.innerHTML = '⏳ Verifying Customer ID...';
+            btn.innerHTML = '⏳ Verifying Credentials...';
 
             try {
                 const res = await fetch('/api/portal/verify-customer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customer_id: cid })
+                    body: JSON.stringify({ customer_id: cid, email: email })
                 });
                 const data = await res.json();
                 
                 if (!res.ok) {
-                    throw new Error(data.detail || 'Customer ID not found.');
+                    throw new Error(data.detail || 'Customer verification failed.');
                 }
 
                 PORTAL_CURRENT_CUSTOMER = data.customer;

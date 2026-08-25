@@ -1776,17 +1776,24 @@ async def read_customers_page(request: Request, msg: str = "", error: str = ""):
 
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
-async def portal_verify_customer(request: Request, customer_id: str = ""):
+async def portal_verify_customer(request: Request, customer_id: str = "", email: str = ""):
     cid_raw = customer_id.strip()
-    if not cid_raw and request.method == "POST":
+    email_raw = email.strip().lower()
+
+    if request.method == "POST":
         try:
             body = await request.json()
-            cid_raw = str(body.get("customer_id") or body.get("code") or body.get("id") or "").strip()
+            if not cid_raw:
+                cid_raw = str(body.get("customer_id") or body.get("code") or body.get("id") or "").strip()
+            if not email_raw:
+                email_raw = str(body.get("email") or "").strip().lower()
         except Exception:
             pass
 
     if not cid_raw:
         raise HTTPException(status_code=400, detail="Customer ID is required.")
+    if not email_raw:
+        raise HTTPException(status_code=400, detail="Registered Email Address is required for security verification.")
 
     clean_num = re.sub(r'[^0-9]', '', cid_raw)
     
@@ -1794,26 +1801,39 @@ async def portal_verify_customer(request: Request, customer_id: str = ""):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            sql = """
-                SELECT * FROM customer 
-                WHERE LOWER(custumer_number) = LOWER(%s)
-                   OR LOWER(email) = LOWER(%s)
-            """
-            params = [cid_raw, cid_raw]
-            
+            # Dual-verification: Require Customer ID match AND registered email match
+            sql_id_clause = "LOWER(custumer_number) = LOWER(%s)"
+            params = [cid_raw]
             if clean_num:
-                sql += " OR id = %s OR custumer_number = %s OR custumer_number ILIKE %s"
+                sql_id_clause += " OR id = %s OR custumer_number = %s OR custumer_number ILIKE %s"
                 params.extend([int(clean_num), clean_num, f"%{clean_num}%"])
 
-            sql += " ORDER BY id LIMIT 1;"
+            sql = f"""
+                SELECT * FROM customer 
+                WHERE ({sql_id_clause})
+                  AND LOWER(COALESCE(email, '')) = LOWER(%s)
+                ORDER BY id LIMIT 1;
+            """
+            params.append(email_raw)
+
             cur.execute(sql, tuple(params))
             cust = cur.fetchone()
             
             if not cust:
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"Customer ID '{cid_raw}' not found. Please enter a valid Customer ID (e.g. CUST-1001 or 1001)."
-                )
+                # Check if customer_id exists under a different email to give diagnostic feedback
+                sql_check = f"SELECT email FROM customer WHERE ({sql_id_clause}) LIMIT 1;"
+                cur.execute(sql_check, tuple(params[:-1]))
+                exist_row = cur.fetchone()
+                if exist_row:
+                    raise HTTPException(
+                        status_code=401, 
+                        detail="Authentication failed: The email address provided does not match the registered record for this Customer ID."
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Customer ID '{cid_raw}' not found. Please verify your Customer ID."
+                    )
 
             ref_code = cust.get("custumer_number") or f"CUST-{cust['id']}"
             return {
