@@ -17,15 +17,15 @@
             --card-bg: rgba(18, 22, 33, 0.7);
             --card-hover: rgba(28, 34, 50, 0.9);
             --border-color: rgba(255, 255, 255, 0.08);
-            --border-glow: rgba(127, 0, 255, 0.35);
-            --primary-grad: linear-gradient(135deg, #7f00ff, #e100ff);
+            --border-glow: rgba(56, 189, 248, 0.35);
+            --primary-grad: linear-gradient(135deg, #0284c7, #2563eb);
             --cyan-grad: linear-gradient(135deg, #00f2fe, #4facfe);
             --emerald-grad: linear-gradient(135deg, #10b981, #059669);
             --amber-grad: linear-gradient(135deg, #f59e0b, #d97706);
             --rose-grad: linear-gradient(135deg, #f43f5e, #be123c);
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
-            --accent-glow: rgba(225, 0, 255, 0.25);
+            --accent-glow: rgba(56, 189, 248, 0.25);
         }
 
         * {
@@ -203,16 +203,16 @@
             align-items: center;
             gap: 8px;
             padding: 8px 20px;
-            background: rgba(127, 0, 255, 0.15);
-            border: 1px solid rgba(225, 0, 255, 0.35);
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 30px;
             font-size: 0.82rem;
             font-weight: 800;
-            color: #e100ff;
+            color: #38bdf8;
             margin-bottom: 28px;
             letter-spacing: 0.05em;
             text-transform: uppercase;
-            box-shadow: 0 0 24px rgba(127, 0, 255, 0.25);
+            box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);
             animation: fadeInDown 0.6s ease-out;
         }
 
@@ -231,7 +231,7 @@
         }
 
         .hero-title span {
-            background: linear-gradient(135deg, #00f2fe 10%, #e100ff 90%);
+            background: linear-gradient(135deg, #00f2fe 10%, #3b82f6 90%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -257,24 +257,24 @@
         }
 
         .btn-primary-portal {
-            padding: 16px 36px;
-            background: linear-gradient(135deg, #7f00ff, #e100ff);
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #0284c7, #2563eb);
             color: #ffffff;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.05rem;
+            font-size: 1.02rem;
             font-weight: 800;
-            border-radius: 14px;
+            border-radius: 12px;
             text-decoration: none;
-            box-shadow: 0 10px 30px rgba(127, 0, 255, 0.45);
-            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
+            transition: all 0.25s ease;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .btn-primary-portal:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 15px 40px rgba(225, 0, 255, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(37, 99, 235, 0.55);
         }
 
         .btn-secondary-action {
@@ -691,11 +691,11 @@
 
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-header-login">
-                    ⚡ Go to Dashboard
+                    Dashboard
                 </a>
             {% else %}
                 <a href="/login" class="btn-header-login">
-                    🚀 Client Portal Login
+                    Login
                 </a>
             {% endif %}
         </div>
@@ -718,11 +718,11 @@
         <div class="hero-buttons">
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-primary-portal">
-                    ⚡ Launch Client Portal
+                    Dashboard
                 </a>
             {% else %}
                 <a href="/login" class="btn-primary-portal">
-                    🚀 Access Client Portal
+                    Login
                 </a>
             {% endif %}
 
@@ -970,11 +970,11 @@
                 <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
                     {% if username and username != 'user' %}
                         <a href="/dashboard" class="btn-primary-portal">
-                            ⚡ Go to Dashboard Portal
+                            Dashboard
                         </a>
                     {% else %}
                         <a href="/login" class="btn-primary-portal">
-                            🚀 Log In to Client Portal
+                            Login
                         </a>
                     {% endif %}
                     <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
