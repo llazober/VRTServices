@@ -4,24 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to VRT Services — Enterprise CRM Portal</title>
+    <title>VRT Services — Tax & Accounting Services Company</title>
+    <meta name="description" content="VRT Services is an enterprise tax preparation, bookkeeping, and accounting services company specializing in individual & corporate tax returns, bank OCR automation, and IRS compliance.">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --bg-color: #0b0c10;
-            --card-bg: rgba(22, 26, 37, 0.65);
-            --card-hover: rgba(30, 36, 51, 0.85);
+            --bg-color: #08090d;
+            --card-bg: rgba(18, 22, 33, 0.7);
+            --card-hover: rgba(28, 34, 50, 0.9);
             --border-color: rgba(255, 255, 255, 0.08);
-            --border-glow: rgba(127, 0, 255, 0.3);
+            --border-glow: rgba(127, 0, 255, 0.35);
             --primary-grad: linear-gradient(135deg, #7f00ff, #e100ff);
             --cyan-grad: linear-gradient(135deg, #00f2fe, #4facfe);
             --emerald-grad: linear-gradient(135deg, #10b981, #059669);
-            --text-main: #f5f6fa;
+            --amber-grad: linear-gradient(135deg, #f59e0b, #d97706);
+            --rose-grad: linear-gradient(135deg, #f43f5e, #be123c);
+            --text-main: #f8fafc;
             --text-muted: #94a3b8;
-            --accent-glow: rgba(225, 0, 255, 0.2);
+            --accent-glow: rgba(225, 0, 255, 0.25);
         }
 
         * {
@@ -30,13 +34,17 @@
             padding: 0;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: var(--bg-color);
             background-image:
-                radial-gradient(circle at 15% 20%, rgba(127, 0, 255, 0.12) 0%, transparent 45%),
-                radial-gradient(circle at 85% 75%, rgba(0, 242, 254, 0.1) 0%, transparent 45%),
-                radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+                radial-gradient(circle at 15% 15%, rgba(127, 0, 255, 0.15) 0%, transparent 45%),
+                radial-gradient(circle at 85% 65%, rgba(0, 242, 254, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 50% 90%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
@@ -47,36 +55,41 @@
         /* ── Header Bar ─────────────────────────────────────────────── */
         header.top-bar {
             width: 100%;
-            max-width: 1200px;
+            max-width: 1280px;
             margin: 0 auto;
             padding: 24px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            z-index: 10;
+            z-index: 100;
         }
 
         .brand-logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             text-decoration: none;
         }
 
         .logo-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
             background: var(--primary-grad);
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 20px var(--accent-glow);
+            box-shadow: 0 0 24px var(--accent-glow);
+            transition: transform 0.3s ease;
+        }
+
+        .brand-logo:hover .logo-icon {
+            transform: scale(1.05) rotate(-3deg);
         }
 
         .logo-icon svg {
-            width: 24px;
-            height: 24px;
+            width: 26px;
+            height: 26px;
             fill: #ffffff;
         }
 
@@ -87,35 +100,79 @@
 
         .brand-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 1.25rem;
-            font-weight: 800;
+            font-size: 1.35rem;
+            font-weight: 900;
             color: #ffffff;
             letter-spacing: -0.02em;
+            line-height: 1.1;
         }
 
         .brand-sub {
             font-size: 0.72rem;
-            color: var(--text-muted);
-            font-weight: 600;
-            letter-spacing: 0.05em;
+            color: #38bdf8;
+            font-weight: 700;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            list-style: none;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 600;
+            transition: color 0.25s ease;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            color: #ffffff;
         }
 
         .nav-actions {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
+        }
+
+        .btn-kb-launcher {
+            padding: 10px 18px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            font-weight: 700;
+            border-radius: 12px;
+            font-size: 0.84rem;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-kb-launcher:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
         }
 
         .btn-header-login {
-            padding: 10px 24px;
+            padding: 10px 22px;
             background: var(--cyan-grad);
             color: #0b0c10;
             font-weight: 800;
             border-radius: 12px;
             text-decoration: none;
-            font-size: 0.88rem;
-            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+            font-size: 0.86rem;
+            box-shadow: 0 4px 18px rgba(0, 242, 254, 0.3);
             transition: all 0.25s ease;
             display: inline-flex;
             align-items: center;
@@ -124,14 +181,14 @@
 
         .btn-header-login:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 242, 254, 0.45);
+            box-shadow: 0 6px 24px rgba(0, 242, 254, 0.5);
         }
 
-        /* ── Main Container & Hero ───────────────────────────────────── */
+        /* ── Main Container & Hero Section ───────────────────────────── */
         main.main-content {
             flex: 1;
             width: 100%;
-            max-width: 1200px;
+            max-width: 1280px;
             margin: 0 auto;
             padding: 40px 32px 80px 32px;
             display: flex;
@@ -145,46 +202,46 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 18px;
+            padding: 8px 20px;
             background: rgba(127, 0, 255, 0.15);
-            border: 1px solid rgba(225, 0, 255, 0.3);
+            border: 1px solid rgba(225, 0, 255, 0.35);
             border-radius: 30px;
-            font-size: 0.8rem;
-            font-weight: 700;
+            font-size: 0.82rem;
+            font-weight: 800;
             color: #e100ff;
             margin-bottom: 28px;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            box-shadow: 0 0 20px rgba(127, 0, 255, 0.2);
+            box-shadow: 0 0 24px rgba(127, 0, 255, 0.25);
             animation: fadeInDown 0.6s ease-out;
         }
 
         .hero-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 3.8rem;
+            font-size: 4rem;
             font-weight: 900;
-            line-height: 1.1;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+            line-height: 1.08;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -0.03em;
-            max-width: 900px;
+            max-width: 960px;
             animation: fadeInUp 0.7s ease-out;
         }
 
         .hero-title span {
-            background: linear-gradient(135deg, #00f2fe, #e100ff);
+            background: linear-gradient(135deg, #00f2fe 10%, #e100ff 90%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .hero-subtitle {
-            font-size: 1.15rem;
+            font-size: 1.2rem;
             color: var(--text-muted);
-            line-height: 1.6;
-            max-width: 720px;
-            margin-bottom: 40px;
+            line-height: 1.65;
+            max-width: 800px;
+            margin-bottom: 44px;
             font-weight: 400;
             animation: fadeInUp 0.8s ease-out;
         }
@@ -192,7 +249,7 @@
         .hero-buttons {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 18px;
             flex-wrap: wrap;
             justify-content: center;
             margin-bottom: 64px;
@@ -208,7 +265,7 @@
             font-weight: 800;
             border-radius: 14px;
             text-decoration: none;
-            box-shadow: 0 10px 30px rgba(127, 0, 255, 0.4);
+            box-shadow: 0 10px 30px rgba(127, 0, 255, 0.45);
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
@@ -217,108 +274,58 @@
 
         .btn-primary-portal:hover {
             transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 15px 40px rgba(225, 0, 255, 0.55);
+            box-shadow: 0 15px 40px rgba(225, 0, 255, 0.6);
         }
 
-        .btn-secondary-portal {
-            padding: 16px 32px;
+        .btn-secondary-action {
+            padding: 16px 30px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.15);
             color: #ffffff;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.05rem;
+            font-size: 1.02rem;
             font-weight: 700;
             border-radius: 14px;
             text-decoration: none;
             transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .btn-secondary-portal:hover {
+        .btn-secondary-action:hover {
             background: rgba(255, 255, 255, 0.12);
             border-color: rgba(255, 255, 255, 0.3);
             transform: translateY(-2px);
         }
 
-        /* ── Feature Cards Grid ──────────────────────────────────────── */
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 24px;
-            width: 100%;
-            margin-bottom: 64px;
-            text-align: left;
-        }
-
-        .feature-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 28px 24px;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .feature-card:hover {
-            background: var(--card-hover);
-            border-color: var(--border-glow);
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(127, 0, 255, 0.15);
-        }
-
-        .feature-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.6rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .feature-card-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 800;
-            color: #ffffff;
-        }
-
-        .feature-card-desc {
-            font-size: 0.88rem;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        /* ── Stats Bar ────────────────────────────────────────────────── */
+        /* ── Trust & Stats Bar ────────────────────────────────────────── */
         .stats-bar {
             width: 100%;
-            background: rgba(15, 21, 35, 0.6);
+            background: rgba(15, 21, 35, 0.65);
             border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 28px 40px;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            flex-wrap: wrap;
+            border-radius: 24px;
+            padding: 30px 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 24px;
             backdrop-filter: blur(16px);
+            margin-bottom: 80px;
+            text-align: center;
         }
 
         .stat-item {
             display: flex;
             flex-direction: column;
             align-items: center;
+            padding: 8px 12px;
         }
 
         .stat-value {
             font-family: 'Outfit', sans-serif;
-            font-size: 2rem;
+            font-size: 1.9rem;
             font-weight: 900;
             background: linear-gradient(135deg, #00f2fe, #7f00ff);
             -webkit-background-clip: text;
@@ -326,24 +333,307 @@
         }
 
         .stat-label {
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             color: var(--text-muted);
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-top: 4px;
+            margin-top: 6px;
+        }
+
+        /* ── Section Titles ─────────────────────────────────────────── */
+        .section-header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .section-badge {
+            display: inline-block;
+            font-size: 0.76rem;
+            font-weight: 800;
+            color: #38bdf8;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            padding: 6px 16px;
+            border-radius: 20px;
+            margin-bottom: 14px;
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+            margin-bottom: 14px;
+        }
+
+        .section-subtitle {
+            font-size: 1.08rem;
+            color: var(--text-muted);
+            max-width: 720px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* ── Services Grid ───────────────────────────────────────────── */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 28px;
+            width: 100%;
+            margin-bottom: 90px;
+            text-align: left;
+        }
+
+        .service-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 32px 28px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: transparent;
+            transition: background 0.3s ease;
+        }
+
+        .service-card:hover {
+            background: var(--card-hover);
+            border-color: var(--border-glow);
+            transform: translateY(-6px);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), 0 0 25px rgba(127, 0, 255, 0.18);
+        }
+
+        .service-card:hover::before {
+            background: var(--primary-grad);
+        }
+
+        .service-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .service-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .service-tag {
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 5px 12px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .tag-cyan { background: rgba(0, 242, 254, 0.15); color: #38bdf8; border: 1px solid rgba(0, 242, 254, 0.3); }
+        .tag-purple { background: rgba(127, 0, 255, 0.15); color: #c084fc; border: 1px solid rgba(127, 0, 255, 0.3); }
+        .tag-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .tag-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .tag-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .tag-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+        .service-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+
+        .service-desc {
+            font-size: 0.92rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .service-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding-top: 18px;
+        }
+
+        .service-item {
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            line-height: 1.45;
+        }
+
+        .service-item span.check {
+            color: #10b981;
+            font-weight: 800;
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        /* ── Workflow Steps Section ──────────────────────────────────── */
+        .workflow-container {
+            width: 100%;
+            margin-bottom: 90px;
+        }
+
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            width: 100%;
+            text-align: left;
+        }
+
+        .workflow-card {
+            background: rgba(15, 21, 35, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 28px 24px;
+            backdrop-filter: blur(12px);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .workflow-card:hover {
+            border-color: rgba(0, 242, 254, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .step-number {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #7f00ff, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        .step-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            font-size: 0.86rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+        }
+
+        /* ── Portal CTA Banner ───────────────────────────────────────── */
+        .portal-cta-banner {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(127, 0, 255, 0.2), rgba(0, 242, 254, 0.15));
+            border: 1px solid rgba(127, 0, 255, 0.4);
+            border-radius: 28px;
+            padding: 48px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(127, 0, 255, 0.2);
+            backdrop-filter: blur(16px);
+            margin-bottom: 60px;
+        }
+
+        .portal-cta-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 14px;
+        }
+
+        .portal-cta-desc {
+            font-size: 1.05rem;
+            color: #cbd5e1;
+            max-width: 680px;
+            line-height: 1.6;
+            margin-bottom: 32px;
         }
 
         /* ── Footer ──────────────────────────────────────────────────── */
         footer.bottom-footer {
             width: 100%;
             border-top: 1px solid var(--border-color);
-            padding: 24px 32px;
-            text-align: center;
+            padding: 40px 32px;
+            background: rgba(8, 9, 13, 0.95);
+            z-index: 10;
+        }
+
+        .footer-inner {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-brand {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            text-align: left;
+        }
+
+        .footer-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .footer-copy {
             font-size: 0.82rem;
             color: var(--text-muted);
-            background: rgba(11, 12, 16, 0.9);
-            z-index: 10;
+        }
+
+        .footer-contacts {
+            display: flex;
+            gap: 24px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .footer-contacts a {
+            color: #38bdf8;
+            text-decoration: none;
         }
 
         /* ── Keyframe Animations ─────────────────────────────────────── */
@@ -356,21 +646,17 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        @media (max-width: 768px) {
-            .hero-title {
-                font-size: 2.6rem;
-            }
-            .hero-subtitle {
-                font-size: 1rem;
-            }
-            .hero-buttons {
-                flex-direction: column;
-                width: 100%;
-            }
-            .btn-primary-portal, .btn-secondary-portal {
-                width: 100%;
-                justify-content: center;
-            }
+        @media (max-width: 900px) {
+            .nav-menu { display: none; }
+            .hero-title { font-size: 2.8rem; }
+            .services-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .hero-title { font-size: 2.2rem; }
+            .hero-buttons { flex-direction: column; width: 100%; }
+            .btn-primary-portal, .btn-secondary-action { width: 100%; justify-content: center; }
+            .portal-cta-banner { padding: 32px 20px; }
         }
     </style>
 </head>
@@ -387,18 +673,29 @@
             </div>
             <div class="logo-text">
                 <span class="brand-title">VRT SERVICES</span>
-                <span class="brand-sub">Enterprise CRM Portal</span>
+                <span class="brand-sub">Tax & Accounting Advisory</span>
             </div>
         </a>
 
+        <ul class="nav-menu">
+            <li><a href="#services" class="nav-link">Our Services</a></li>
+            <li><a href="#workflow" class="nav-link">Filing Process</a></li>
+            <li><a href="#portal-cta" class="nav-link">Client Portal</a></li>
+            <li><span onclick="openKnowledgeBaseModal()" class="nav-link">Knowledge Base</span></li>
+        </ul>
+
         <div class="nav-actions">
+            <button onclick="openKnowledgeBaseModal()" class="btn-kb-launcher">
+                <span>📖</span> <span>KB Library</span>
+            </button>
+
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-header-login">
                     ⚡ Go to Dashboard
                 </a>
             {% else %}
                 <a href="/login" class="btn-header-login">
-                    🚀 Log In
+                    🚀 Client Portal Login
                 </a>
             {% endif %}
         </div>
@@ -407,78 +704,288 @@
     <!-- Main Content Hero Section -->
     <main class="main-content">
         <div class="hero-badge">
-            ✨ VRT SERVICES PORTAL
+            🏛️ Enterprise Tax & Accounting Advisory Firm
         </div>
 
         <h1 class="hero-title">
-            Welcome to <span>VRT Services</span>
+            Full-Service Tax Preparation & <span>Accounting Solutions</span>
         </h1>
 
-        <p class="hero-subtitle" style="margin-bottom: 56px;">
-            Next-generation CRM platform for automated bank statement OCR extraction, client communication management, and secure financial document processing.
+        <p class="hero-subtitle">
+            Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.
         </p>
 
-        <!-- Feature Grid -->
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.3);">
-                    📄
-                </div>
-                <h3 class="feature-card-title">Bank Statement OCR</h3>
-                <p class="feature-card-desc">
-                    Extract transactions from PDF & image bank statements automatically. Instant reconciliation and export formatted CSVs for QuickBooks.
-                </p>
-            </div>
+        <div class="hero-buttons">
+            {% if username and username != 'user' %}
+                <a href="/dashboard" class="btn-primary-portal">
+                    ⚡ Launch Client Portal
+                </a>
+            {% else %}
+                <a href="/login" class="btn-primary-portal">
+                    🚀 Access Client Portal
+                </a>
+            {% endif %}
 
-            <div class="feature-card">
-                <div class="feature-icon" style="color: #e100ff; border-color: rgba(225, 0, 255, 0.3);">
-                    👥
-                </div>
-                <h3 class="feature-card-title">Customer CRM Portal</h3>
-                <p class="feature-card-desc">
-                    Comprehensive customer profiles, custom client reference tags, and automated cloud folder setup for seamlessly managing client assets.
-                </p>
-            </div>
+            <button onclick="openKnowledgeBaseModal()" class="btn-secondary-action">
+                <span>📖</span> <span>Explore Tax Guides & FAQ</span>
+            </button>
 
-            <div class="feature-card">
-                <div class="feature-icon" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
-                    💬
-                </div>
-                <h3 class="feature-card-title">Client Email System</h3>
-                <p class="feature-card-desc">
-                    Send outbound emails with automatic reference tagging and receive inbound client replies directly inside the CRM.
-                </p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.3);">
-                    🔒
-                </div>
-                <h3 class="feature-card-title">Cloud Document Storage</h3>
-                <p class="feature-card-desc">
-                    Direct Integration with DigitalOcean Spaces for encrypted file uploads, subfolder organization, and quick document downloads.
-                </p>
-            </div>
+            <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
+                <span>✨</span> <span>AI Tax Assistant</span>
+            </button>
         </div>
 
-        <!-- Stats Bar -->
+        <!-- Trust & Highlights Bar -->
         <div class="stats-bar">
             <div class="stat-item">
-                <div class="stat-value">99.9%</div>
-                <div class="stat-label">Extraction Accuracy</div>
+                <div class="stat-value">100% IRS E-File</div>
+                <div class="stat-label">Form 8879 Authorized</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">Multi-Tenant</div>
-                <div class="stat-label">Client Segregation</div>
+                <div class="stat-value">Form 1040 / 1120</div>
+                <div class="stat-label">Individual & Corporate</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">Automated OCR</div>
+                <div class="stat-label">Bank Reconciliation</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value">QBO Ready</div>
-                <div class="stat-label">Seamless Integration</div>
+                <div class="stat-label">QuickBooks Online Sync</div>
             </div>
         </div>
+
+        <!-- Services Section Header -->
+        <section id="services" style="width: 100%;">
+            <div class="section-header">
+                <span class="section-badge">Comprehensive Offerings</span>
+                <h2 class="section-title">Tax & Accounting Services</h2>
+                <p class="section-subtitle">
+                    Discover our complete range of specialized tax return preparation, business accounting, automated bookkeeping, and IRS regulatory compliance services.
+                </p>
+            </div>
+
+            <!-- Detailed Services Cards Grid -->
+            <div class="services-grid">
+                
+                <!-- Service 1: Individual Tax Returns -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.3);">
+                                👤
+                            </div>
+                            <span class="service-tag tag-cyan">Form 1040 & 1040-SR</span>
+                        </div>
+                        <h3 class="service-title">Individual Tax Returns</h3>
+                        <p class="service-desc">
+                            Thorough federal and state income tax preparation for individuals, families, freelancers, and sole proprietors.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> Federal & State Income Tax Filings (Form 1040 / 1040-SR)</li>
+                            <li class="service-item"><span class="check">✓</span> Schedule C Self-Employment Tax & Expense Deductions</li>
+                            <li class="service-item"><span class="check">✓</span> W-2, 1099-NEC, 1099-MISC & 1099-K Income Reconciliation</li>
+                            <li class="service-item"><span class="check">✓</span> Schedule A Itemized Deductions (Mortgage, Taxes, Charity)</li>
+                            <li class="service-item"><span class="check">✓</span> Maximization of Earned Income & Child Tax Credits</li>
+                            <li class="service-item"><span class="check">✓</span> Form 8879 E-File Signature Authorization & IRS Submission</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Service 2: Corporate & Business Tax Filings -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #e100ff; border-color: rgba(225, 0, 255, 0.3);">
+                                🏢
+                            </div>
+                            <span class="service-tag tag-purple">Form 1120 / 1120-S / 1065</span>
+                        </div>
+                        <h3 class="service-title">Corporate & Business Tax Filings</h3>
+                        <p class="service-desc">
+                            Strategic tax preparation, Schedule K-1 generation, and corporate compliance for C-Corps, S-Corps, and LLCs.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> C-Corporation Tax Returns (Form 1120) & Officer Payroll</li>
+                            <li class="service-item"><span class="check">✓</span> S-Corporation Filings (Form 1120-S) & Shareholder K-1s</li>
+                            <li class="service-item"><span class="check">✓</span> Partnership & Multi-Member LLC Returns (Form 1065)</li>
+                            <li class="service-item"><span class="check">✓</span> Quarterly Estimated Tax Calculation & Officer Compensation</li>
+                            <li class="service-item"><span class="check">✓</span> Section 179 & Bonus Depreciation Capital Asset Schedules</li>
+                            <li class="service-item"><span class="check">✓</span> State Corporate Income & Annual Franchise Tax Filings</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Service 3: Automated Bookkeeping & Accounting -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                                📊
+                            </div>
+                            <span class="service-tag tag-emerald">Bookkeeping & OCR</span>
+                        </div>
+                        <h3 class="service-title">Automated Bookkeeping & Accounting</h3>
+                        <p class="service-desc">
+                            Year-round financial management powered by AI OCR bank statement extraction and QuickBooks synchronization.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> AI Vision OCR Extraction for PDF & Image Bank Statements</li>
+                            <li class="service-item"><span class="check">✓</span> Monthly Profit & Loss (P&L) and Balance Sheet Reporting</li>
+                            <li class="service-item"><span class="check">✓</span> QuickBooks Online (QBO) Direct OAuth & Chart of Accounts Sync</li>
+                            <li class="service-item"><span class="check">✓</span> General Ledger Maintenance & Transaction Categorization</li>
+                            <li class="service-item"><span class="check">✓</span> Monthly Bank & Credit Card Account Reconciliation</li>
+                            <li class="service-item"><span class="check">✓</span> Check Image Digitization & Reference Record Archival</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Service 4: Payroll & Contractor Compliance -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.3);">
+                                💳
+                            </div>
+                            <span class="service-tag tag-amber">Payroll & 1099 Reporting</span>
+                        </div>
+                        <h3 class="service-title">Payroll Tax & Contractor Filing</h3>
+                        <p class="service-desc">
+                            Comprehensive payroll tax administration, quarterly federal filings, and year-end 1099 contractor reporting.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> Employer Quarterly Federal Tax Returns (Form 941 Filing)</li>
+                            <li class="service-item"><span class="check">✓</span> Federal Unemployment Tax Reconciliation (Form 940)</li>
+                            <li class="service-item"><span class="check">✓</span> Independent Contractor 1099-NEC & 1099-MISC Information Filings</li>
+                            <li class="service-item"><span class="check">✓</span> Annual W-2 & W-3 Employee Wage Statement Processing</li>
+                            <li class="service-item"><span class="check">✓</span> State Unemployment Insurance (SUI) & Local Payroll Taxing</li>
+                            <li class="service-item"><span class="check">✓</span> Payroll Journal Entries Export to QuickBooks Online</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Service 5: IRS Notice Resolution & E-Filing Authorization -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #fb7185; border-color: rgba(244, 63, 94, 0.3);">
+                                🛡️
+                            </div>
+                            <span class="service-tag tag-rose">IRS Compliance & E-Sign</span>
+                        </div>
+                        <h3 class="service-title">IRS Compliance & E-Filing</h3>
+                        <p class="service-desc">
+                            Authorized IRS e-file signature authorization, extension processing, and notice correspondence support.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> Form 8879 Electronic Signature Workflow & Filing Authorization</li>
+                            <li class="service-item"><span class="check">✓</span> Automatic Tax Extension Processing (Form 4868 / Form 7004)</li>
+                            <li class="service-item"><span class="check">✓</span> IRS Notice & Penalty Relief Assistance</li>
+                            <li class="service-item"><span class="check">✓</span> Power of Attorney & Authorization Filings (Form 2848 / 8821)</li>
+                            <li class="service-item"><span class="check">✓</span> IRS Account Transcript Analysis & Income Verification</li>
+                            <li class="service-item"><span class="check">✓</span> Client Reference Code Tracking (`CUST-XXXX`) for Status Check</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Service 6: Business Formation & Tax Strategy -->
+                <div class="service-card">
+                    <div>
+                        <div class="service-header">
+                            <div class="service-icon" style="color: #60a5fa; border-color: rgba(59, 130, 246, 0.3);">
+                                🚀
+                            </div>
+                            <span class="service-tag tag-blue">Entity Formation & Advisory</span>
+                        </div>
+                        <h3 class="service-title">Business Formation & Advisory</h3>
+                        <p class="service-desc">
+                            Expert entity structuring, tax classification choice, and proactive tax minimization planning.
+                        </p>
+                        <ul class="service-list">
+                            <li class="service-item"><span class="check">✓</span> LLC, S-Corp, & C-Corp Entity Setup & Registration</li>
+                            <li class="service-item"><span class="check">✓</span> S-Corporation Election Filings (IRS Form 2553)</li>
+                            <li class="service-item"><span class="check">✓</span> Multi-State Business Tax Structuring & Nexus Review</li>
+                            <li class="service-item"><span class="check">✓</span> Proactive Year-End Tax Planning & Deduction Analysis</li>
+                            <li class="service-item"><span class="check">✓</span> Cash Flow Forecasting & Financial Performance Review</li>
+                            <li class="service-item"><span class="check">✓</span> Secure Cloud Document Portal Storage & Digital Archival</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Filing Process Workflow Section -->
+        <section id="workflow" class="workflow-container">
+            <div class="section-header">
+                <span class="section-badge">Streamlined Process</span>
+                <h2 class="section-title">How Our Client Workflow Works</h2>
+                <p class="section-subtitle">
+                    Experience a hassle-free, secure digital process from initial document submission to final IRS acceptance.
+                </p>
+            </div>
+
+            <div class="workflow-grid">
+                <div class="workflow-card">
+                    <div class="step-number">01</div>
+                    <h3 class="step-title">Document Intake</h3>
+                    <p class="step-desc">
+                        Upload tax documents to your Client Portal folder or email them to <code>crm@ostooechei.resend.app</code> with your reference tag (e.g. <code>[Ref: CUST-1001]</code>).
+                    </p>
+                </div>
+
+                <div class="workflow-card">
+                    <div class="step-number">02</div>
+                    <h3 class="step-title">OCR & Advisory Preparation</h3>
+                    <p class="step-desc">
+                        Bank statements are extracted via AI vision OCR. Our tax specialists reconcile data, categorize expenses, and prepare your tax returns.
+                    </p>
+                </div>
+
+                <div class="workflow-card">
+                    <div class="step-number">03</div>
+                    <h3 class="step-title">Review & Form 8879 E-Sign</h3>
+                    <p class="step-desc">
+                        Review completed tax returns in your secure portal. Electronically sign IRS Form 8879 e-file authorization with one click.
+                    </p>
+                </div>
+
+                <div class="workflow-card">
+                    <div class="step-number">04</div>
+                    <h3 class="step-title">Instant IRS E-Filing</h3>
+                    <p class="step-desc">
+                        Your return is electronically submitted to the IRS and state authorities. Track progress anytime by asking our AI Assistant!
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Portal CTA Banner -->
+        <section id="portal-cta" style="width: 100%;">
+            <div class="portal-cta-banner">
+                <h2 class="portal-cta-title">Ready to File or Check Your Tax Status?</h2>
+                <p class="portal-cta-desc">
+                    Log in to your secure VRT Services Client Portal to manage documents, review filing checklists, or consult our AI Assistant using your Customer Reference Code (<code>CUST-XXXX</code>).
+                </p>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+                    {% if username and username != 'user' %}
+                        <a href="/dashboard" class="btn-primary-portal">
+                            ⚡ Go to Dashboard Portal
+                        </a>
+                    {% else %}
+                        <a href="/login" class="btn-primary-portal">
+                            🚀 Log In to Client Portal
+                        </a>
+                    {% endif %}
+                    <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
+                        <span>✨</span> <span>Ask AI Tax Assistant</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
     </main>
 
-    <!-- Footer -->
     <!-- Create New Knowledge Article Modal -->
     <div id="createKbArticleModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
         <div style="background: #0f172a; border: 1px solid rgba(127, 0, 255, 0.4); border-radius: 20px; max-width: 620px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.7); gap: 16px; color: #fff; overflow: hidden;">
@@ -601,7 +1108,7 @@
     <!-- Floating AI Assistant Chatbot Widget -->
     <div id="aiChatTriggerBtn" onclick="toggleAiChatDrawer()" style="position: fixed; bottom: 24px; right: 24px; z-index: 2147483640; background: linear-gradient(135deg, #7f00ff, #00f2fe); color: #fff; padding: 12px 20px; border-radius: 30px; font-weight: 800; font-size: 0.88rem; cursor: pointer; box-shadow: 0 8px 25px rgba(127, 0, 255, 0.45); display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.2); transition: all 0.25s ease;">
         <span>✨</span>
-        <span>AI Assistant</span>
+        <span>AI Tax Assistant</span>
     </div>
 
     <div id="aiChatDrawer" style="display: none; position: fixed; bottom: 84px; right: 24px; width: 410px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 110px); background: #0d1322; border: 1px solid rgba(127, 0, 255, 0.35); border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.88), 0 0 35px rgba(0, 242, 254, 0.15); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); z-index: 2147483645; flex-direction: column; overflow: hidden;">
@@ -613,7 +1120,7 @@
                 </div>
                 <div>
                     <h4 id="aiChatDrawerTitle" style="font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #fff; margin: 0;">
-                        VRT Knowledge Assistant
+                        VRT Tax & Accounting Assistant
                     </h4>
                     <div style="font-size: 0.72rem; color: #4ade80; display: flex; align-items: center; gap: 4px; font-weight: 600;">
                         <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80;"></span> RAG Engine & Customer Status
@@ -633,22 +1140,50 @@
         <!-- Messages Container -->
         <div id="aiChatMessageList" style="flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
             <div style="align-self: flex-start; max-width: 88%; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 12px 14px; font-size: 0.84rem; color: #e2e8f0; line-height: 1.55;">
-                👋 Hello! I am your <strong>VRT Services AI Assistant</strong>.<br><br>
+                👋 Hello! Welcome to <strong>VRT Tax & Accounting Services</strong>.<br><br>
                 I can help you with:<br>
-                • Checking your live <strong>task progress</strong> (enter <code>CUST-XXXX</code>)<br>
-                • Answering <strong>IRS Tax Publications</strong> & filing deadlines<br>
-                • Document submission & portal guidance.
+                • Checking live <strong>tax filing progress</strong> (enter <code>CUST-XXXX</code>)<br>
+                • Answering <strong>IRS Tax Publications</strong> & filing deadline questions<br>
+                • Document submission & portal onboarding instructions.
             </div>
         </div>
 
         <!-- Input Bar -->
         <div style="padding: 12px 14px; background: rgba(0,0,0,0.35); border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 8px;">
-            <input type="text" id="aiChatInput" onkeydown="handleAiInputKeyDown(event)" placeholder="Ask tax question or enter CUST-XXXX..." style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 12px; font-size: 0.83rem; color: #fff; outline: none;">
+            <input type="text" id="aiChatInput" onkeydown="handleAiInputKeyDown(event)" placeholder="Ask a tax question or enter CUST-XXXX..." style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 12px; font-size: 0.83rem; color: #fff; outline: none;">
             <button onclick="submitAiChatMessage()" style="background: linear-gradient(135deg, #7f00ff, #00f2fe); border: none; color: #fff; font-weight: 800; padding: 8px 16px; border-radius: 10px; font-size: 0.8rem; cursor: pointer;">Send</button>
         </div>
     </div>
 
+    <!-- Bottom Footer -->
+    <footer class="bottom-footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <span class="footer-title">VRT Services — Tax & Accounting Advisory</span>
+                <span class="footer-copy">© 2026 VRT Services. All Rights Reserved. Authorised IRS E-File Provider.</span>
+            </div>
+            <div class="footer-contacts">
+                <span>Support: <a href="mailto:crm@ostooechei.resend.app">crm@ostooechei.resend.app</a></span>
+                <span>Hours: Mon – Fri, 8:00 AM – 6:00 PM EST</span>
+            </div>
+        </div>
+    </footer>
+
     <script>
+        function renderAiMarkdown(text) {
+            if (!text) return '';
+            let html = String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.5); padding:10px; border-radius:8px; overflow-x:auto;"><code>$1</code></pre>')
+                .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-family:monospace;">$1</code>')
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>');
+            return html;
+        }
+
         (function initAiDrawer() {
             function moveDrawerToBody() {
                 const drawer = document.getElementById('aiChatDrawer');
@@ -959,7 +1494,7 @@
             aiDiv.style.padding = '10px 12px';
             aiDiv.style.fontSize = '0.8rem';
             aiDiv.style.color = '#cbd5e1';
-            aiDiv.innerHTML = '⏳ <em>Consulting Knowledge Base...</em>';
+            aiDiv.innerHTML = '⏳ <em>Consulting AI Knowledge Base...</em>';
             chatList.appendChild(aiDiv);
             chatList.scrollTop = chatList.scrollHeight;
 
@@ -1000,23 +1535,10 @@
                 setTimeout(() => {
                     const input = document.getElementById('aiChatInput');
                     if (input) input.focus();
-                }, 50);
+                }, 100);
             } else {
                 drawer.style.display = 'none';
             }
-        };
-
-        window.renderAiMarkdown = function(text) {
-            if (!text) return '';
-            let html = String(text)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/### (.*?)\n/g, '<h5 style="color:#00f2fe; margin:8px 0 4px 0; font-size:0.9rem;">$1</h5>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/`(.*?)`/g, '<code style="background:rgba(0,242,254,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:0.8rem;">$1</code>')
-                .replace(/^- (.*?)$/gm, '<li style="margin-left:14px; margin-bottom:2px;">$1</li>')
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\n/g, '<br>');
-            return html;
         };
 
         window.submitAiChatMessage = async function() {
@@ -1027,12 +1549,11 @@
             input.value = '';
 
             const chatList = document.getElementById('aiChatMessageList');
-            
-            // Add User Message Bubble
+
             const userDiv = document.createElement('div');
             userDiv.style.alignSelf = 'flex-end';
             userDiv.style.maxWidth = '85%';
-            userDiv.style.background = 'linear-gradient(135deg, #7f00ff, #a855f7)';
+            userDiv.style.background = 'linear-gradient(135deg, #7f00ff, #e100ff)';
             userDiv.style.color = '#fff';
             userDiv.style.borderRadius = '14px';
             userDiv.style.padding = '10px 14px';
@@ -1041,10 +1562,9 @@
             userDiv.textContent = msg;
             chatList.appendChild(userDiv);
 
-            // Add Loading AI Bubble
             const aiDiv = document.createElement('div');
             aiDiv.style.alignSelf = 'flex-start';
-            aiDiv.style.maxWidth = '90%';
+            aiDiv.style.maxWidth = '88%';
             aiDiv.style.background = 'rgba(30, 41, 59, 0.7)';
             aiDiv.style.border = '1px solid rgba(0, 242, 254, 0.3)';
             aiDiv.style.borderRadius = '14px';
