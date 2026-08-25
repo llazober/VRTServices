@@ -1774,6 +1774,155 @@ async def read_customers_page(request: Request, msg: str = "", error: str = ""):
         context=ctx
     )
 
+# ── Public Client Portal API Routes ─────────────────────────────────────────
+@app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
+async def portal_verify_customer(request: Request, customer_id: str = ""):
+    cid_raw = customer_id.strip()
+    if not cid_raw and request.method == "POST":
+        try:
+            body = await request.json()
+            cid_raw = str(body.get("customer_id") or body.get("code") or body.get("id") or "").strip()
+        except Exception:
+            pass
+
+    if not cid_raw:
+        raise HTTPException(status_code=400, detail="Customer ID is required.")
+
+    clean_num = re.sub(r'[^0-9]', '', cid_raw)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT * FROM customer 
+                WHERE LOWER(custumer_number) = LOWER(%s)
+                   OR LOWER(COALESCE(reference_code, '')) = LOWER(%s)
+                   OR LOWER(email) = LOWER(%s)
+            """
+            params = [cid_raw, cid_raw, cid_raw]
+            
+            if clean_num:
+                sql += " OR id = %s OR custumer_number = %s"
+                params.extend([int(clean_num), clean_num])
+
+            sql += " ORDER BY id LIMIT 1;"
+            cur.execute(sql, tuple(params))
+            cust = cur.fetchone()
+            
+            if not cust:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Customer ID '{cid_raw}' not found. Please enter a valid Customer ID (e.g. CUST-1001 or 1001)."
+                )
+
+            ref_code = cust.get("reference_code") or cust.get("custumer_number") or f"CUST-{cust['id']}"
+            return {
+                "status": "ok",
+                "customer": {
+                    "id": cust["id"],
+                    "legal_name": cust.get("legal_name") or f"Customer #{cust['id']}",
+                    "custumer_number": cust.get("custumer_number") or ref_code,
+                    "reference_code": ref_code,
+                    "email": cust.get("email") or "",
+                    "parent_name": cust.get("parent_name") or "VRT Services"
+                }
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR in portal_verify_customer]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/portal/upload")
+async def portal_upload_file(
+    request: Request,
+    customer_id: str = Form(...),
+    file: UploadFile = File(...),
+    subfolder: str = Form("Inbox")
+):
+    cid_raw = customer_id.strip()
+    if not cid_raw:
+        raise HTTPException(status_code=400, detail="Customer ID is required.")
+
+    clean_num = re.sub(r'[^0-9]', '', cid_raw)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT * FROM customer 
+                WHERE LOWER(custumer_number) = LOWER(%s)
+                   OR LOWER(COALESCE(reference_code, '')) = LOWER(%s)
+            """
+            params = [cid_raw, cid_raw]
+            if clean_num:
+                sql += " OR id = %s OR custumer_number = %s"
+                params.extend([int(clean_num), clean_num])
+            sql += " ORDER BY id LIMIT 1;"
+            
+            cur.execute(sql, tuple(params))
+            cust = cur.fetchone()
+            
+            if not cust:
+                raise HTTPException(status_code=404, detail="Customer record not found.")
+
+        root_folder = get_customer_root_folder_path(cust)
+        if not root_folder:
+            parent = (cust.get("parent_name") or "VRT Services").strip()
+            c_name = (cust.get("legal_name") or f"Customer_{cust['id']}").strip()
+            root_folder = f"{parent}/customers/{cust['id']}_{c_name}/"
+
+        if not root_folder.endswith('/'):
+            root_folder += '/'
+
+        folder_name = (subfolder or "Inbox").strip().strip('/')
+        target_prefix = f"{root_folder}{folder_name}/"
+
+        filename = os.path.basename(file.filename)
+        file_key = f"{target_prefix}{filename}"
+
+        client, err = get_s3_client()
+        if not client:
+            local_dir = os.path.join("storage", target_prefix)
+            os.makedirs(local_dir, exist_ok=True)
+            local_path = os.path.join(local_dir, filename)
+            with open(local_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            return {
+                "status": "ok",
+                "message": f"File '{filename}' uploaded successfully to {folder_name} folder (Local Storage).",
+                "file_key": local_path,
+                "customer_name": cust.get("legal_name")
+            }
+
+        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+        client.upload_fileobj(file.file, bucket, file_key)
+
+        return {
+            "status": "ok",
+            "message": f"File '{filename}' uploaded successfully to {folder_name} folder.",
+            "file_key": file_key,
+            "customer_name": cust.get("legal_name")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR in portal_upload_file]: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/customers")
 async def get_customers(request: Request, query: str = "", parentName: str = ""):
     username = get_current_username(request)

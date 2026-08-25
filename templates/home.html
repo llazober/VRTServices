@@ -680,19 +680,8 @@
         <ul class="nav-menu">
             <li><a href="#services" class="nav-link">Our Services</a></li>
             <li><a href="#workflow" class="nav-link">Filing Process</a></li>
+            <li><a href="javascript:void(0)" onclick="openClientPortalModal()" class="nav-link" style="color: #00f2fe; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">📂 Client Portal</a></li>
         </ul>
-
-        <div class="nav-actions">
-            {% if username and username != 'user' %}
-                <a href="/dashboard" class="btn-header-login">
-                    Dashboard
-                </a>
-            {% else %}
-                <a href="/login" class="btn-header-login">
-                    Login
-                </a>
-            {% endif %}
-        </div>
     </header>
 
     <!-- Main Content Hero Section -->
@@ -709,21 +698,7 @@
             Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.
         </p>
 
-        <div class="hero-buttons">
-            {% if username and username != 'user' %}
-                <a href="/dashboard" class="btn-primary-portal">
-                    Dashboard
-                </a>
-            {% else %}
-                <a href="/login" class="btn-primary-portal">
-                    Login
-                </a>
-            {% endif %}
 
-            <button onclick="toggleAiChatDrawer()" class="btn-secondary-action" style="border-color: rgba(0, 242, 254, 0.4); color: #38bdf8;">
-                <span>✨</span> <span>AI Tax Assistant</span>
-            </button>
-        </div>
 
         <!-- Trust & Highlights Bar -->
         <div class="stats-bar">
@@ -1073,30 +1048,100 @@
         </div>
     </div>
 
-    <!-- Floating AI Assistant Chatbot Widget -->
-    <div id="aiChatTriggerBtn" onclick="toggleAiChatDrawer()" style="position: fixed; bottom: 24px; right: 24px; z-index: 2147483640; background: linear-gradient(135deg, #7f00ff, #00f2fe); color: #fff; padding: 12px 20px; border-radius: 30px; font-weight: 800; font-size: 0.88rem; cursor: pointer; box-shadow: 0 8px 25px rgba(127, 0, 255, 0.45); display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.2); transition: all 0.25s ease;">
-        <span>✨</span>
-        <span>AI Tax Assistant</span>
-    </div>
+    <!-- Client Portal Document Upload Modal -->
+    <div id="clientPortalModal" style="display: none; position: fixed; inset: 0; background: rgba(5, 7, 13, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: #0e1322; border: 1px solid rgba(0, 242, 254, 0.35); border-radius: 24px; max-width: 580px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(0,242,254,0.15); color: #fff; overflow: hidden; position: relative;">
+            
+            <!-- Close Button -->
+            <button onclick="closeClientPortalModal()" style="position: absolute; top: 18px; right: 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;">✕</button>
 
-    <div id="aiChatDrawer" style="display: none; position: fixed; bottom: 84px; right: 24px; width: 410px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 110px); background: #0d1322; border: 1px solid rgba(127, 0, 255, 0.35); border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.88), 0 0 35px rgba(0, 242, 254, 0.15); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); z-index: 2147483645; flex-direction: column; overflow: hidden;">
-        <!-- Header -->
-        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #7f00ff, #00f2fe); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff;">
-                    ✨
-                </div>
-                <div>
-                    <h4 id="aiChatDrawerTitle" style="font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #fff; margin: 0;">
-                        VRT Tax & Accounting Assistant
-                    </h4>
-                    <div style="font-size: 0.72rem; color: #4ade80; display: flex; align-items: center; gap: 4px; font-weight: 600;">
-                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80;"></span> RAG Engine & Customer Status
+            <!-- STEP 1: Customer ID Authentication View -->
+            <div id="portalStep1Auth" style="padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #00f2fe, #2563eb); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; box-shadow: 0 0 20px rgba(0,242,254,0.3);">
+                        📂
+                    </div>
+                    <div>
+                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">
+                            Client Portal Access
+                        </h3>
+                        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                            Enter your Customer ID to upload documents directly to your inbox folder.
+                        </p>
                     </div>
                 </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Customer ID or Reference Tag</label>
+                    <input type="text" id="portalCustomerIdInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. CUST-1001 or 1001" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 14px 16px; color: #fff; font-size: 0.95rem; font-weight: 600; outline: none;">
+                    <div id="portalAuthError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 8px 12px; border-radius: 8px; font-weight: 600;"></div>
+                </div>
+
+                <button id="btnPortalAuthSubmit" onclick="submitClientPortalAuth()" style="background: linear-gradient(135deg, #00f2fe, #2563eb); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; padding: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 242, 254, 0.3); transition: all 0.25s ease; width: 100%; margin-top: 6px;">
+                    Sign In to Inbox ➔
+                </button>
+
+                <div style="font-size: 0.76rem; color: #64748b; text-align: center; line-height: 1.4;">
+                    💡 Don't know your Customer ID? Check your recent invoice or email from VRT Services.
+                </div>
             </div>
-            <button onclick="toggleAiChatDrawer()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+
+            <!-- STEP 2: File Upload View with Drag & Drop -->
+            <div id="portalStep2Upload" style="display: none; padding: 32px; flex-direction: column; gap: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span style="background: rgba(0,242,254,0.15); border: 1px solid rgba(0,242,254,0.3); color: #38bdf8; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;">AUTHENTICATED</span>
+                            <span style="background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #34d399; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;">📁 Inbox/ Folder</span>
+                        </div>
+                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">
+                            <span id="portalCustomerNameText">John Doe</span>
+                        </h3>
+                        <div style="font-size: 0.78rem; color: #94a3b8;">
+                            ID: <strong id="portalCustomerRefText" style="color: #38bdf8;">CUST-1001</strong>
+                        </div>
+                    </div>
+                    <button onclick="resetClientPortalModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.74rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+                        Change ID
+                    </button>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div id="portalDropzone" onclick="document.getElementById('portalFileInput').click()" style="border: 2px dashed rgba(0, 242, 254, 0.4); border-radius: 16px; background: rgba(0, 242, 254, 0.04); padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.25s ease; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                    <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(0, 242, 254, 0.12); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: #38bdf8;">
+                        ☁️
+                    </div>
+                    <div>
+                        <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 4px;">
+                            Drag & drop files here, or <span style="color: #38bdf8; text-decoration: underline;">click to browse</span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: #94a3b8;">
+                            Upload PDF tax forms, bank statements, checks, W-2s, 1099s, or images
+                        </div>
+                    </div>
+                    <input type="file" id="portalFileInput" multiple onchange="handlePortalFilesChosen(this.files)" style="display: none;">
+                </div>
+
+                <!-- Selected Files List -->
+                <div id="portalFilesContainer" style="display: none; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
+                    <div style="font-size: 0.76rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Selected Files</div>
+                    <div id="portalFileList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                </div>
+
+                <!-- Upload Status -->
+                <div id="portalUploadStatus" style="display: none; font-size: 0.84rem; padding: 12px 14px; border-radius: 10px;"></div>
+
+                <!-- Actions -->
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+                    <button onclick="closeClientPortalModal()" style="background: rgba(255,255,255,0.08); border: none; color: #cbd5e1; padding: 10px 18px; border-radius: 10px; font-size: 0.84rem; font-weight: 700; cursor: pointer;">Close</button>
+                    <button id="btnPortalSubmitUpload" onclick="uploadSelectedFilesToInbox()" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; padding: 10px 22px; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 6px;">
+                        🚀 Upload to Inbox Folder
+                    </button>
+                </div>
+            </div>
+
         </div>
+    </div>
 
         <!-- Quick Suggestion Chips -->
         <div style="padding: 10px 14px; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;">
@@ -1572,6 +1617,258 @@
             if (e.key === 'Enter') {
                 e.preventDefault();
                 submitAiChatMessage();
+            }
+        };
+
+        // ── Client Portal Modal Logic ───────────────────────────────────────
+        let PORTAL_CURRENT_CUSTOMER = null;
+        let PORTAL_SELECTED_FILES = [];
+
+        window.openClientPortalModal = function() {
+            let modal = document.getElementById('clientPortalModal');
+            if (!modal) return;
+            if (modal.parentNode !== document.body) {
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            modal.style.zIndex = '2147483647';
+
+            if (PORTAL_CURRENT_CUSTOMER) {
+                showPortalStep2();
+            } else {
+                showPortalStep1();
+            }
+        };
+
+        window.closeClientPortalModal = function() {
+            let modal = document.getElementById('clientPortalModal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.showPortalStep1 = function() {
+            document.getElementById('portalStep1Auth').style.display = 'flex';
+            document.getElementById('portalStep2Upload').style.display = 'none';
+            setTimeout(() => {
+                const input = document.getElementById('portalCustomerIdInput');
+                if (input) input.focus();
+            }, 100);
+        };
+
+        window.showPortalStep2 = function() {
+            if (!PORTAL_CURRENT_CUSTOMER) return;
+            document.getElementById('portalStep1Auth').style.display = 'none';
+            document.getElementById('portalStep2Upload').style.display = 'flex';
+            
+            document.getElementById('portalCustomerNameText').innerText = PORTAL_CURRENT_CUSTOMER.legal_name || 'Customer';
+            document.getElementById('portalCustomerRefText').innerText = PORTAL_CURRENT_CUSTOMER.reference_code || `CUST-${PORTAL_CURRENT_CUSTOMER.id}`;
+            
+            setupPortalDragAndDrop();
+        };
+
+        window.resetClientPortalModal = function() {
+            PORTAL_CURRENT_CUSTOMER = null;
+            PORTAL_SELECTED_FILES = [];
+            document.getElementById('portalCustomerIdInput').value = '';
+            document.getElementById('portalAuthError').style.display = 'none';
+            document.getElementById('portalFileList').innerHTML = '';
+            document.getElementById('portalFilesContainer').style.display = 'none';
+            document.getElementById('portalUploadStatus').style.display = 'none';
+            showPortalStep1();
+        };
+
+        window.handlePortalAuthKeyDown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitClientPortalAuth();
+            }
+        };
+
+        window.submitClientPortalAuth = async function() {
+            const input = document.getElementById('portalCustomerIdInput');
+            const errEl = document.getElementById('portalAuthError');
+            const btn = document.getElementById('btnPortalAuthSubmit');
+            if (!input) return;
+
+            const cid = input.value.trim();
+            if (!cid) {
+                errEl.innerText = 'Please enter your Customer ID or reference code.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            errEl.style.display = 'none';
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Verifying Customer ID...';
+
+            try {
+                const res = await fetch('/api/portal/verify-customer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: cid })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Customer ID not found.');
+                }
+
+                PORTAL_CURRENT_CUSTOMER = data.customer;
+                showPortalStep2();
+            } catch (err) {
+                errEl.innerText = err.message;
+                errEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Sign In to Inbox ➔';
+            }
+        };
+
+        function setupPortalDragAndDrop() {
+            const dropzone = document.getElementById('portalDropzone');
+            if (!dropzone || dropzone.dataset.dragInitialized) return;
+            dropzone.dataset.dragInitialized = 'true';
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.style.borderColor = '#00f2fe';
+                    dropzone.style.background = 'rgba(0, 242, 254, 0.12)';
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.style.borderColor = 'rgba(0, 242, 254, 0.4)';
+                    dropzone.style.background = 'rgba(0, 242, 254, 0.04)';
+                }, false);
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    handlePortalFilesChosen(files);
+                }
+            }, false);
+        }
+
+        window.handlePortalFilesChosen = function(files) {
+            if (!files || files.length === 0) return;
+            for (let i = 0; i < files.length; i++) {
+                PORTAL_SELECTED_FILES.push(files[i]);
+            }
+            renderPortalFileList();
+        };
+
+        function renderPortalFileList() {
+            const container = document.getElementById('portalFilesContainer');
+            const listEl = document.getElementById('portalFileList');
+            if (!container || !listEl) return;
+
+            if (PORTAL_SELECTED_FILES.length === 0) {
+                container.style.display = 'none';
+                listEl.innerHTML = '';
+                return;
+            }
+
+            container.style.display = 'flex';
+            listEl.innerHTML = '';
+
+            PORTAL_SELECTED_FILES.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.background = 'rgba(255,255,255,0.05)';
+                item.style.border = '1px solid rgba(255,255,255,0.1)';
+                item.style.padding = '8px 12px';
+                item.style.borderRadius = '8px';
+                item.style.fontSize = '0.8rem';
+                item.style.color = '#fff';
+
+                const sizeKb = (file.size / 1024).toFixed(1);
+                const sizeStr = file.size > 1048576 ? (file.size / 1048576).toFixed(1) + ' MB' : sizeKb + ' KB';
+
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+                        <span>📄</span>
+                        <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px;">${file.name}</span>
+                        <span style="color:#94a3b8; font-size:0.72rem;">(${sizeStr})</span>
+                    </div>
+                    <button onclick="removePortalFile(${index})" style="background:transparent; border:none; color:#fb7185; cursor:pointer; font-weight:800; font-size:0.9rem;">✕</button>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        window.removePortalFile = function(index) {
+            PORTAL_SELECTED_FILES.splice(index, 1);
+            renderPortalFileList();
+        };
+
+        window.uploadSelectedFilesToInbox = async function() {
+            if (!PORTAL_CURRENT_CUSTOMER) {
+                alert('Please sign in with your Customer ID first.');
+                return;
+            }
+            if (PORTAL_SELECTED_FILES.length === 0) {
+                alert('Please select or drag & drop at least one file to upload.');
+                return;
+            }
+
+            const btn = document.getElementById('btnPortalSubmitUpload');
+            const statusEl = document.getElementById('portalUploadStatus');
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Uploading to Inbox...';
+
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(0, 242, 254, 0.12)';
+            statusEl.style.color = '#38bdf8';
+            statusEl.style.border = '1px solid rgba(0, 242, 254, 0.3)';
+            statusEl.innerHTML = `⏳ Uploading ${PORTAL_SELECTED_FILES.length} file(s) to Customer Inbox folder...`;
+
+            let successCount = 0;
+            let errors = [];
+
+            for (let i = 0; i < PORTAL_SELECTED_FILES.length; i++) {
+                const file = PORTAL_SELECTED_FILES[i];
+                const formData = new FormData();
+                formData.append('customer_id', PORTAL_CURRENT_CUSTOMER.id);
+                formData.append('file', file);
+                formData.append('subfolder', 'Inbox');
+
+                try {
+                    const res = await fetch('/api/portal/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                    successCount++;
+                } catch (err) {
+                    errors.push(`${file.name}: ${err.message}`);
+                }
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '🚀 Upload to Inbox Folder';
+
+            if (successCount > 0) {
+                statusEl.style.background = 'rgba(16, 185, 129, 0.15)';
+                statusEl.style.color = '#34d399';
+                statusEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                statusEl.innerHTML = `🎉 Successfully uploaded ${successCount} file(s) to your <strong>Inbox/</strong> folder!`;
+                PORTAL_SELECTED_FILES = [];
+                renderPortalFileList();
+            } else {
+                statusEl.style.background = 'rgba(244, 63, 94, 0.15)';
+                statusEl.style.color = '#fb7185';
+                statusEl.style.border = '1px solid rgba(244, 63, 94, 0.3)';
+                statusEl.innerHTML = `❌ Failed to upload files: ${errors.join(', ')}`;
             }
         };
     </script>
