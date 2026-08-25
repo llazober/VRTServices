@@ -682,6 +682,18 @@
             <li><a href="#workflow" class="nav-link">Filing Process</a></li>
             <li><a href="javascript:void(0)" onclick="openClientPortalModal()" class="nav-link" style="color: #00f2fe; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">📂 Client Portal</a></li>
         </ul>
+
+        <div class="nav-actions">
+            {% if username and username != 'user' %}
+                <a href="/dashboard" class="btn-header-login">
+                    Dashboard
+                </a>
+            {% else %}
+                <a href="/login" class="btn-header-login">
+                    Login
+                </a>
+            {% endif %}
+        </div>
     </header>
 
     <!-- Main Content Hero Section -->
