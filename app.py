@@ -1797,14 +1797,13 @@ async def portal_verify_customer(request: Request, customer_id: str = ""):
             sql = """
                 SELECT * FROM customer 
                 WHERE LOWER(custumer_number) = LOWER(%s)
-                   OR LOWER(COALESCE(reference_code, '')) = LOWER(%s)
                    OR LOWER(email) = LOWER(%s)
             """
-            params = [cid_raw, cid_raw, cid_raw]
+            params = [cid_raw, cid_raw]
             
             if clean_num:
-                sql += " OR id = %s OR custumer_number = %s"
-                params.extend([int(clean_num), clean_num])
+                sql += " OR id = %s OR custumer_number = %s OR custumer_number ILIKE %s"
+                params.extend([int(clean_num), clean_num, f"%{clean_num}%"])
 
             sql += " ORDER BY id LIMIT 1;"
             cur.execute(sql, tuple(params))
@@ -1816,7 +1815,7 @@ async def portal_verify_customer(request: Request, customer_id: str = ""):
                     detail=f"Customer ID '{cid_raw}' not found. Please enter a valid Customer ID (e.g. CUST-1001 or 1001)."
                 )
 
-            ref_code = cust.get("reference_code") or cust.get("custumer_number") or f"CUST-{cust['id']}"
+            ref_code = cust.get("custumer_number") or f"CUST-{cust['id']}"
             return {
                 "status": "ok",
                 "customer": {
@@ -1858,12 +1857,11 @@ async def portal_upload_file(
             sql = """
                 SELECT * FROM customer 
                 WHERE LOWER(custumer_number) = LOWER(%s)
-                   OR LOWER(COALESCE(reference_code, '')) = LOWER(%s)
             """
-            params = [cid_raw, cid_raw]
+            params = [cid_raw]
             if clean_num:
-                sql += " OR id = %s OR custumer_number = %s"
-                params.extend([int(clean_num), clean_num])
+                sql += " OR id = %s OR custumer_number = %s OR custumer_number ILIKE %s"
+                params.extend([int(clean_num), clean_num, f"%{clean_num}%"])
             sql += " ORDER BY id LIMIT 1;"
             
             cur.execute(sql, tuple(params))
