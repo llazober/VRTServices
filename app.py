@@ -4720,32 +4720,53 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
     kb_base = rag_engine.KB_DIR
 
-    docs = []
-    categories = [
-        {"slug": tenant_slug, "name": "VRT Services Knowledge" if tenant_slug == "vrt_services" else "Datalazo LLC Knowledge", "icon": "🏢" if tenant_slug == "vrt_services" else "💻"}
-    ]
+    all_flat_docs = []
+    category_list = []
 
-    for cat in categories:
-        cat_dir = os.path.join(kb_base, cat["slug"])
+    available_slugs = []
+    if os.path.exists(kb_base):
+        for item in sorted(os.listdir(kb_base)):
+            item_path = os.path.join(kb_base, item)
+            if os.path.isdir(item_path):
+                available_slugs.append(item)
+
+    if tenant_slug not in available_slugs and available_slugs:
+        available_slugs.insert(0, tenant_slug)
+
+    for slug in available_slugs:
+        cat_dir = os.path.join(kb_base, slug)
+        cat_name = "VRT Services Knowledge" if slug == "vrt_services" else ("Datalazo LLC Knowledge" if slug == "datalazo_llc" else f"{slug.replace('_', ' ').title()} Knowledge")
+        icon = "🏢" if slug == "vrt_services" else "💻"
         cat_items = []
+
         if os.path.exists(cat_dir):
             for file in sorted(os.listdir(cat_dir)):
                 if file.endswith(".md") or file.endswith(".txt"):
-                    rel_path = f"{cat['slug']}/{file}"
+                    rel_path = f"{slug}/{file}"
                     title = file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
-                    cat_items.append({
+                    doc_obj = {
                         "filename": file,
                         "rel_path": rel_path,
-                        "title": title
-                    })
-        docs.append({
-            "category": cat["name"],
-            "slug": cat["slug"],
-            "icon": cat["icon"],
+                        "path": rel_path,
+                        "title": title,
+                        "tenant_slug": slug
+                    }
+                    cat_items.append(doc_obj)
+                    all_flat_docs.append(doc_obj)
+
+        category_list.append({
+            "category": cat_name,
+            "slug": slug,
+            "icon": icon,
             "items": cat_items
         })
 
-    return {"success": True, "tenant": tenant_slug, "categories": docs}
+    return {
+        "success": True,
+        "tenant": tenant_slug,
+        "docs": all_flat_docs,
+        "categories": category_list
+    }
 
 @app.get("/api/knowledge/doc")
 async def get_knowledge_doc(request: Request, path: str = ""):
