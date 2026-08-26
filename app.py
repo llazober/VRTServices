@@ -1622,30 +1622,38 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             if user.get("email") and "@" in str(user.get("email")):
                 user_email = str(user.get("email")).strip()
 
-        if user and user.get("clientId"):
-            conn = None
-            try:
-                conn = get_db_connection()
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        conn_dlz = None
+        try:
+            conn_dlz = get_db_connection("datalazo")
+            with conn_dlz.cursor(cursor_factory=RealDictCursor) as cur_dlz:
+                if user and user.get("clientId"):
                     try:
-                        cur.execute('SELECT company, name, email, "software" FROM "Client" WHERE id = %s;', (user["clientId"],))
-                        client = cur.fetchone()
+                        cur_dlz.execute('SELECT company, name, email, "software" FROM "Client" WHERE id = %s;', (user["clientId"],))
+                        client = cur_dlz.fetchone()
                         if client:
-                            company_name = client.get("company") or client.get("name")
-                            software_name = client.get("software") or client.get("Software")
+                            company_name = (client.get("company") or client.get("name") or "").strip()
+                            software_name = (client.get("software") or client.get("Software") or "").strip()
                             if not user_email and client.get("email") and "@" in str(client.get("email")):
                                 user_email = str(client.get("email")).strip()
-                    except Exception as e_col:
-                        conn.rollback()
-                        cur.execute('SELECT company, name FROM "Client" WHERE id = %s;', (user["clientId"],))
-                        client = cur.fetchone()
-                        if client:
-                            company_name = client.get("company") or client.get("name")
-            except Exception as e:
-                print(f"Error fetching client info: {e}")
-            finally:
-                if conn:
-                    conn.close()
+                    except Exception as e_c:
+                        conn_dlz.rollback()
+
+                if not software_name or not company_name:
+                    subdomain = get_client_subdomain(username)
+                    search_company = company_name or "VRT Services"
+                    cur_dlz.execute('SELECT company, "software" FROM "Client" WHERE company ILIKE %s OR subdomain ILIKE %s LIMIT 1;', 
+                                    (f"%{search_company.strip()}%", f"%{subdomain.strip()}%"))
+                    fallback_client = cur_dlz.fetchone()
+                    if fallback_client:
+                        if not software_name:
+                            software_name = (fallback_client.get("software") or "").strip()
+                        if not company_name:
+                            company_name = (fallback_client.get("company") or "").strip()
+        except Exception as e:
+            print(f"Error fetching Client info from datalazo DB: {e}")
+        finally:
+            if conn_dlz:
+                conn_dlz.close()
 
         if not company_name:
             if username == APP_USERNAME or username.lower() == "admin@vrtservices12.com":
