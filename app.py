@@ -4846,6 +4846,75 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
     else:
         raise HTTPException(status_code=404, detail="File not found.")
 
+@app.post("/api/knowledge/upload")
+async def upload_knowledge_doc(
+    request: Request,
+    file: UploadFile = File(...),
+    parent_name: str = Form("")
+):
+    import rag_engine, zipfile, io, xml.etree.ElementTree as ET
+    tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
+    
+    filename = file.filename or "uploaded_doc"
+    ext = os.path.splitext(filename)[1].lower()
+    content_bytes = await file.read()
+    
+    extracted_text = ""
+    
+    if ext == ".pdf":
+        try:
+            import fitz
+            doc = fitz.open(stream=content_bytes, filetype="pdf")
+            pages = []
+            for idx, page in enumerate(doc):
+                p_text = page.get_text()
+                if p_text.strip():
+                    pages.append(f"## Page {idx + 1}\n\n{p_text.strip()}")
+            extracted_text = "\n\n".join(pages)
+        except Exception as pe:
+            print(f"[PDF Extract Error]: {pe}")
+            extracted_text = content_bytes.decode("utf-8", errors="ignore")
+    elif ext in [".docx", ".doc"]:
+        try:
+            with zipfile.ZipFile(io.BytesIO(content_bytes)) as z:
+                xml_content = z.read("word/document.xml")
+                tree = ET.fromstring(xml_content)
+                paragraphs = []
+                for p in tree.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
+                    texts = [node.text for node in p.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t') if node.text]
+                    if texts:
+                        paragraphs.append("".join(texts))
+                extracted_text = "\n\n".join(paragraphs)
+        except Exception as de:
+            print(f"[DOCX Extract Error]: {de}")
+            extracted_text = content_bytes.decode("utf-8", errors="ignore")
+    else:
+        extracted_text = content_bytes.decode("utf-8", errors="ignore")
+
+    clean_title = os.path.splitext(filename)[0].replace("_", " ").replace("-", " ").title()
+    if not extracted_text.strip().startswith("#"):
+        final_markdown = f"# {clean_title}\n\n{extracted_text.strip()}"
+    else:
+        final_markdown = extracted_text.strip()
+
+    safe_base = re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(filename)[0].lower()).strip('_')
+    md_filename = f"{safe_base}.md"
+    rel_path = f"{tenant_slug}/{md_filename}"
+    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
+
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(final_markdown)
+
+    return {
+        "success": True,
+        "filename": filename,
+        "md_filename": md_filename,
+        "path": rel_path,
+        "title": clean_title,
+        "message": f"Successfully processed '{filename}' into Knowledge Base article!"
+    }
+
 # ── Customer Email Communication & Inbound Webhooks ───────────────────────────
 @app.post("/api/customers/{customer_id}/send-email")
 async def send_customer_email(customer_id: int, request: Request):
