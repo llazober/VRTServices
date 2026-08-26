@@ -776,6 +776,16 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #e100ff, #7f00ff);">NEW</span>
             </a>
 
+            <a href="/knowledge" class="nav-item {% if active_tab == 'knowledge' %}active{% endif %}" title="Knowledge Base & AI Assistant">
+                <div class="icon-box" style="color: #38bdf8;">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z" />
+                    </svg>
+                </div>
+                <span class="nav-text">Knowledge Base</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #00f2fe, #4facfe);">AI</span>
+            </a>
+
             <div class="nav-label" style="margin-top: 14px;">Management & Tools</div>
 
             <button class="nav-item" onclick="openCoaModal()" id="openCoaModalBtn" title="Chart of Accounts">
@@ -830,7 +840,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -987,6 +997,88 @@
                             <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading customers...</td></tr>
                         </tbody>
                     </table>
+            {% elif active_tab == 'knowledge' %}
+            <!-- ── DEDICATED KNOWLEDGE BASE VIEW ─────────────────── -->
+            <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                    <div>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 6px;">
+                            📚 Knowledge Base <span style="color: #38bdf8;">& AI Assistant</span>
+                        </h2>
+                        <p style="color: var(--text-muted); font-size: 0.95rem;">
+                            Browse markdown documentation articles, edit company policies, and ask the AI Assistant questions.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button onclick="togglePageKbCreateForm()" style="padding: 10px 20px; background: linear-gradient(135deg, #00f2fe, #4facfe); color: #000; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 0 15px rgba(0, 242, 254, 0.35); transition: all 0.2s ease;">
+                            ➕ New Article
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Create New Article Form (Hidden by default) -->
+                <form id="pageKbCreateForm" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 16px; padding: 20px; flex-direction: column; gap: 16px;" onsubmit="saveNewPageKbDoc(event)">
+                    <h4 style="color: #fff; font-size: 1rem; font-weight: 800; margin: 0;">➕ Create New Documentation Article</h4>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Article Filename (e.g. tax_filing_guide.md) *</label>
+                        <input type="text" id="pageKbCreateFilename" required placeholder="tax_filing_guide.md" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Article Content (Markdown) *</label>
+                        <textarea id="pageKbCreateContent" rows="8" required placeholder="# Article Title&#10;&#10;Write knowledge base content here using Markdown formatting..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.88rem; font-family: monospace; outline: none; resize: vertical; line-height: 1.5;"></textarea>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                        <button type="button" onclick="togglePageKbCreateForm()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); color: #fff; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer;">Cancel</button>
+                        <button type="submit" style="padding: 10px 28px; background: linear-gradient(135deg, #00f2fe, #4facfe); color: #000; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer;">Create Article</button>
+                    </div>
+                </form>
+
+                <!-- Page Layout Grid: Left File Explorer, Center Editor/Viewer, Right AI Assistant -->
+                <div style="display: grid; grid-template-columns: 280px 1fr 340px; gap: 20px; min-height: 600px;">
+                    <!-- Left Column: Document File List -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                        <h4 style="color: #fff; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; margin: 0;">
+                            <span>📁 Documentation</span>
+                            <span id="pageKbDocCount" style="font-size: 0.75rem; background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 8px; border-radius: 10px;">0 files</span>
+                        </h4>
+                        <div id="pageKbFileList" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 520px;">
+                            <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">Loading documentation files...</div>
+                        </div>
+                    </div>
+
+                    <!-- Center Column: Editor & Viewer -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 16px;">
+                            <div>
+                                <h3 id="pageKbCurrentTitle" style="color: #fff; font-size: 1.1rem; font-weight: 800; margin: 0;">Select an article to view</h3>
+                                <span id="pageKbCurrentPath" style="font-size: 0.78rem; color: var(--text-muted);">knowledge_base/</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="pageKbSaveBtn" onclick="savePageKbDoc()" style="padding: 8px 18px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">💾 Save Changes</button>
+                                <button id="pageKbDeleteBtn" onclick="deletePageKbDoc()" style="padding: 8px 14px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: #f87171; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">🗑️ Delete</button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                            <textarea id="pageKbContentEditor" style="width: 100%; min-height: 480px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; color: #f1f5f9; font-family: monospace; font-size: 0.88rem; line-height: 1.6; outline: none; resize: vertical;" placeholder="Document content will appear here..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Interactive AI Assistant -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                        <h4 style="color: #fff; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin: 0;">
+                            <span>✨ Ask AI Assistant</span>
+                        </h4>
+                        <div id="pageKbAiChatBox" style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; overflow-y: auto; max-height: 420px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 12px;">
+                            <div style="color: var(--text-muted); font-size: 0.82rem; line-height: 1.5; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px;">
+                                💡 Ask any question about company policies, tax filing procedures, Form 1040/1120 guidelines, or client reference codes.
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="pageKbAiQueryInput" placeholder="Ask AI a question..." style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 12px; color: #fff; font-size: 0.85rem; outline: none;" onkeypress="if(event.key==='Enter') sendPageKbAiQuery()">
+                            <button onclick="sendPageKbAiQuery()" style="padding: 8px 14px; background: #38bdf8; color: #000; border: none; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">Ask</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             {% else %}
@@ -5115,12 +5207,190 @@
             }
         };
 
-        window.handleAiInputKeyDown = function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                submitAiChatMessage();
+        // ── Dedicated Knowledge Base Page Script Handlers ──
+        let CURRENT_PAGE_KB_PATH = "";
+
+        window.loadPageKbDocs = async function() {
+            const listEl = document.getElementById('pageKbFileList');
+            if (!listEl) return;
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch(`/api/knowledge/list?parent_name=${encodeURIComponent(parentName)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to fetch documentation list');
+                
+                const docs = data.docs || [];
+                const countEl = document.getElementById('pageKbDocCount');
+                if (countEl) countEl.innerText = `${docs.length} files`;
+
+                if (docs.length === 0) {
+                    listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No documentation files found.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = docs.map(d => `
+                    <div onclick="selectPageKbDoc('${d.path.replace(/'/g, "\\'")}', '${d.title.replace(/'/g, "\\'")}')" style="padding: 10px 14px; background: ${CURRENT_PAGE_KB_PATH === d.path ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${CURRENT_PAGE_KB_PATH === d.path ? '#38bdf8' : 'rgba(255,255,255,0.08)'}; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="overflow: hidden;">
+                            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${d.title}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">${d.tenant_slug}</div>
+                        </div>
+                        <span style="font-size: 0.8rem;">📄</span>
+                    </div>
+                `).join('');
+
+                if (!CURRENT_PAGE_KB_PATH && docs.length > 0) {
+                    selectPageKbDoc(docs[0].path, docs[0].title);
+                }
+            } catch (err) {
+                listEl.innerHTML = `<div style="padding: 16px; color: #f87171; font-size: 0.82rem;">Failed to load documentation: ${err.message}</div>`;
             }
         };
+
+        window.selectPageKbDoc = async function(path, title) {
+            CURRENT_PAGE_KB_PATH = path;
+            document.getElementById('pageKbCurrentTitle').innerText = title || path.split('/').pop();
+            document.getElementById('pageKbCurrentPath').innerText = path;
+            
+            const editor = document.getElementById('pageKbContentEditor');
+            const saveBtn = document.getElementById('pageKbSaveBtn');
+            const deleteBtn = document.getElementById('pageKbDeleteBtn');
+            
+            editor.value = "Loading article content...";
+            if (saveBtn) saveBtn.style.display = 'inline-block';
+            if (deleteBtn) deleteBtn.style.display = 'inline-block';
+
+            try {
+                const res = await fetch(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to load article content');
+                editor.value = data.content;
+            } catch (err) {
+                editor.value = `Error loading document: ${err.message}`;
+            }
+            loadPageKbDocs();
+        };
+
+        window.savePageKbDoc = async function() {
+            if (!CURRENT_PAGE_KB_PATH) return alert('No article selected to save.');
+            const content = document.getElementById('pageKbContentEditor').value;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch('/api/knowledge/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_PAGE_KB_PATH, content: content, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to save document');
+                alert('✓ Knowledge base article saved successfully!');
+            } catch (err) {
+                alert('❌ Error saving article: ' + err.message);
+            }
+        };
+
+        window.deletePageKbDoc = async function() {
+            if (!CURRENT_PAGE_KB_PATH) return;
+            if (!confirm(`Are you sure you want to delete article '${CURRENT_PAGE_KB_PATH}'?`)) return;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_PAGE_KB_PATH)}&parent_name=${encodeURIComponent(parentName)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+                alert('✓ Article deleted successfully.');
+                CURRENT_PAGE_KB_PATH = "";
+                document.getElementById('pageKbContentEditor').value = "";
+                document.getElementById('pageKbCurrentTitle').innerText = "Select an article to view";
+                document.getElementById('pageKbCurrentPath').innerText = "knowledge_base/";
+                document.getElementById('pageKbSaveBtn').style.display = 'none';
+                document.getElementById('pageKbDeleteBtn').style.display = 'none';
+                loadPageKbDocs();
+            } catch (err) {
+                alert('❌ Error deleting article: ' + err.message);
+            }
+        };
+
+        window.togglePageKbCreateForm = function() {
+            const form = document.getElementById('pageKbCreateForm');
+            if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+        };
+
+        window.saveNewPageKbDoc = async function(e) {
+            e.preventDefault();
+            const filename = document.getElementById('pageKbCreateFilename').value.trim();
+            const content = document.getElementById('pageKbCreateContent').value;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch('/api/knowledge/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename, content: content, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to create article');
+                alert('✓ Article created successfully!');
+                togglePageKbCreateForm();
+                document.getElementById('pageKbCreateFilename').value = "";
+                document.getElementById('pageKbCreateContent').value = "";
+                selectPageKbDoc(data.path, filename);
+            } catch (err) {
+                alert('❌ Error creating article: ' + err.message);
+            }
+        };
+
+        window.sendPageKbAiQuery = async function() {
+            const input = document.getElementById('pageKbAiQueryInput');
+            const chatBox = document.getElementById('pageKbAiChatBox');
+            if (!input || !chatBox) return;
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const userDiv = document.createElement('div');
+            userDiv.style.background = 'rgba(56, 189, 248, 0.15)';
+            userDiv.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+            userDiv.style.borderRadius = '10px';
+            userDiv.style.padding = '8px 12px';
+            userDiv.style.color = '#fff';
+            userDiv.style.alignSelf = 'flex-end';
+            userDiv.style.maxWidth = '85%';
+            userDiv.innerText = msg;
+            chatBox.appendChild(userDiv);
+
+            input.value = "";
+
+            const aiDiv = document.createElement('div');
+            aiDiv.style.background = 'rgba(255,255,255,0.04)';
+            aiDiv.style.border = '1px solid rgba(255,255,255,0.08)';
+            aiDiv.style.borderRadius = '10px';
+            aiDiv.style.padding = '10px 12px';
+            aiDiv.style.color = '#cbd5e1';
+            aiDiv.style.lineHeight = '1.5';
+            aiDiv.innerHTML = '⏳ <em>Searching knowledge base...</em>';
+            chatBox.appendChild(aiDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to process AI query');
+                aiDiv.innerHTML = renderAiMarkdown(data.reply);
+            } catch (err) {
+                aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.getElementById('pageKbFileList')) {
+                loadPageKbDocs();
+            }
+        });
     </script>
 </body>
 

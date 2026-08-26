@@ -1737,13 +1737,15 @@ async def read_home_page(request: Request):
     )
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def read_dashboard(request: Request, msg: str = "", error: str = ""):
+async def read_dashboard(request: Request, tab: str = "", msg: str = "", error: str = ""):
     try:
         ctx = prepare_dashboard_context(request)
         if isinstance(ctx, RedirectResponse):
             return ctx
         ctx["msg"] = msg
         ctx["error"] = error
+        if tab:
+            ctx["active_tab"] = tab
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
@@ -1778,6 +1780,21 @@ async def read_customers_page(request: Request, msg: str = "", error: str = ""):
     ctx["msg"] = msg
     ctx["error"] = error
     ctx["active_tab"] = "customers"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
+@app.get("/knowledge", response_class=HTMLResponse)
+@app.get("/kb", response_class=HTMLResponse)
+async def read_knowledge_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "knowledge"
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
