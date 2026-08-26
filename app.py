@@ -331,10 +331,20 @@ def cleanup_temp_dir(path: str):
             print(f"Failed to clean up temporary directory {path}: {e}")
 
 # ── DB & Password helpers ──────────────────────────────────────────────────────
-def get_db_connection():
+def get_db_connection(db_name: str = None):
+    """
+    Returns a PostgreSQL connection. Supports multi-tenant routing by db_name.
+    Defaults to the primary VRT database.
+    """
+    target_db = db_name or os.environ.get("POSTGRES_DB") or "VRT"
     db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        db_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/datalazo?sslmode=disable"
+    if db_url:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(db_url)
+        new_path = f"/{target_db}"
+        db_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, new_path, parsed.params, parsed.query, parsed.fragment))
+    else:
+        db_url = f"postgresql://postgres:Paris2025%24@161.35.119.223:5432/{target_db}?sslmode=disable"
     return psycopg2.connect(db_url)
 
 def sync_customer_parent_mapping(cur, parent_name: str, legal_name: str, display_name: str = None):
