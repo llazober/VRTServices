@@ -4225,6 +4225,24 @@ async def process_check_pdf(
             client_name=client_name,
             original_filename=file.filename
         )
+
+        # Record page/file scan usage for check image extraction
+        current_username = get_current_username(request) or username
+        if current_username:
+            page_count = 1
+            if ext == ".pdf":
+                try:
+                    import fitz
+                    doc = fitz.open(check_file_path)
+                    page_count = len(doc)
+                    doc.close()
+                except Exception:
+                    page_count = 1
+            try:
+                record_user_usage(current_username, page_count)
+            except Exception as ex:
+                print(f"Error recording check extraction usage: {ex}")
+
         background_tasks.add_task(cleanup_temp_dir, temp_dir)
         return check_data
     except Exception as e:
@@ -4379,6 +4397,7 @@ async def process_checks_from_do(
 
     allowed_exts = {".pdf", ".png", ".jpg", ".jpeg"}
     all_checks = []
+    total_pages_scanned = 0
 
     s3_client, err = get_s3_client()
     if not s3_client:
@@ -4404,6 +4423,19 @@ async def process_checks_from_do(
             print(f"[DO] Failed to download check file {s3_key}: {e}")
             continue
 
+        # Calculate pages/scans count for this check file
+        page_count = 1
+        if ext == ".pdf":
+            try:
+                import fitz
+                doc = fitz.open(check_path)
+                page_count = len(doc)
+                doc.close()
+            except Exception:
+                page_count = 1
+
+        total_pages_scanned += page_count
+
         try:
             check_data = extract_check_images(
                 check_path,
@@ -4419,6 +4451,21 @@ async def process_checks_from_do(
         except Exception as e:
             cleanup_temp_dir(temp_dir)
             print(f"[DO] Check extraction failed for {s3_key}: {e}")
+
+    if customer_id and s3_keys:
+        try:
+            detected_period = extract_period_from_key(s3_keys[0])
+            update_customer_checklist_milestone(customer_id, detected_period, "checks_received")
+            update_customer_checklist_milestone(customer_id, detected_period, "extraction_done")
+        except Exception as ex_m:
+            print(f"Error updating checklist milestone for checks: {ex_m}")
+
+    # Record user usage for check images scanned
+    if username and total_pages_scanned > 0:
+        try:
+            record_user_usage(username, total_pages_scanned)
+        except Exception as ex:
+            print(f"Error recording check extraction usage from DO: {ex}")
 
     return {"checks": all_checks, "count": len(all_checks)}
 
