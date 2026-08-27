@@ -1709,6 +1709,27 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
         env_reply_to = (os.environ.get("RESEND_REPLY_TO_EMAIL") or "").strip()
         ctx_reply_to = env_reply_to if env_reply_to and "receive.datalazo.net" not in env_reply_to.lower() else "crm@ostooechei.resend.app"
 
+        created_at_fmt = ""
+        if user and user.get("createdAt"):
+            ca = user.get("createdAt")
+            created_at_fmt = ca.strftime("%b %d, %Y") if hasattr(ca, "strftime") else str(ca)
+
+        client_user_data = {
+            "id": (user.get("id") or "") if user else "",
+            "username": username,
+            "user_email": user_email or username,
+            "client_id": (user.get("clientId") or "") if user else "",
+            "contact_name": (client.get("name") or "") if ('client' in locals() and client) else "",
+            "company": company_name or "VRT Services",
+            "parent_name": user_parent_name,
+            "subdomain": subdomain,
+            "software": software_name or "",
+            "monthly_usage_actual": user.get("monthlyUsageActual", 0) if user else 0,
+            "monthly_usage_previous": user.get("monthlyUsagePrevious", 0) if user else 0,
+            "terms_accepted": bool(user.get("termsAccepted")) if user else False,
+            "created_at": created_at_fmt
+        }
+
         return {
             "client_config": client_conf,
             "username": username,
@@ -1719,7 +1740,8 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_connected": qbo_connected,
             "qbo_realm_id": qbo_realm_id or "",
             "qbo_company_name": qbo_company_name or "",
-            "resend_reply_to_email": ctx_reply_to
+            "resend_reply_to_email": ctx_reply_to,
+            "client_user": client_user_data
         }
     except Exception as e:
         import traceback

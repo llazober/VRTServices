@@ -1110,6 +1110,61 @@
                     </a>
                 </div>
             </div>
+
+            <!-- Logged-in User Info Bar (ClientUser & Client details) -->
+            {% if client_user %}
+            <div class="clientuser-info-card" style="margin-top: 14px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 14px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); backdrop-filter: blur(8px);">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                            👤
+                        </div>
+                        <div>
+                            <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700;">Logged-In User Account (ClientUser Table)</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: #f8fafc;">
+                                {{ client_user.user_email or username }}
+                                {% if client_user.contact_name %}
+                                <span style="font-size: 0.8rem; font-weight: 400; color: #cbd5e1; margin-left: 6px;">({{ client_user.contact_name }})</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 0.82rem;">
+                        {% if client_user.subdomain %}
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">ASSIGNED DOMAIN</span>
+                            <span style="color: #34d399; font-weight: 700;">🌐 {{ client_user.subdomain }}</span>
+                        </div>
+                        {% endif %}
+
+                        <div style="display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 16px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">MONTHLY USAGE (PAGES)</span>
+                            <span style="color: #fbbf24; font-weight: 700;">
+                                📊 {{ client_user.monthly_usage_actual or 0 }} actual
+                                <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 400;">(prev: {{ client_user.monthly_usage_previous or 0 }})</span>
+                            </span>
+                        </div>
+
+                        {% if client_user.created_at %}
+                        <div style="display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 16px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">MEMBER SINCE</span>
+                            <span style="color: #cbd5e1; font-weight: 600;">📅 {{ client_user.created_at }}</span>
+                        </div>
+                        {% endif %}
+
+                        <div style="display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 16px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">TERMS & CONDITIONS</span>
+                            {% if client_user.terms_accepted %}
+                            <span style="color: #34d399; font-weight: 700;">✓ Accepted</span>
+                            {% else %}
+                            <span style="color: #f87171; font-weight: 700;">Pending</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             <div class="stats-grid" style="margin-top: 24px;">
                 <div class="stat-card" style="border-color: rgba(56, 189, 248, 0.25);">
                     <div class="stat-icon" style="color: #38bdf8;">
