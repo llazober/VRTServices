@@ -1943,19 +1943,7 @@
             }
 
             const hasCurrentStatement = currentResult && currentResult.transactions && currentResult.transactions.length > 0;
-            const clientSelect = document.getElementById('historyClientSelect');
-            const clientName = clientSelect ? clientSelect.value.trim() : ((currentResult && currentResult.business_name) ? currentResult.business_name : 'DEFAULT');
-
-            // Pre-fetch history rules if not loaded yet
-            if (!currentHistoryRecords || currentHistoryRecords.length === 0) {
-                try {
-                    const res = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}&parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
-                    const data = await res.json();
-                    if (data.historyRules) currentHistoryRecords = data.historyRules;
-                } catch (e) {
-                    console.warn('Could not pre-fetch history rules for check matching:', e);
-                }
-            }
+            const clientName = (currentResult && currentResult.business_name) ? currentResult.business_name : '';
 
             let totalUpdatedCount = 0;
             let processedFilesCount = 0;
