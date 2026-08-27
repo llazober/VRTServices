@@ -5,8 +5,11 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 def cleanup_databases():
-    # 1. Connect to VRT and remove tables 9 to 21
-    vrt_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/VRT?sslmode=disable"
+    import os
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is missing.")
+    vrt_url = db_url if "/VRT" in db_url else db_url.replace("/datalazo", "/VRT")
     print("Connecting to VRT database...")
     conn_vrt = psycopg2.connect(vrt_url)
     
@@ -29,7 +32,7 @@ def cleanup_databases():
     conn_vrt.close()
 
     # 2. Connect to datalazo and fix casing of renamed _old tables
-    dlz_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/datalazo?sslmode=disable"
+    dlz_url = db_url if "/datalazo" in db_url else db_url.replace("/VRT", "/datalazo")
     print("\nConnecting to datalazo database...")
     conn_dlz = psycopg2.connect(dlz_url)
     

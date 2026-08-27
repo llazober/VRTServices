@@ -5,8 +5,11 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 def rename_datalazo_tables():
-    src_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/datalazo?sslmode=disable"
-    print("Connecting to datalazo database...")
+    import os
+    src_url = os.environ.get("DATABASE_URL")
+    if not src_url:
+        raise ValueError("DATABASE_URL environment variable is missing.")
+    print("Connecting to database...")
     conn = psycopg2.connect(src_url)
     
     tables_to_rename = [

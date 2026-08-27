@@ -16,6 +16,7 @@ env/
 !requirements*.txt
 .env
 .env.*
+!.env.example
 
 # Temp files
 *.csv

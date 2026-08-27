@@ -19,11 +19,16 @@ TARGET_TABLES = [
 ]
 
 def get_db_urls():
-    src_url = os.environ.get("DATABASE_URL") or "postgresql://postgres:Paris2025%24@161.35.119.223:5432/datalazo?sslmode=disable"
+    src_url = os.environ.get("DATABASE_URL")
+    if not src_url:
+        raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment.")
     if "/datalazo" in src_url:
         tgt_url = src_url.replace("/datalazo", "/VRT")
+    elif "/VRT" in src_url:
+        tgt_url = src_url
+        src_url = src_url.replace("/VRT", "/datalazo")
     else:
-        tgt_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/VRT?sslmode=disable"
+        tgt_url = src_url
     return src_url, tgt_url
 
 def migrate_tables_1_to_8():

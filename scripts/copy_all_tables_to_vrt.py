@@ -33,8 +33,19 @@ ALL_TABLES = [
 ]
 
 def get_db_urls():
-    src_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/datalazo?sslmode=disable"
-    tgt_url = "postgresql://postgres:Paris2025%24@161.35.119.223:5432/VRT?sslmode=disable"
+    import os
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is missing.")
+    if "/datalazo" in db_url:
+        src_url = db_url
+        tgt_url = db_url.replace("/datalazo", "/VRT")
+    elif "/VRT" in db_url:
+        tgt_url = db_url
+        src_url = db_url.replace("/VRT", "/datalazo")
+    else:
+        src_url = db_url
+        tgt_url = db_url
     return src_url, tgt_url
 
 def migrate_all_tables():

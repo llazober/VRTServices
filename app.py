@@ -73,8 +73,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # ── Auth config ────────────────────────────────────────────────────────────────
-APP_USERNAME = os.environ.get("APP_USERNAME", "admin@vrtservices12.com")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "hon12345")
+APP_USERNAME = os.environ.get("APP_USERNAME", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 COOKIE_NAME  = "ocr_session"
 
 # ── Dynamic CSV Export Layout Config ───────────────────────────────────────────
@@ -139,7 +139,7 @@ def create_user_session(username: str) -> str:
     # Persist session token in database so server redeployments/restarts keep users logged in
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor() as cur:
             cur.execute(
                 'UPDATE "ClientUser" SET "sessionToken" = %s WHERE username = %s;',
@@ -176,7 +176,7 @@ def get_current_session_info(request: Request) -> tuple[str | None, str | None, 
     # Fallback lookup in DB if server was restarted and in-memory dicts were reset
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('SELECT username FROM "ClientUser" WHERE "sessionToken" = %s;', (token,))
             user = cur.fetchone()
@@ -292,8 +292,8 @@ def is_user_allowed_on_site(username: str, request: Request) -> tuple[bool, str]
     if request_host in ("localhost", "127.0.0.1", "testserver"):
         return True, ""
 
-    # Allow default admin fallback user across domains
-    if username == APP_USERNAME or username.lower() == "admin@vrtservices12.com":
+    # Allow default admin user across domains
+    if APP_USERNAME and username.lower() == APP_USERNAME.lower():
         return True, ""
 
     assigned = get_user_assigned_subdomain(username)
@@ -344,7 +344,7 @@ def get_db_connection(db_name: str = None):
         new_path = f"/{target_db}"
         db_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, new_path, parsed.params, parsed.query, parsed.fragment))
     else:
-        db_url = f"postgresql://postgres:Paris2025%24@161.35.119.223:5432/{target_db}?sslmode=disable"
+        raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
     return psycopg2.connect(db_url)
 
 def sync_customer_parent_mapping(cur, parent_name: str, legal_name: str, display_name: str = None):
@@ -650,8 +650,8 @@ def update_customer_checklist_milestone(customer_id: int, period: str | None, mi
             conn.close()
 
 # ── DigitalOcean Spaces Config & Storage Helpers ────────────────────────────────
-DO_SPACES_KEY      = os.environ.get("DO_SPACES_KEY", "DO8014EY6DYN3XCKFU7Q")
-DO_SPACES_SECRET   = os.environ.get("DO_SPACES_SECRET", "76Uy6ejEwtyWbuBfv9pWdWVUtCt7KW7yEBJxaqLI6XY")
+DO_SPACES_KEY      = os.environ.get("DO_SPACES_KEY", "")
+DO_SPACES_SECRET   = os.environ.get("DO_SPACES_SECRET", "")
 DO_SPACES_ENDPOINT = os.environ.get("DO_SPACES_ENDPOINT", "https://nyc3.digitaloceanspaces.com")
 DO_SPACES_BUCKET   = os.environ.get("DO_SPACES_BUCKET", "datalazocrm")
 DO_SPACES_REGION   = os.environ.get("DO_SPACES_REGION", "nyc3")
@@ -846,7 +846,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
 def get_client_user(username: str) -> dict | None:
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('SELECT * FROM "ClientUser" WHERE username = %s;', (username,))
             user = cur.fetchone()
@@ -907,7 +907,7 @@ def get_user_parent_name(username: str) -> str:
         return "VRT Services"
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('SELECT company, name FROM "Client" WHERE id = %s;', (client_id,))
             client = cur.fetchone()
@@ -1036,7 +1036,7 @@ def save_history_rule(client_name: str, pattern: str, account_number: str, accou
 def update_terms_accepted(username: str, ip: str, user_agent: str) -> bool:
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor() as cur:
             import datetime
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -1064,7 +1064,7 @@ def get_user_assigned_subdomain(username: str) -> str | None:
         
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('SELECT subdomain FROM "Client" WHERE id = %s;', (client_id,))
             client = cur.fetchone()
@@ -1085,7 +1085,7 @@ def get_client_subdomain(username: str) -> str:
 def record_user_usage(username: str, page_count: int):
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('SELECT "monthlyUsageActual", "monthlyUsagePrevious", "updatedAt" FROM "ClientUser" WHERE username = %s;', (username,))
             user = cur.fetchone()
@@ -1140,7 +1140,7 @@ def record_user_usage(username: str, page_count: int):
 def record_login(username: str, site: str, ip: str, user_agent: str):
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection("datalazo")
         with conn.cursor() as cur:
             cur.execute(
                 'INSERT INTO "LoginLog" (username, site, "ipAddress", "userAgent") VALUES (%s, %s, %s, %s);',
@@ -1186,16 +1186,21 @@ def init_qbo_db():
                     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             ''')
-            try:
-                cur.execute('ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT;')
-            except Exception as e_col:
-                print(f"sessionToken column check: {e_col}")
             conn.commit()
     except Exception as e:
         print(f"Error initializing QboConnection table: {e}")
     finally:
         if conn:
             conn.close()
+
+    try:
+        conn_dlz = get_db_connection("datalazo")
+        with conn_dlz.cursor() as cur:
+            cur.execute('ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT;')
+            conn_dlz.commit()
+        conn_dlz.close()
+    except Exception as e_col:
+        print(f"sessionToken column check: {e_col}")
 
 init_qbo_db()
 
@@ -1490,8 +1495,8 @@ async def login_submit(
             )
             return response
             
-    # 2. Fallback to default admin account
-    if username_clean == APP_USERNAME and password == APP_PASSWORD:
+    # 2. Fallback to environment admin account (only if environment credentials are set)
+    if APP_USERNAME and APP_PASSWORD and username_clean == APP_USERNAME and password == APP_PASSWORD:
         allowed, assigned_site = is_user_allowed_on_site(username_clean, request)
         if not allowed:
             request_host = get_request_host(request)
@@ -1571,7 +1576,7 @@ def get_user_email(username: str) -> str:
         if client_id:
             conn = None
             try:
-                conn = get_db_connection()
+                conn = get_db_connection("datalazo")
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     try:
                         cur.execute('SELECT email FROM "Client" WHERE id = %s;', (client_id,))
@@ -1656,7 +1661,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
                 conn_dlz.close()
 
         if not company_name:
-            if username == APP_USERNAME or username.lower() == "admin@vrtservices12.com":
+            if APP_USERNAME and username.lower() == APP_USERNAME.lower():
                 company_name = "VRT Services"
             else:
                 company_name = "Datalazo Partner"
@@ -4444,7 +4449,7 @@ async def support_submit(
     
     subject = "Support Request - Bank Statement OCR Extractor"
     
-    current_user = get_current_username(request) or APP_USERNAME
+    current_user = get_current_username(request) or APP_USERNAME or "Anonymous User"
     html_content = f"""
     <h3>Support Request</h3>
     <p><strong>User:</strong> {current_user}</p>
