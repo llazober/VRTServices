@@ -453,12 +453,18 @@
                         <p>or click to browse your files</p>
                     </div>
                 </div>
-                <div style="text-align: center; margin-top: 14px;">
-                    <button id="openDoPickerForStatementBtn" onclick="event.stopPropagation(); openDoPickerModal('statement')" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; background: rgba(0,242,254,0.08); border: 1px solid rgba(0,242,254,0.3); color: #00f2fe; border-radius: 12px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(0,242,254,0.16)'" onmouseout="this.style.background='rgba(0,242,254,0.08)'">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 14px;">
+                    <button id="openDoPickerForStatementBtn" onclick="event.stopPropagation(); openDoPickerModal('statement')" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: rgba(0,242,254,0.08); border: 1px solid rgba(0,242,254,0.3); color: #00f2fe; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(0,242,254,0.16)'" onmouseout="this.style.background='rgba(0,242,254,0.08)'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-                        ☁️ Load from Cloud Storage
+                        ☁️ Load Statement from Cloud
                     </button>
-                    <div id="doSelectedStatementBadge" style="display:none; margin-top: 8px; font-size: 0.78rem; color: #00f2fe; font-family: monospace;"></div>
+                    <button type="button" onclick="event.stopPropagation(); document.getElementById('uploadCheckImagesInput').click();" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(168, 85, 247, 0.22)'" onmouseout="this.style.background='rgba(168, 85, 247, 0.12)'">
+                        📷 Upload Check Images
+                    </button>
+                    <button type="button" onclick="event.stopPropagation(); openDoPickerModal('checks')" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: rgba(0,242,254,0.08); border: 1px solid rgba(0,242,254,0.3); color: #00f2fe; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(0,242,254,0.16)'" onmouseout="this.style.background='rgba(0,242,254,0.08)'">
+                        ☁️ Checks from Cloud
+                    </button>
+                    <div id="doSelectedStatementBadge" style="display:none; width: 100%; margin-top: 8px; font-size: 0.78rem; color: #00f2fe; font-family: monospace;"></div>
                 </div>
 
                 <div class="file-info-box" id="fileInfoBox">
@@ -1927,7 +1933,6 @@
         });
 
         // Check Image Document Upload & Transaction Description Replacement Handler
-        // Check Image Document Upload & Transaction Description Replacement Handler
         async function handleCheckPdfUpload(input) {
             if (!input.files || input.files.length === 0) return;
 
@@ -1945,6 +1950,20 @@
 
             const hasCurrentStatement = currentResult && currentResult.transactions && currentResult.transactions.length > 0;
 
+            // Transition UI to loading state
+            const uploadFormContainer = document.getElementById('uploadFormContainer');
+            const loadingState = document.getElementById('loadingState');
+            const resultsContainer = document.getElementById('resultsContainer');
+
+            if (uploadFormContainer) uploadFormContainer.style.display = 'none';
+            if (loadingState) {
+                loadingState.style.display = 'flex';
+                const loadingText = loadingState.querySelector('.loading-text');
+                const loadingSubtext = loadingState.querySelector('.loading-subtext');
+                if (loadingText) loadingText.textContent = `Extracting ${validFiles.length} Check Image(s)...`;
+                if (loadingSubtext) loadingSubtext.textContent = 'Executing OCR and extracting check details...';
+            }
+
             // Pre-fetch history rules if not loaded yet
             if (!currentHistoryRecords || currentHistoryRecords.length === 0) {
                 try {
@@ -1961,11 +1980,6 @@
             let totalUpdatedCount = 0;
             let processedFilesCount = 0;
             let allExtractedChecks = [];
-
-            const uploadFormContainer = document.getElementById('uploadFormContainer');
-            const resultsSection = document.getElementById('resultsSection');
-
-            showAlert(`📷 Processing ${validFiles.length} check document(s)...`, 'info');
 
             try {
                 for (let i = 0; i < validFiles.length; i++) {
@@ -2091,8 +2105,8 @@
                 }
 
                 if (hasCurrentStatement) {
+                    displayResults(currentResult);
                     if (totalUpdatedCount > 0) {
-                        displayResults(currentResult);
                         showAlert(`✅ Successfully processed ${processedFilesCount} check document(s) and matched/updated ${totalUpdatedCount} check transaction(s)!`, 'success');
                     } else if (allExtractedChecks.length > 0) {
                         const checkNumbers = allExtractedChecks.map(c => c.check_number).filter(Boolean).join(', ');
@@ -2133,17 +2147,19 @@
                             "warnings": []
                         };
 
-                        if (uploadFormContainer) uploadFormContainer.style.display = 'none';
-                        if (resultsSection) resultsSection.style.display = 'block';
                         displayResults(standaloneResult);
                         showAlert(`✅ Successfully extracted ${allExtractedChecks.length} check image(s)!`, 'success');
                     } else {
+                        if (loadingState) loadingState.style.display = 'none';
+                        if (uploadFormContainer) uploadFormContainer.style.display = 'block';
                         showAlert(`Processed ${processedFilesCount} check document(s), but no check details could be extracted.`, 'error');
                     }
                 }
 
             } catch (err) {
                 console.error(err);
+                if (loadingState) loadingState.style.display = 'none';
+                if (uploadFormContainer) uploadFormContainer.style.display = 'block';
                 showAlert(`Error processing check files: ${err.message}`, 'error');
             } finally {
                 input.value = '';
@@ -3470,10 +3486,6 @@
                         "warnings": []
                     };
 
-                    const uploadFormContainer = document.getElementById('uploadFormContainer');
-                    const resultsSection = document.getElementById('resultsSection');
-                    if (uploadFormContainer) uploadFormContainer.style.display = 'none';
-                    if (resultsSection) resultsSection.style.display = 'block';
                     displayResults(standaloneResult);
                     showAlert(`✅ Processed ${checks.length} check(s) from cloud storage!`, 'success');
                 }
