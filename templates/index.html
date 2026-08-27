@@ -1927,15 +1927,8 @@
         });
 
         // Check Image Document Upload & Transaction Description Replacement Handler
-        // Check Image Document Upload & Transaction Description Replacement Handler
         async function handleCheckPdfUpload(input) {
             if (!input.files || input.files.length === 0) return;
-
-            if (!currentResult || !currentResult.transactions || currentResult.transactions.length === 0) {
-                showAlert('Please process a bank statement first before uploading check images.', 'error');
-                input.value = '';
-                return;
-            }
 
             const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg'];
             const validFiles = Array.from(input.files).filter(file => {
@@ -1949,11 +1942,13 @@
                 return;
             }
 
+            const hasCurrentStatement = currentResult && currentResult.transactions && currentResult.transactions.length > 0;
+            const clientSelect = document.getElementById('historyClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : ((currentResult && currentResult.business_name) ? currentResult.business_name : 'DEFAULT');
+
             // Pre-fetch history rules if not loaded yet
             if (!currentHistoryRecords || currentHistoryRecords.length === 0) {
                 try {
-                    const clientSelect = document.getElementById('historyClientSelect');
-                    const clientName = clientSelect ? clientSelect.value.trim() : (currentResult.business_name || 'DEFAULT');
                     const res = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}&parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
                     const data = await res.json();
                     if (data.historyRules) currentHistoryRecords = data.historyRules;
@@ -1966,20 +1961,20 @@
             let processedFilesCount = 0;
             let allExtractedChecks = [];
 
-            showAlert(`📷 Processing ${validFiles.length} check document(s)...`, 'info');
+            showAlert(`📷 Processing ${validFiles.length} check file(s)...`, 'info');
 
             try {
                 for (let i = 0; i < validFiles.length; i++) {
                     const file = validFiles[i];
-                    showAlert(`📷 Processing check document ${i + 1} of ${validFiles.length}: ${file.name}...`, 'info');
+                    showAlert(`📷 Processing check ${i + 1} of ${validFiles.length}: ${file.name}...`, 'info');
 
                     const formData = new FormData();
                     formData.append('file', file);
                     const useHistoryChecked = document.getElementById('useHistoryGlCheckbox')?.checked ?? true;
                     formData.append('use_history', useHistoryChecked ? 'true' : 'false');
                     formData.append('parent_name', CURRENT_PARENT_NAME);
-                    if (currentResult.business_name) {
-                        formData.append('client_name', currentResult.business_name);
+                    if (clientName && clientName !== 'DEFAULT') {
+                        formData.append('client_name', clientName);
                     }
 
                     try {
@@ -2000,104 +1995,144 @@
                         allExtractedChecks.push(...checks);
                         processedFilesCount++;
 
-                        checks.forEach(chk => {
-                            if (!chk.check_number) return;
-                            const targetNum = String(chk.check_number).trim();
-                            const targetNorm = targetNum.replace(/^0+/, '');
-                            const payee = (chk.payee || chk.business_name || '').trim();
+                        if (hasCurrentStatement) {
+                            checks.forEach(chk => {
+                                if (!chk.check_number) return;
+                                const targetNum = String(chk.check_number).trim();
+                                const targetNorm = targetNum.replace(/^0+/, '');
+                                const payee = (chk.payee || chk.business_name || '').trim();
 
-                            currentResult.transactions.forEach(tx => {
-                                const allTxNums = [
-                                    String(tx.checknumber || ''),
-                                    String(tx.check_number || ''),
-                                    String(tx.checkNo || ''),
-                                    String(tx.check_no || ''),
-                                    String(tx.reference || ''),
-                                    String(tx.Reference || ''),
-                                    String(tx.ref || ''),
-                                    String(tx.description || '')
-                                ].join(' ');
+                                currentResult.transactions.forEach(tx => {
+                                    const allTxNums = [
+                                        String(tx.checknumber || ''),
+                                        String(tx.check_number || ''),
+                                        String(tx.checkNo || ''),
+                                        String(tx.check_no || ''),
+                                        String(tx.reference || ''),
+                                        String(tx.Reference || ''),
+                                        String(tx.ref || ''),
+                                        String(tx.description || '')
+                                    ].join(' ');
 
-                                const extractedNums = allTxNums.match(/\b\d{3,8}\b/g) || [];
-                                const normalizedNums = extractedNums.map(n => n.replace(/^0+/, ''));
+                                    const extractedNums = allTxNums.match(/\b\d{3,8}\b/g) || [];
+                                    const normalizedNums = extractedNums.map(n => n.replace(/^0+/, ''));
 
-                                const matchesCheckNum = 
-                                    extractedNums.includes(targetNum) ||
-                                    normalizedNums.includes(targetNorm) ||
-                                    allTxNums.includes(targetNum) ||
-                                    (targetNorm && allTxNums.includes(targetNorm));
+                                    const matchesCheckNum = 
+                                        extractedNums.includes(targetNum) ||
+                                        normalizedNums.includes(targetNorm) ||
+                                        allTxNums.includes(targetNum) ||
+                                        (targetNorm && allTxNums.includes(targetNorm));
 
-                                if (matchesCheckNum) {
-                                    if (payee) {
-                                        tx.description = payee;
-                                    }
+                                    if (matchesCheckNum) {
+                                        if (payee) tx.description = payee;
 
-                                    if (chk.account && (chk.match_source === 'Matched' || chk.match_confidence > 0)) {
-                                        tx.account = chk.account;
-                                        tx.account_name = chk.account_name || "Mapped Account";
-                                        tx.match_source = chk.match_source || "Matched";
-                                    } else if (payee) {
-                                        let historyMatched = false;
-                                        if (currentHistoryRecords && currentHistoryRecords.length > 0) {
-                                            const cleanPayee = payee.toUpperCase().trim();
-                                            for (const rule of currentHistoryRecords) {
-                                                const pattern = (rule.pattern || '').toUpperCase().trim();
-                                                const acctNum = (rule.accountNumber || '').trim();
-                                                
-                                                const isPatternMatch = 
-                                                    (cleanPayee === pattern) ||
-                                                    (pattern.length >= 3 && cleanPayee.includes(pattern)) ||
-                                                    (pattern.length >= 2 && new RegExp('\\b' + pattern.replace(/[^A-Z0-9]/g, '') + '\\b', 'i').test(cleanPayee));
+                                        if (chk.account && (chk.match_source === 'Matched' || chk.match_confidence > 0)) {
+                                            tx.account = chk.account;
+                                            tx.account_name = chk.account_name || "Mapped Account";
+                                            tx.match_source = chk.match_source || "Matched";
+                                        } else if (payee) {
+                                            let historyMatched = false;
+                                            if (currentHistoryRecords && currentHistoryRecords.length > 0) {
+                                                const cleanPayee = payee.toUpperCase().trim();
+                                                for (const rule of currentHistoryRecords) {
+                                                    const pattern = (rule.pattern || '').toUpperCase().trim();
+                                                    const acctNum = (rule.accountNumber || '').trim();
+                                                    
+                                                    const isPatternMatch = 
+                                                        (cleanPayee === pattern) ||
+                                                        (pattern.length >= 3 && cleanPayee.includes(pattern)) ||
+                                                        (pattern.length >= 2 && new RegExp('\\b' + pattern.replace(/[^A-Z0-9]/g, '') + '\\b', 'i').test(cleanPayee));
 
-                                                if (isPatternMatch) {
-                                                    tx.account = acctNum;
-                                                    tx.account_name = rule.accountName || "Mapped Account";
+                                                    if (isPatternMatch) {
+                                                        tx.account = acctNum;
+                                                        tx.account_name = rule.accountName || "Mapped Account";
+                                                        tx.match_source = "Matched";
+                                                        historyMatched = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            if (!historyMatched) {
+                                                const lowerPayee = payee.toLowerCase();
+                                                if (lowerPayee.includes('sandez') || lowerPayee.includes('transport') || lowerPayee.includes('freight') || lowerPayee.includes('trucking') || lowerPayee.includes('logistics')) {
+                                                    tx.account = "481";
+                                                    tx.account_name = "Transportation Service";
                                                     tx.match_source = "Matched";
-                                                    historyMatched = true;
-                                                    break;
+                                                } else if (lowerPayee.includes('comcast') || lowerPayee.includes('xfinity') || lowerPayee.includes('att') || lowerPayee.includes('fpl') || lowerPayee.includes('verizon') || lowerPayee.includes('t-mobile') || lowerPayee.includes('utility')) {
+                                                    tx.account = "795";
+                                                    tx.account_name = "Utilities & Telecom";
+                                                    tx.match_source = "Matched";
+                                                } else if (lowerPayee.includes('home depot') || lowerPayee.includes('lowes') || lowerPayee.includes('hardware') || lowerPayee.includes('repair')) {
+                                                    tx.account = "778";
+                                                    tx.account_name = "Repairs & Maintenance";
+                                                    tx.match_source = "Matched";
+                                                } else if (lowerPayee.includes('publix') || lowerPayee.includes('walmart') || lowerPayee.includes('target') || lowerPayee.includes('costco') || lowerPayee.includes('supplies')) {
+                                                    tx.account = "782";
+                                                    tx.account_name = "Supplies & Provisions";
+                                                    tx.match_source = "Matched";
                                                 }
                                             }
                                         }
 
-                                        if (!historyMatched) {
-                                            const lowerPayee = payee.toLowerCase();
-                                            if (lowerPayee.includes('sandez') || lowerPayee.includes('transport') || lowerPayee.includes('freight') || lowerPayee.includes('trucking') || lowerPayee.includes('logistics')) {
-                                                tx.account = "481";
-                                                tx.account_name = "Transportation Service";
-                                                tx.match_source = "Matched";
-                                            } else if (lowerPayee.includes('comcast') || lowerPayee.includes('xfinity') || lowerPayee.includes('att') || lowerPayee.includes('fpl') || lowerPayee.includes('verizon') || lowerPayee.includes('t-mobile') || lowerPayee.includes('utility')) {
-                                                tx.account = "795";
-                                                tx.account_name = "Utilities & Telecom";
-                                                tx.match_source = "Matched";
-                                            } else if (lowerPayee.includes('home depot') || lowerPayee.includes('lowes') || lowerPayee.includes('hardware') || lowerPayee.includes('repair')) {
-                                                tx.account = "778";
-                                                tx.account_name = "Repairs & Maintenance";
-                                                tx.match_source = "Matched";
-                                            } else if (lowerPayee.includes('publix') || lowerPayee.includes('walmart') || lowerPayee.includes('target') || lowerPayee.includes('costco') || lowerPayee.includes('supplies')) {
-                                                tx.account = "782";
-                                                tx.account_name = "Supplies & Provisions";
-                                                tx.match_source = "Matched";
-                                            }
-                                        }
+                                        totalUpdatedCount++;
                                     }
-
-                                    totalUpdatedCount++;
-                                }
+                                });
                             });
-                        });
+                        }
                     } catch (fileErr) {
                         console.error(`Error processing check file ${file.name}:`, fileErr);
                     }
                 }
 
-                if (totalUpdatedCount > 0) {
-                    displayResults(currentResult);
-                    showAlert(`✅ Successfully processed ${processedFilesCount} check document(s) and matched/updated ${totalUpdatedCount} check transaction(s)!`, 'success');
-                } else if (allExtractedChecks.length > 0) {
-                    const checkNumbers = allExtractedChecks.map(c => c.check_number).filter(Boolean).join(', ');
-                    showAlert(`Processed ${processedFilesCount} check document(s) (${checkNumbers}), but could not find matching check numbers in the current bank statement table.`, 'error');
+                if (hasCurrentStatement) {
+                    if (totalUpdatedCount > 0) {
+                        displayResults(currentResult);
+                        showAlert(`✅ Successfully processed ${processedFilesCount} check document(s) and matched/updated ${totalUpdatedCount} check transaction(s)!`, 'success');
+                    } else if (allExtractedChecks.length > 0) {
+                        const checkNumbers = allExtractedChecks.map(c => c.check_number).filter(Boolean).join(', ');
+                        showAlert(`Processed ${processedFilesCount} check document(s) (${checkNumbers}), but could not find matching check numbers in the current bank statement table.`, 'error');
+                    } else {
+                        showAlert(`Processed ${processedFilesCount} check document(s), but no check details could be extracted.`, 'error');
+                    }
                 } else {
-                    showAlert(`Processed ${processedFilesCount} check document(s), but no check details could be extracted.`, 'error');
+                    // Standalone Check Extraction (No pre-loaded bank statement)
+                    if (allExtractedChecks.length > 0) {
+                        const checkTxs = allExtractedChecks.map(chk => ({
+                            "date": chk.date || "",
+                            "checknumber": chk.check_number || "",
+                            "description": chk.payee || chk.business_name || "Check Payment",
+                            "Withdrawals": chk.amount ? parseFloat(chk.amount) : "",
+                            "Deposits": "",
+                            "account": chk.account || "",
+                            "account_name": chk.account_name || "Uncategorized",
+                            "match_source": chk.match_source || "Extracted"
+                        }));
+
+                        const totalAmount = checkTxs.reduce((sum, t) => sum + (parseFloat(t.Withdrawals) || 0), 0);
+
+                        const standaloneResult = {
+                            "business_name": (allExtractedChecks[0] && allExtractedChecks[0].business_name) ? allExtractedChecks[0].business_name : "Check Image Extraction",
+                            "bank_type": "check_images",
+                            "period": `Extracted ${allExtractedChecks.length} check(s)`,
+                            "reconciliation": [
+                                {
+                                    "Category": "Extracted Checks Total",
+                                    "Detail Sum": totalAmount,
+                                    "Summary Amount": totalAmount,
+                                    "Difference": 0,
+                                    "Items Count": checkTxs.length
+                                }
+                            ],
+                            "transactions": checkTxs,
+                            "warnings": []
+                        };
+
+                        displayResults(standaloneResult);
+                        showAlert(`✅ Successfully extracted ${allExtractedChecks.length} check image(s)!`, 'success');
+                    } else {
+                        showAlert(`Processed ${processedFilesCount} check document(s), but no check details could be extracted.`, 'error');
+                    }
                 }
 
             } catch (err) {
