@@ -1090,14 +1090,17 @@
             <div class="welcome-banner">
                 <div class="banner-text">
                     <h2>{{ parent_name or company_name or 'VRT Services' }} Portal</h2>
-                    <div class="banner-badges">
+                    <div class="banner-badges" style="flex-wrap: wrap;">
                         <span class="badge-pill primary">Organization: {{ company_name }}</span>
                         <span class="badge-pill">Parent: {{ parent_name }}</span>
                         {% if software_name %}
                         <span class="badge-pill">System: {{ software_name }}</span>
                         {% endif %}
+                        {% if user_email or username %}
+                        <span class="badge-pill">User: {{ user_email or username }}</span>
+                        {% endif %}
                         {% if username %}
-                        <span class="badge-pill">User: {{ username }}</span>
+                        <span class="badge-pill" style="background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;">User Logged: {{ username }}</span>
                         {% endif %}
                     </div>
                 </div>
