@@ -4227,19 +4227,9 @@ async def process_check_pdf(
         )
 
         # Record page/file scan usage for check image extraction
-        current_username = get_current_username(request) or username
-        if current_username:
-            page_count = 1
-            if ext == ".pdf":
-                try:
-                    import fitz
-                    doc = fitz.open(check_file_path)
-                    page_count = len(doc)
-                    doc.close()
-                except Exception:
-                    page_count = 1
+        if username:
             try:
-                record_user_usage(current_username, page_count)
+                record_user_usage(username, 1)
             except Exception as ex:
                 print(f"Error recording check extraction usage: {ex}")
 
