@@ -451,8 +451,64 @@ def estimate_skew_wf(words):
                 slopes.append(dy / dx)
     return statistics.median(slopes) if slopes else 0.0
 
+def extract_wells_fargo_statement_date(p1_words=None, pdf_path=None):
+    """
+    Extracts statement ending date (month, 4-digit year) from Page 1 of a Wells Fargo statement.
+    Checks under header titles like 'Initiate Business Checking SM', 'Business Checking SM',
+    'Page 1 of', etc.
+    Returns (statement_month, statement_year) e.g. (7, 2025).
+    """
+    MONTH_MAP = {
+        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+    }
+    
+    text_candidates = []
+    
+    if pdf_path:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                text_candidates.append(doc[0].get_text('text'))
+            doc.close()
+        except Exception:
+            pass
+            
+    if p1_words:
+        words_sorted = sorted(p1_words, key=lambda w: (w.get('center_y', 0), w.get('center_x', 0)))
+        text_candidates.append(' '.join(w.get('text', '') for w in words_sorted))
+        
+    months_pattern = r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+    date_regex_1 = re.compile(months_pattern + r'\s+(\d{1,2})\s*,?\s*(20\d{2}|\d{2})', re.IGNORECASE)
+    date_regex_2 = re.compile(r'\b(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\b')
+    
+    for text in text_candidates:
+        m1 = date_regex_1.search(text)
+        if m1:
+            m_name = m1.group(1).lower()[:3]
+            m_num = MONTH_MAP.get(m_name, 1)
+            y_str = m1.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+        m2 = date_regex_2.search(text)
+        if m2:
+            m_num = int(m2.group(1))
+            y_str = m2.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+    return 1, 2026
+
 def run_wells_fargo_pipeline(all_pages_words, pdf_path, csv_output=None):
     print("=== STARTING WELLS FARGO DETECTION AND PARSING ===")
+    
+    p1_words = all_pages_words.get('page_1', [])
+    stmt_month, stmt_year = extract_wells_fargo_statement_date(p1_words, pdf_path)
+    print(f"--> EXTRACTED WELLS FARGO STATEMENT DATE: Month={stmt_month}, Year={stmt_year}")
     
     page_skews = {}
     non_zero_skews = []
@@ -645,14 +701,22 @@ def run_wells_fargo_pipeline(all_pages_words, pdf_path, csv_output=None):
                     amount = wit_amt
                     
                 m_part, d_part = current_date.split('/')
-                date_iso = f"2026-{int(m_part):02d}-{int(d_part):02d}"
+                m_int = int(m_part)
+                d_int = int(d_part)
+                
+                if stmt_month and m_int > stmt_month:
+                    tx_year = stmt_year - 1
+                else:
+                    tx_year = stmt_year
+                    
+                formatted_date = f"{m_int:02d}/{d_int:02d}/{tx_year}"
                 
                 final_desc = desc_str
                 if check_num:
                     final_desc = f"Check {check_num} {desc_str}".strip()
                     
                 active_tx = {
-                    'date': date_iso,
+                    'date': formatted_date,
                     'amount': amount,
                     'description': final_desc,
                     'category': category
