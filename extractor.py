@@ -797,10 +797,56 @@ def run_wells_fargo_pipeline(all_pages_words, pdf_path, csv_output=None):
         
     return formatted_df, reconciliation, summary_page, period, warnings
 
+def extract_pnc_statement_date(p1_words=None, pdf_path=None):
+    """
+    Extracts statement period dates (start_month, start_year, end_month, end_year)
+    from Page 1 of a PNC Bank statement.
+    Checks near/below header titles like 'Business Checking Plus', 'Business Checking', 'PNC Bank', etc.
+    Returns (start_month, start_year, end_month, end_year).
+    """
+    text_candidates = []
+    
+    if pdf_path:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                text_candidates.append(doc[0].get_text('text'))
+            doc.close()
+        except Exception:
+            pass
+            
+    if p1_words:
+        words_sorted = sorted(p1_words, key=lambda w: (w.get('center_y', 0), w.get('center_x', 0)))
+        text_candidates.append(' '.join(w.get('text', '') for w in words_sorted))
+        
+    for text in text_candidates:
+        m = re.search(r'For\s+the\s+Per[iodl1]{2,4}\s+(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\s+(?:to|through|-)\s+(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})', text, re.IGNORECASE)
+        if m:
+            sm = int(m.group(1))
+            sy_str = m.group(3)
+            sy = int(sy_str) if len(sy_str) == 4 else 2000 + int(sy_str)
+            em = int(m.group(4))
+            ey_str = m.group(6)
+            ey = int(ey_str) if len(ey_str) == 4 else 2000 + int(ey_str)
+            return sm, sy, em, ey
+            
+        m_single = re.search(r'\b(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\b', text)
+        if m_single:
+            m_num = int(m_single.group(1))
+            y_str = m_single.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num, m_num, y_num
+            
+    return 1, 2026, 1, 2026
+
 def run_pnc_pipeline(all_pages_words, pdf_path, csv_output=None):
     print("=== STARTING PNC BANK PROCESSING ===")
     
     p1_words = all_pages_words.get('page_1', [])
+    start_month, start_year, end_month, end_year = extract_pnc_statement_date(p1_words, pdf_path)
+    print(f"--> EXTRACTED PNC STATEMENT PERIOD: {start_month}/{start_year} to {end_month}/{end_year}")
+    
     if not p1_words:
         print("Error: Could not extract data from Page 1.")
         return
@@ -944,11 +990,28 @@ def run_pnc_pipeline(all_pages_words, pdf_path, csv_output=None):
                     
     for t in details:
         date_str = t['date'].replace('-', '')
-        match = re.search(r'(\d{2})/(\d{2})', date_str)
+        match = re.search(r'(\d{1,2})/(\d{1,2})', date_str)
         if match:
-            t['date'] = f"2026-{match.group(1)}-{match.group(2)}"
+            m_int = int(match.group(1))
+            d_int = int(match.group(2))
+            
+            if start_month and end_month and start_year and end_year:
+                if start_month > end_month:
+                    if m_int >= start_month:
+                        tx_year = start_year
+                    else:
+                        tx_year = end_year
+                else:
+                    if m_int > end_month:
+                        tx_year = end_year - 1
+                    else:
+                        tx_year = end_year
+            else:
+                tx_year = 2026
+                
+            t['date'] = f"{m_int:02d}/{d_int:02d}/{tx_year}"
         else:
-            t['date'] = "2026-01-01"
+            t['date'] = f"01/01/{end_year if end_year else 2026}"
             
         t['description'] = re.sub(r'\s+', ' ', t['description']).strip()
         
