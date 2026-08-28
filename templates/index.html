@@ -2015,13 +2015,16 @@
 
                         if (hasCurrentStatement) {
                             checks.forEach(chk => {
-                                if (!chk.check_number) return;
-                                const targetNum = String(chk.check_number).trim();
-                                const targetNorm = targetNum.replace(/^0+/, '');
+                                const rawTarget = String(chk.check_number || '').trim();
+                                const targetNum = rawTarget.replace(/^0+/, '');
+                                const targetDigits = rawTarget.replace(/\D/g, '');
+                                const chkAmt = chk.amount ? Math.abs(parseFloat(chk.amount)) : null;
                                 const payee = (chk.payee || chk.business_name || '').trim();
 
+                                if (!targetNum && !chkAmt) return;
+
                                 currentResult.transactions.forEach(tx => {
-                                    const allTxNums = [
+                                    const txCheckStr = [
                                         String(tx.checknumber || ''),
                                         String(tx.check_number || ''),
                                         String(tx.checkNo || ''),
@@ -2029,24 +2032,31 @@
                                         String(tx.reference || ''),
                                         String(tx.Reference || ''),
                                         String(tx.ref || ''),
-                                        String(tx.matched_description || ''),
-                                        String(tx.description || '')
+                                        String(tx.matched_description || '')
                                     ].join(' ');
 
-                                    const extractedNums = allTxNums.match(/\b\d{3,8}\b/g) || [];
+                                    const allTxStr = txCheckStr + ' ' + String(tx.description || '');
+                                    const extractedNums = allTxStr.match(/\b\d{3,8}\b/g) || [];
                                     const normalizedNums = extractedNums.map(n => n.replace(/^0+/, ''));
+                                    const digitsOnlyNums = extractedNums.map(n => n.replace(/\D/g, ''));
 
-                                    const matchesCheckNum = 
+                                    const matchesCheckNum = targetNum && (
                                         extractedNums.includes(targetNum) ||
-                                        normalizedNums.includes(targetNorm) ||
-                                        allTxNums.includes(targetNum) ||
-                                        (targetNorm && allTxNums.includes(targetNorm)) ||
+                                        normalizedNums.includes(targetNum) ||
+                                        allTxStr.includes(targetNum) ||
+                                        (targetDigits && digitsOnlyNums.includes(targetDigits)) ||
                                         (tx.checknumber && String(tx.checknumber).trim() === targetNum) ||
-                                        (tx.checknumber && String(tx.checknumber).trim() === targetNorm) ||
-                                        (tx.matched_description && String(tx.matched_description).trim() === targetNum) ||
-                                        (tx.matched_description && String(tx.matched_description).trim() === targetNorm);
+                                        (tx.checknumber && String(tx.checknumber).trim().replace(/^0+/, '') === targetNum) ||
+                                        (tx.matched_description && String(tx.matched_description).trim() === targetNum)
+                                    );
 
-                                    if (matchesCheckNum) {
+                                    const txWit = tx.Withdrawals ? Math.abs(parseFloat(tx.Withdrawals)) : null;
+                                    const txDep = tx.Deposits ? Math.abs(parseFloat(tx.Deposits)) : null;
+                                    const matchesAmount = chkAmt && ((txWit && Math.abs(chkAmt - txWit) < 0.01) || (txDep && Math.abs(chkAmt - txDep) < 0.01));
+
+                                    const isMatch = matchesCheckNum || (matchesAmount && (!tx.account || tx.account === '500' || String(tx.description || '').toLowerCase().includes('check')));
+
+                                    if (isMatch) {
                                         if (payee) tx.description = payee;
 
                                         if (chk.account && (chk.match_source === 'Matched' || chk.match_confidence > 0)) {
