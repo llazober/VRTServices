@@ -543,11 +543,40 @@ def cleanup_duplicate_communications():
     except Exception as e:
         print(f"Error cleaning up communications: {e}")
 
+def init_history_table():
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS "ClientTransactionHistory" (
+                    "id"              VARCHAR(100) PRIMARY KEY,
+                    "clientName"      VARCHAR(255) NOT NULL,
+                    "parentName"      VARCHAR(255),
+                    "pattern"         VARCHAR(255) NOT NULL,
+                    "description"     TEXT,
+                    "accountNumber"   VARCHAR(100) NOT NULL,
+                    "accountName"     VARCHAR(255),
+                    "transactionType" VARCHAR(50) DEFAULT 'ALL',
+                    "source"          VARCHAR(50) DEFAULT 'MANUAL',
+                    "useCount"        INT DEFAULT 1,
+                    "createdAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "uniq_client_pattern_txtype" UNIQUE ("clientName", "pattern", "transactionType")
+                );
+                ALTER TABLE "ClientTransactionHistory" ADD COLUMN IF NOT EXISTS "description" TEXT;
+            """)
+            conn.commit()
+        conn.close()
+        print("ClientTransactionHistory table initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing ClientTransactionHistory table: {e}")
+
 try:
     init_customer_table()
     init_checklist_table()
     init_communications_table()
     init_webhook_debug_table()
+    init_history_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -964,7 +993,7 @@ def get_client_history_rules(client_name: str, parent_name: str = None) -> list[
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if client_name:
                 cur.execute('''
-                    SELECT "pattern", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
+                    SELECT "pattern", "description", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
                     FROM "ClientTransactionHistory"
                     WHERE (LOWER("clientName") = LOWER(%s) OR "clientName" = 'DEFAULT')
                       AND (LOWER("parentName") = LOWER(%s) OR "parentName" IS NULL OR "parentName" = '' OR "parentName" = 'VRT Services')
@@ -974,7 +1003,7 @@ def get_client_history_rules(client_name: str, parent_name: str = None) -> list[
             
             if not rules and client_name:
                 cur.execute('''
-                    SELECT "pattern", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
+                    SELECT "pattern", "description", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
                     FROM "ClientTransactionHistory"
                     WHERE LOWER("clientName") = LOWER(%s) OR "clientName" = 'DEFAULT'
                     ORDER BY "useCount" DESC;
@@ -983,7 +1012,7 @@ def get_client_history_rules(client_name: str, parent_name: str = None) -> list[
 
             if not rules:
                 cur.execute('''
-                    SELECT "pattern", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
+                    SELECT "pattern", "description", "accountNumber", "accountName", "transactionType", "useCount", "parentName"
                     FROM "ClientTransactionHistory"
                     ORDER BY "useCount" DESC;
                 ''')
@@ -1006,7 +1035,7 @@ def get_client_history_rules(client_name: str, parent_name: str = None) -> list[
 
     return rules
 
-def save_history_rule(client_name: str, pattern: str, account_number: str, account_name: str = "", tx_type: str = "ALL", parent_name: str = None) -> bool:
+def save_history_rule(client_name: str, pattern: str, account_number: str, account_name: str = "", tx_type: str = "ALL", parent_name: str = None, description: str = "") -> bool:
     """Save or update a learned vendor rule in ClientTransactionHistory table."""
     parent_name = normalize_parent_name(parent_name)
     conn = None
@@ -1014,16 +1043,17 @@ def save_history_rule(client_name: str, pattern: str, account_number: str, accou
         conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute('''
-                INSERT INTO "ClientTransactionHistory" ("clientName", "parentName", "pattern", "accountNumber", "accountName", "transactionType", "source", "useCount")
-                VALUES (%s, %s, %s, %s, %s, %s, 'USER_EDIT', 1)
+                INSERT INTO "ClientTransactionHistory" ("clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'USER_EDIT', 1)
                 ON CONFLICT ("clientName", "pattern", "transactionType")
                 DO UPDATE SET
                     "parentName" = EXCLUDED."parentName",
+                    "description" = EXCLUDED."description",
                     "accountNumber" = EXCLUDED."accountNumber",
                     "accountName" = EXCLUDED."accountName",
                     "useCount" = "ClientTransactionHistory"."useCount" + 1,
                     "updatedAt" = CURRENT_TIMESTAMP;
-            ''', (client_name, parent_name, pattern.upper().strip(), account_number.strip(), account_name.strip(), tx_type))
+            ''', (client_name, parent_name, pattern.upper().strip(), description.strip(), account_number.strip(), account_name.strip(), tx_type))
             conn.commit()
             return True
     except Exception as e:
@@ -3941,7 +3971,7 @@ async def get_history_rules_endpoint(request: Request, clientName: str = "", par
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            query = 'SELECT id, "clientName", "parentName", "pattern", "accountNumber", "accountName", "transactionType", "source", "useCount" FROM "ClientTransactionHistory"'
+            query = 'SELECT id, "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount" FROM "ClientTransactionHistory"'
             conditions = []
             params = []
             if clientName:
@@ -3973,6 +4003,7 @@ async def save_history_rule_endpoint(request: Request):
     client_name = body.get("clientName") or "DEFAULT"
     parent_name = body.get("parentName") or get_user_parent_name(username)
     pattern = (body.get("pattern") or "").upper().strip()
+    description = (body.get("description") or "").strip()
     account_number = (body.get("accountNumber") or "").strip()
     account_name = (body.get("accountName") or "").strip()
     tx_type = (body.get("transactionType") or "ALL").upper().strip()
@@ -3987,20 +4018,20 @@ async def save_history_rule_endpoint(request: Request):
             if record_id:
                 cur.execute('''
                     UPDATE "ClientTransactionHistory"
-                    SET "parentName" = %s, "pattern" = %s, "accountNumber" = %s, "accountName" = %s, "transactionType" = %s, "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
+                    SET "parentName" = %s, "pattern" = %s, "description" = %s, "accountNumber" = %s, "accountName" = %s, "transactionType" = %s, "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
                     WHERE "id" = %s
                     RETURNING *;
-                ''', (parent_name, pattern, account_number, account_name, tx_type, record_id))
+                ''', (parent_name, pattern, description, account_number, account_name, tx_type, record_id))
             else:
                 import uuid
                 new_id = str(uuid.uuid4())
                 cur.execute('''
-                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT ("clientName", "pattern", "transactionType")
-                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
+                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "description" = EXCLUDED."description", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
                     RETURNING *;
-                ''', (new_id, client_name, parent_name, pattern, account_number, account_name, tx_type))
+                ''', (new_id, client_name, parent_name, pattern, description, account_number, account_name, tx_type))
             rule = cur.fetchone()
             conn.commit()
             return {"success": True, "rule": rule}
@@ -4043,14 +4074,17 @@ async def upload_history_rules_endpoint(request: Request, clientName: str = Form
     headers = [h.strip().replace('"', '') for h in lines[0].split(',')]
     
     import re
-    pattern_idx = next((i for i, h in enumerate(headers) if re.search(r'pattern|description|vendor|keyword', h, re.I)), -1)
+    pattern_idx = next((i for i, h in enumerate(headers) if re.search(r'pattern|vendor|keyword', h, re.I)), -1)
+    if pattern_idx == -1:
+        pattern_idx = next((i for i, h in enumerate(headers) if re.search(r'description', h, re.I)), -1)
+    desc_idx = next((i for i, h in enumerate(headers) if re.search(r'description|memo|notes', h, re.I)), -1)
     acct_num_idx = next((i for i, h in enumerate(headers) if re.search(r'account\s*number|acct|gl|code', h, re.I)), -1)
     acct_name_idx = next((i for i, h in enumerate(headers) if re.search(r'account\s*name|category|drake', h, re.I)), -1)
     tx_type_idx = next((i for i, h in enumerate(headers) if re.search(r'type|transaction\s*type', h, re.I)), -1)
     parent_idx = next((i for i, h in enumerate(headers) if re.search(r'parent', h, re.I)), -1)
 
     if pattern_idx == -1 or acct_num_idx == -1:
-        raise HTTPException(status_code=400, detail='CSV must contain "Description"/"Pattern" and "Account Number" columns.')
+        raise HTTPException(status_code=400, detail='CSV must contain "Pattern" and "Account Number" columns.')
 
     import csv, uuid
     def clean_raw_desc(desc):
@@ -4083,17 +4117,18 @@ async def upload_history_rules_endpoint(request: Request, clientName: str = Form
                 if not raw_pattern or not acct_num:
                     continue
                 cleaned_pattern = clean_raw_desc(raw_pattern)
+                description_val = row[desc_idx].strip() if desc_idx != -1 and desc_idx < len(row) else ""
                 acct_name = row[acct_name_idx].strip() if acct_name_idx != -1 and acct_name_idx < len(row) else ""
                 tx_type = row[tx_type_idx].strip().upper() if tx_type_idx != -1 and tx_type_idx < len(row) and row[tx_type_idx].strip() else "ALL"
                 parent_val = row[parent_idx].strip() if parent_idx != -1 and parent_idx < len(row) and row[parent_idx].strip() else parentName
 
                 new_id = str(uuid.uuid4())
                 cur.execute('''
-                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT ("clientName", "pattern", "transactionType")
-                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'CSV_UPLOAD', "updatedAt" = CURRENT_TIMESTAMP;
-                ''', (new_id, clientName, parent_val, cleaned_pattern, acct_num, acct_name, tx_type))
+                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "description" = EXCLUDED."description", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'CSV_UPLOAD', "updatedAt" = CURRENT_TIMESTAMP;
+                ''', (new_id, clientName, parent_val, cleaned_pattern, description_val, acct_num, acct_name, tx_type))
                 count += 1
             conn.commit()
             return {"success": True, "message": f"Successfully imported {count} history rules."}
@@ -4112,6 +4147,7 @@ async def learn_history_rule_endpoint(request: Request):
     client_name = payload.get("client_name") or "DEFAULT"
     parent_name = payload.get("parent_name") or get_user_parent_name(username)
     pattern = payload.get("pattern") or ""
+    description = payload.get("description") or ""
     account_number = payload.get("account_number") or ""
     account_name = payload.get("account_name") or ""
     tx_type = payload.get("transaction_type") or "ALL"
@@ -4119,7 +4155,7 @@ async def learn_history_rule_endpoint(request: Request):
     if not pattern or not account_number:
         raise HTTPException(status_code=400, detail="Pattern and account_number are required.")
         
-    ok = save_history_rule(client_name, pattern, account_number, account_name, tx_type, parent_name)
+    ok = save_history_rule(client_name, pattern, account_number, account_name, tx_type, parent_name, description)
     return {"success": ok, "message": f"Rule learned for '{pattern}' -> {account_number}"}
 
 @app.post("/process")

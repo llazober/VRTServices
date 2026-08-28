@@ -1380,6 +1380,10 @@
                     <input type="text" id="historyFormName" placeholder="e.g. Utilities" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; color: #fff;">
                 </div>
                 <div>
+                    <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Description</label>
+                    <input type="text" id="historyFormDescription" placeholder="Optional description" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; color: #fff;">
+                </div>
+                <div>
                     <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tx Type</label>
                     <select id="historyFormTxType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; color: #fff;">
                         <option value="ALL">ALL</option>
@@ -1399,6 +1403,7 @@
                             <th style="padding: 10px 16px; cursor: pointer;" onclick="handleHistorySort('pattern')">Vendor Pattern <span id="sortPatternArrow">↕</span></th>
                             <th style="padding: 10px 16px; cursor: pointer;" onclick="handleHistorySort('accountNumber')">Account # <span id="sortAccountArrow">↕</span></th>
                             <th style="padding: 10px 16px; cursor: pointer;" onclick="handleHistorySort('accountName')">Account Name <span id="sortNameArrow">↕</span></th>
+                            <th style="padding: 10px 16px; cursor: pointer;" onclick="handleHistorySort('description')">Description <span id="sortDescArrow">↕</span></th>
                             <th style="padding: 10px 16px;">Tx Type</th>
                             <th style="padding: 10px 16px; text-align: right;">Actions</th>
                         </tr>
@@ -2326,6 +2331,7 @@
 
             let filtered = currentHistoryRecords.filter(r =>
                 (r.pattern || '').toLowerCase().includes(query) ||
+                (r.description || '').toLowerCase().includes(query) ||
                 (r.accountNumber || '').toLowerCase().includes(query) ||
                 (r.accountName || '').toLowerCase().includes(query)
             );
@@ -2341,7 +2347,7 @@
 
             if (totalCount) totalCount.textContent = filtered.length;
 
-            ['Pattern', 'Account', 'Name'].forEach(col => {
+            ['Pattern', 'Account', 'Name', 'Desc'].forEach(col => {
                 const el = document.getElementById(`sort${col}Arrow`);
                 if (el) el.textContent = '↕';
             });
@@ -2351,10 +2357,12 @@
                 document.getElementById('sortAccountArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
             } else if (historySortKey === 'accountName' && document.getElementById('sortNameArrow')) {
                 document.getElementById('sortNameArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
+            } else if (historySortKey === 'description' && document.getElementById('sortDescArrow')) {
+                document.getElementById('sortDescArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
             }
 
             if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colSpan="6" style="padding: 24px; text-align: center; color: #64748b;">No transaction rules found. Click ➕ Add Rule or Upload CSV.</td></tr>';
+                tbody.innerHTML = '<tr><td colSpan="7" style="padding: 24px; text-align: center; color: #64748b;">No transaction rules found. Click ➕ Add Rule or Upload CSV.</td></tr>';
                 return;
             }
 
@@ -2364,11 +2372,12 @@
                     <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #34d399; text-transform: uppercase;">${rule.pattern}</td>
                     <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #22d3ee;">${rule.accountNumber}</td>
                     <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${rule.accountName || '—'}</td>
+                    <td style="padding: 10px 16px; color: #cbd5e1;">${rule.description || '—'}</td>
                     <td style="padding: 10px 16px;">
                         <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; text-transform: uppercase; font-weight: 700; color: #cbd5e1;">${rule.transactionType || 'ALL'}</span>
                     </td>
                     <td style="padding: 10px 16px; text-align: right;">
-                        <button onclick="editHistoryRecord('${rule.id || ''}', '${rule.pattern.replace(/'/g, "\\'")}', '${rule.accountNumber.replace(/'/g, "\\'")}', '${(rule.accountName || '').replace(/'/g, "\\'")}', '${(rule.transactionType || 'ALL').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
+                        <button onclick="editHistoryRecord('${rule.id || ''}', '${(rule.pattern || '').replace(/'/g, "\\'")}', '${(rule.accountNumber || '').replace(/'/g, "\\'")}', '${(rule.accountName || '').replace(/'/g, "\\'")}', '${(rule.transactionType || 'ALL').replace(/'/g, "\\'")}', '${(rule.description || '').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
                         <button onclick="deleteHistoryRecord('${rule.id || ''}')" style="padding: 4px 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">Delete</button>
                     </td>
                 </tr>
@@ -2384,6 +2393,7 @@
                 document.getElementById('historyFormPattern').value = '';
                 document.getElementById('historyFormNumber').value = '';
                 document.getElementById('historyFormName').value = '';
+                if (document.getElementById('historyFormDescription')) document.getElementById('historyFormDescription').value = '';
                 document.getElementById('historyFormTxType').value = 'ALL';
                 document.getElementById('historyFormSubmitBtn').textContent = 'Save Rule';
                 form.style.display = 'grid';
@@ -2394,7 +2404,7 @@
             }
         }
 
-        function editHistoryRecord(id, pattern, number, name, txType) {
+        function editHistoryRecord(id, pattern, number, name, txType, description) {
             const form = document.getElementById('historyForm');
             const btn = document.getElementById('toggleHistoryFormBtn');
             if (!form) return;
@@ -2402,6 +2412,7 @@
             document.getElementById('historyFormPattern').value = pattern;
             document.getElementById('historyFormNumber').value = number;
             document.getElementById('historyFormName').value = name || '';
+            if (document.getElementById('historyFormDescription')) document.getElementById('historyFormDescription').value = description || '';
             document.getElementById('historyFormTxType').value = txType || 'ALL';
             document.getElementById('historyFormSubmitBtn').textContent = 'Update Rule';
             form.style.display = 'grid';
@@ -2416,6 +2427,7 @@
             const pattern = document.getElementById('historyFormPattern').value.trim();
             const accountNumber = document.getElementById('historyFormNumber').value.trim();
             const accountName = document.getElementById('historyFormName').value.trim();
+            const description = document.getElementById('historyFormDescription') ? document.getElementById('historyFormDescription').value.trim() : '';
             const transactionType = document.getElementById('historyFormTxType').value;
 
             try {
@@ -2423,7 +2435,7 @@
                 const res = await fetch('/api/clients/history', {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, clientName, parentName: CURRENT_PARENT_NAME, pattern, accountNumber, accountName, transactionType })
+                    body: JSON.stringify({ id, clientName, parentName: CURRENT_PARENT_NAME, pattern, accountNumber, accountName, transactionType, description })
                 });
                 if (res.ok) {
                     toggleHistoryForm();
