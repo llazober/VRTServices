@@ -560,10 +560,18 @@ def init_history_table():
                     "source"          VARCHAR(50) DEFAULT 'MANUAL',
                     "useCount"        INT DEFAULT 1,
                     "createdAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    "updatedAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT "uniq_client_pattern_txtype" UNIQUE ("clientName", "pattern", "transactionType")
+                    "updatedAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 ALTER TABLE "ClientTransactionHistory" ADD COLUMN IF NOT EXISTS "description" TEXT;
+
+                DELETE FROM "ClientTransactionHistory" a USING "ClientTransactionHistory" b
+                WHERE a.ctid < b.ctid 
+                  AND a."clientName" = b."clientName" 
+                  AND a."pattern" = b."pattern" 
+                  AND a."transactionType" = b."transactionType";
+
+                CREATE UNIQUE INDEX IF NOT EXISTS "uniq_client_pattern_txtype_idx" 
+                ON "ClientTransactionHistory" ("clientName", "pattern", "transactionType");
             """)
             conn.commit()
         conn.close()
@@ -1043,17 +1051,28 @@ def save_history_rule(client_name: str, pattern: str, account_number: str, accou
         conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute('''
-                INSERT INTO "ClientTransactionHistory" ("clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount")
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'USER_EDIT', 1)
-                ON CONFLICT ("clientName", "pattern", "transactionType")
-                DO UPDATE SET
-                    "parentName" = EXCLUDED."parentName",
-                    "description" = EXCLUDED."description",
-                    "accountNumber" = EXCLUDED."accountNumber",
-                    "accountName" = EXCLUDED."accountName",
-                    "useCount" = "ClientTransactionHistory"."useCount" + 1,
-                    "updatedAt" = CURRENT_TIMESTAMP;
-            ''', (client_name, parent_name, pattern.upper().strip(), description.strip(), account_number.strip(), account_name.strip(), tx_type))
+                SELECT "id" FROM "ClientTransactionHistory"
+                WHERE "clientName" = %s AND "pattern" = %s AND "transactionType" = %s;
+            ''', (client_name, pattern.upper().strip(), tx_type))
+            row = cur.fetchone()
+            if row:
+                cur.execute('''
+                    UPDATE "ClientTransactionHistory"
+                    SET "parentName" = %s,
+                        "description" = %s,
+                        "accountNumber" = %s,
+                        "accountName" = %s,
+                        "useCount" = "useCount" + 1,
+                        "updatedAt" = CURRENT_TIMESTAMP
+                    WHERE "id" = %s;
+                ''', (parent_name, description.strip(), account_number.strip(), account_name.strip(), row[0]))
+            else:
+                import uuid
+                new_id = str(uuid.uuid4())
+                cur.execute('''
+                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'USER_EDIT', 1);
+                ''', (new_id, client_name, parent_name, pattern.upper().strip(), description.strip(), account_number.strip(), account_name.strip(), tx_type))
             conn.commit()
             return True
     except Exception as e:
@@ -4022,17 +4041,30 @@ async def save_history_rule_endpoint(request: Request):
                     WHERE "id" = %s
                     RETURNING *;
                 ''', (parent_name, pattern, description, account_number, account_name, tx_type, record_id))
+                rule = cur.fetchone()
             else:
-                import uuid
-                new_id = str(uuid.uuid4())
                 cur.execute('''
-                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT ("clientName", "pattern", "transactionType")
-                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "description" = EXCLUDED."description", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
-                    RETURNING *;
-                ''', (new_id, client_name, parent_name, pattern, description, account_number, account_name, tx_type))
-            rule = cur.fetchone()
+                    SELECT id FROM "ClientTransactionHistory"
+                    WHERE "clientName" = %s AND "pattern" = %s AND "transactionType" = %s;
+                ''', (client_name, pattern, tx_type))
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute('''
+                        UPDATE "ClientTransactionHistory"
+                        SET "parentName" = %s, "description" = %s, "accountNumber" = %s, "accountName" = %s, "source" = 'MANUAL_EDIT', "updatedAt" = CURRENT_TIMESTAMP
+                        WHERE "id" = %s
+                        RETURNING *;
+                    ''', (parent_name, description, account_number, account_name, existing['id']))
+                    rule = cur.fetchone()
+                else:
+                    import uuid
+                    new_id = str(uuid.uuid4())
+                    cur.execute('''
+                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        RETURNING *;
+                    ''', (new_id, client_name, parent_name, pattern, description, account_number, account_name, tx_type))
+                    rule = cur.fetchone()
             conn.commit()
             return {"success": True, "rule": rule}
     except Exception as e:
@@ -4122,13 +4154,23 @@ async def upload_history_rules_endpoint(request: Request, clientName: str = Form
                 tx_type = row[tx_type_idx].strip().upper() if tx_type_idx != -1 and tx_type_idx < len(row) and row[tx_type_idx].strip() else "ALL"
                 parent_val = row[parent_idx].strip() if parent_idx != -1 and parent_idx < len(row) and row[parent_idx].strip() else parentName
 
-                new_id = str(uuid.uuid4())
                 cur.execute('''
-                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT ("clientName", "pattern", "transactionType")
-                    DO UPDATE SET "parentName" = EXCLUDED."parentName", "description" = EXCLUDED."description", "accountNumber" = EXCLUDED."accountNumber", "accountName" = EXCLUDED."accountName", "source" = 'CSV_UPLOAD', "updatedAt" = CURRENT_TIMESTAMP;
-                ''', (new_id, clientName, parent_val, cleaned_pattern, description_val, acct_num, acct_name, tx_type))
+                    SELECT id FROM "ClientTransactionHistory"
+                    WHERE "clientName" = %s AND "pattern" = %s AND "transactionType" = %s;
+                ''', (clientName, cleaned_pattern, tx_type))
+                row_found = cur.fetchone()
+                if row_found:
+                    cur.execute('''
+                        UPDATE "ClientTransactionHistory"
+                        SET "parentName" = %s, "description" = %s, "accountNumber" = %s, "accountName" = %s, "source" = 'CSV_UPLOAD', "updatedAt" = CURRENT_TIMESTAMP
+                        WHERE "id" = %s;
+                    ''', (parent_val, description_val, acct_num, acct_name, row_found[0]))
+                else:
+                    new_id = str(uuid.uuid4())
+                    cur.execute('''
+                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                    ''', (new_id, clientName, parent_val, cleaned_pattern, description_val, acct_num, acct_name, tx_type))
                 count += 1
             conn.commit()
             return {"success": True, "message": f"Successfully imported {count} history rules."}
