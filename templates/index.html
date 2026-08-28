@@ -1979,6 +1979,18 @@
             let processedFilesCount = 0;
             let allExtractedChecks = [];
 
+            if (clientName && (!currentHistoryRecords || currentHistoryRecords.length === 0)) {
+                try {
+                    const histRes = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}`);
+                    if (histRes.ok) {
+                        const histData = await histRes.json();
+                        currentHistoryRecords = histData.historyRules || [];
+                    }
+                } catch (e) {
+                    console.error("Error pre-fetching history rules for check matching:", e);
+                }
+            }
+
             showAlert(`📷 Processing ${validFiles.length} check file(s)...`, 'info');
 
             try {
