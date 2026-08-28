@@ -1317,6 +1317,71 @@ def run_boa_pipeline(all_pages_words, pdf_path, csv_output=None):
         
     return formatted_df, reconciliation, 1, period, warnings
 
+def extract_td_statement_date(p1_words=None, pdf_path=None):
+    """
+    Extracts statement period dates (start_month, start_year, end_month, end_year)
+    from Page 1 of a TD Bank statement.
+    Checks near 'Statement Period: Jan 12 2025-Feb 11 2025'.
+    Returns (start_month, start_year, end_month, end_year).
+    """
+    MONTH_MAP = {
+        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+    }
+    
+    text_candidates = []
+    
+    if pdf_path:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                text_candidates.append(doc[0].get_text('text'))
+            doc.close()
+        except Exception:
+            pass
+            
+    if p1_words:
+        words_sorted = sorted(p1_words, key=lambda w: (w.get('center_y', 0), w.get('center_x', 0)))
+        text_candidates.append(' '.join(w.get('text', '') for w in words_sorted))
+        
+    months_pat = r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+    
+    for text in text_candidates:
+        m1 = re.search(
+            months_pat + r'\s+\d{1,2}\s+(20\d{2}|\d{2})\s*(?:-|to|through)\s*' + months_pat + r'\s+\d{1,2}\s+(20\d{2}|\d{2})',
+            text, re.IGNORECASE
+        )
+        if m1:
+            sm = MONTH_MAP.get(m1.group(1).lower()[:3], 1)
+            sy_str = m1.group(2)
+            sy = int(sy_str) if len(sy_str) == 4 else 2000 + int(sy_str)
+            em = MONTH_MAP.get(m1.group(3).lower()[:3], 2)
+            ey_str = m1.group(4)
+            ey = int(ey_str) if len(ey_str) == 4 else 2000 + int(ey_str)
+            return sm, sy, em, ey
+            
+        m2 = re.search(r'(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\s*(?:-|to|through)\s*(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})', text)
+        if m2:
+            sm = int(m2.group(1))
+            sy_str = m2.group(3)
+            sy = int(sy_str) if len(sy_str) == 4 else 2000 + int(sy_str)
+            em = int(m2.group(4))
+            ey_str = m2.group(6)
+            ey = int(ey_str) if len(ey_str) == 4 else 2000 + int(ey_str)
+            return sm, sy, em, ey
+
+        m3 = re.search(months_pat + r'\s+\d{1,2}\s*,?\s*(20\d{2}|\d{2})', text, re.IGNORECASE)
+        if m3:
+            m_num = MONTH_MAP.get(m3.group(1).lower()[:3], 1)
+            y_str = m3.group(2)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num, m_num, y_num
+            
+    return 1, 2025, 2, 2025
+
 def run_td_pipeline(all_pages_words, pdf_path, csv_output=None):
     print("=== STARTING TD BANK PROCESSING ===")
     
@@ -1325,29 +1390,35 @@ def run_td_pipeline(all_pages_words, pdf_path, csv_output=None):
         print("Error: Page 1 not found.")
         return
         
-    p1_text = ' '.join(w['text'] for w in p1_words)
-    months_pattern = r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)'
-    period_match = re.search(
-        months_pattern + r'\s+\d{1,2}\s+(\d{4})\s*-\s*' + months_pattern + r'\s+\d{1,2}\s+(\d{4})',
-        p1_text.lower()
-    )
-    start_year, end_year = 2025, 2025
-    start_month, end_month = 1, 2
-    if period_match:
-        start_year = int(period_match.group(2))
-        end_year = int(period_match.group(4))
-        months_map = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
-        start_month = months_map.get(period_match.group(1), 1)
-        end_month = months_map.get(period_match.group(3), 2)
-        
-    def get_date_iso(date_str):
-        m = re.match(r'(\d{2})/(\d{2})', date_str)
+    start_month, start_year, end_month, end_year = extract_td_statement_date(p1_words, pdf_path)
+    print(f"--> EXTRACTED TD STATEMENT PERIOD: {start_month}/{start_year} to {end_month}/{end_year}")
+    
+    def format_td_date(date_str):
+        m = re.match(r'(\d{1,2})/(\d{1,2})', date_str)
         if not m:
-            return "2025-01-01"
-        month = int(m.group(1))
-        day = int(m.group(2))
-        year = start_year if month == start_month else end_year
-        return f"{year}-{month:02d}-{day:02d}"
+            return f"01/01/{end_year}"
+        m_int = int(m.group(1))
+        d_int = int(m.group(2))
+        
+        if start_month and end_month and start_year and end_year:
+            if m_int == start_month:
+                tx_year = start_year
+            elif m_int == end_month:
+                tx_year = end_year
+            elif start_month > end_month:
+                if m_int >= start_month:
+                    tx_year = start_year
+                else:
+                    tx_year = end_year
+            else:
+                if m_int > end_month:
+                    tx_year = end_year - 1
+                else:
+                    tx_year = end_year
+        else:
+            tx_year = 2025
+            
+        return f"{m_int:02d}/{d_int:02d}/{tx_year}"
 
     period = None
     all_p1_lines = group_words_into_lines(p1_words, y_tol=8)
@@ -1467,7 +1538,7 @@ def run_td_pipeline(all_pages_words, pdf_path, csv_output=None):
                     desc_str = ' '.join(line_txt for _, line_txt in desc_lines).strip()
                     
                     details.append({
-                        'date': get_date_iso(dates[i]['text']),
+                        'date': format_td_date(dates[i]['text']),
                         'amount': amounts[i]['value'],
                         'description': desc_str,
                         'category': cat
