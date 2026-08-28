@@ -1982,19 +1982,22 @@
             let processedFilesCount = 0;
             let allExtractedChecks = [];
 
+            showAlert(`📷 Processing ${validFiles.length} check file(s)...`, 'info');
+
             if (clientName && (!currentHistoryRecords || currentHistoryRecords.length === 0)) {
                 try {
-                    const histRes = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 1500);
+                    const histRes = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
                     if (histRes.ok) {
                         const histData = await histRes.json();
                         currentHistoryRecords = histData.historyRules || [];
                     }
                 } catch (e) {
-                    console.error("Error pre-fetching history rules for check matching:", e);
+                    console.warn("History rules pre-fetch skipped or timed out:", e);
                 }
             }
-
-            showAlert(`📷 Processing ${validFiles.length} check file(s)...`, 'info');
 
             try {
                 for (let i = 0; i < validFiles.length; i++) {
