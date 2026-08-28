@@ -1529,6 +1529,45 @@ def run_td_pipeline(all_pages_words, pdf_path, csv_output=None):
         
     return formatted_df, reconciliation, 1, period, warnings
 
+def extract_truist_statement_date(p1_words=None, pdf_path=None):
+    """
+    Extracts statement ending date (month, 4-digit year) from Page 1 of a Truist statement.
+    Checks under header titles like 'Your account statement' / 'For MM/DD/YYYY'.
+    Returns (statement_month, statement_year).
+    """
+    text_candidates = []
+    
+    if pdf_path:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                text_candidates.append(doc[0].get_text('text'))
+            doc.close()
+        except Exception:
+            pass
+            
+    if p1_words:
+        words_sorted = sorted(p1_words, key=lambda w: (w.get('center_y', 0), w.get('center_x', 0)))
+        text_candidates.append(' '.join(w.get('text', '') for w in words_sorted))
+        
+    for text in text_candidates:
+        m = re.search(r'for\s+(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})', text, re.IGNORECASE)
+        if m:
+            m_num = int(m.group(1))
+            y_str = m.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+        m_general = re.search(r'\b(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\b', text)
+        if m_general:
+            m_num = int(m_general.group(1))
+            y_str = m_general.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+    return 1, 2025
+
 def run_truist_pipeline(all_pages_words, pdf_path, csv_output=None):
     print("=== STARTING TRUIST BANK PROCESSING ===")
     
@@ -1537,19 +1576,22 @@ def run_truist_pipeline(all_pages_words, pdf_path, csv_output=None):
         print("Error: Page 1 not found.")
         return
         
-    p1_text = ' '.join(w['text'] for w in p1_words)
-    year = 2025
-    for_match = re.search(r'for\s+\d{2}/\d{2}/(\d{4})', p1_text.lower())
-    if for_match:
-        year = int(for_match.group(1))
-        
-    def get_date_iso(date_str):
-        m = re.match(r'(\d{2})/(\d{2})', date_str)
+    stmt_month, stmt_year = extract_truist_statement_date(p1_words, pdf_path)
+    print(f"--> EXTRACTED TRUIST STATEMENT DATE: Month={stmt_month}, Year={stmt_year}")
+    
+    def format_truist_date(date_str):
+        m = re.match(r'(\d{1,2})/(\d{1,2})', date_str)
         if not m:
-            return "2025-01-01"
-        month = int(m.group(1))
-        day = int(m.group(2))
-        return f"{year}-{month:02d}-{day:02d}"
+            return f"01/01/{stmt_year}"
+        m_int = int(m.group(1))
+        d_int = int(m.group(2))
+        
+        if stmt_month and m_int > stmt_month:
+            tx_year = stmt_year - 1
+        else:
+            tx_year = stmt_year
+            
+        return f"{m_int:02d}/{d_int:02d}/{tx_year}"
 
     left_words = [w for w in p1_words if w['center_x'] < 400 and w['center_y'] < 800]
     right_words = [w for w in p1_words if 400 <= w['center_x'] < 700 and w['center_y'] < 800]
@@ -1679,7 +1721,7 @@ def run_truist_pipeline(all_pages_words, pdf_path, csv_output=None):
                             chk_num = match_chk.group(2)
                             amount = clean_amount(match_chk.group(3))
                             details.append({
-                                'date': get_date_iso(date_str),
+                                'date': format_truist_date(date_str),
                                 'amount': amount,
                                 'description': f"Check {chk_num}",
                                 'category': 'Checks'
@@ -1717,7 +1759,7 @@ def run_truist_pipeline(all_pages_words, pdf_path, csv_output=None):
                         desc_str = ' '.join(line_txt for _, line_txt in desc_lines).strip()
                         
                         details.append({
-                            'date': get_date_iso(dates[i]['text']),
+                            'date': format_truist_date(dates[i]['text']),
                             'amount': amounts[i]['value'],
                             'description': desc_str,
                             'category': cat
