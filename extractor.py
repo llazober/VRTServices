@@ -2026,6 +2026,7 @@ def run_extraction(pdf_path, temp_dir, create_csv=False, use_history=False, clie
     mapped_names = []
     mapped_confidences = []
     mapped_sources = []
+    mapped_matched_descs = []  # matched rule description → Reference field fallback
 
     for _, row in formatted_df.iterrows():
         dep_val = row.get("Deposits")
@@ -2033,7 +2034,7 @@ def run_extraction(pdf_path, temp_dir, create_csv=False, use_history=False, clie
         raw_desc = str(row.get("description") or row.get("Description") or "")
         
         if use_history and history_rules:
-            acct_num, acct_name, conf = match_gl_account(
+            acct_num, acct_name, conf, matched_desc = match_gl_account(
                 raw_desc=raw_desc,
                 history_rules=history_rules,
                 default_deposit="260",
@@ -2044,16 +2045,19 @@ def run_extraction(pdf_path, temp_dir, create_csv=False, use_history=False, clie
             mapped_names.append(acct_name)
             mapped_confidences.append(conf)
             mapped_sources.append("Matched" if conf > 0 else "Default")
+            mapped_matched_descs.append(matched_desc)
         else:
             mapped_accounts.append("260" if has_dep else default_withdrawal)
             mapped_names.append("Default Deposit" if has_dep else "Default Expense")
             mapped_confidences.append(0.0)
             mapped_sources.append("Default")
+            mapped_matched_descs.append("")
 
     formatted_df["account"] = mapped_accounts
     formatted_df["account_name"] = mapped_names
     formatted_df["match_confidence"] = mapped_confidences
     formatted_df["match_source"] = mapped_sources
+    formatted_df["matched_description"] = mapped_matched_descs
 
     # Convert NaN to None for JSON compliance
     clean_df = formatted_df.astype(object).where(pd.notnull(formatted_df), None)

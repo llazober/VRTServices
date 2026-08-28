@@ -1793,8 +1793,19 @@
                         td.innerHTML = contentHTML;
                     } else if (key === 'checknumber') {
                         td.style.color = 'var(--text-muted)';
-                        const checkNum = val !== null && val !== undefined && !isNaN(val) ? val : '';
-                        td.textContent = checkNum;
+                        const checkNum = val !== null && val !== undefined && String(val).trim() !== '' && !isNaN(val) ? String(val).trim() : '';
+                        if (checkNum) {
+                            // Check number present — always display it, never override
+                            td.textContent = checkNum;
+                        } else if (tx.matched_description && String(tx.matched_description).trim() !== '' && tx.match_source === 'Matched') {
+                            // No check number but rule matched — show matched description as reference hint
+                            td.textContent = String(tx.matched_description).trim();
+                            td.style.fontStyle = 'italic';
+                            td.style.fontSize = '0.82rem';
+                            td.title = 'Reference from matched history rule';
+                        } else {
+                            td.textContent = '';
+                        }
                     } else if (key === 'description') {
                         td.style.color = 'var(--text-main)';
                         td.style.maxWidth = '250px';
@@ -1891,7 +1902,18 @@
                         } else if (f.type === 'credit') {
                             val = hasCredit ? String(tx.Withdrawals) : '';
                         } else if (f.type === 'reference') {
-                            val = tx.checknumber !== null && tx.checknumber !== undefined && !isNaN(tx.checknumber) && tx.checknumber !== '' ? String(tx.checknumber) : '';
+                            // Check number ALWAYS wins — rule description only fills in when reference is empty/null
+                            const hasCheckNum = tx.checknumber !== null
+                                             && tx.checknumber !== undefined
+                                             && String(tx.checknumber).trim() !== ''
+                                             && !isNaN(tx.checknumber);
+                            if (hasCheckNum) {
+                                val = String(tx.checknumber);
+                            } else if (tx.matched_description && String(tx.matched_description).trim() !== '' && tx.match_source === 'Matched') {
+                                val = String(tx.matched_description).trim();
+                            } else {
+                                val = '';
+                            }
                         }
                         return csvEscape(val);
                     });
