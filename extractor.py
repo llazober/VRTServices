@@ -2263,7 +2263,7 @@ def extract_check_images(file_path, temp_dir, use_history=True, client_history_f
         match_src = "Default"
         check_desc = payee or for_payee or business_name
         if check_desc:
-            acct_num, acct_name, conf = match_gl_account(
+            acct_num, acct_name, conf, _matched_desc = match_gl_account(
                 raw_desc=check_desc,
                 history_rules=history_rules,
                 default_deposit="260",
