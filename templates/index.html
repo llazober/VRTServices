@@ -1733,7 +1733,7 @@
             headerRow.style.textAlign = 'left';
 
             const firstTx = result.transactions[0] || {};
-            let keys = Object.keys(firstTx).filter(k => !['account_name', 'match_confidence', 'match_source'].includes(k));
+            let keys = Object.keys(firstTx).filter(k => !['account_name', 'match_confidence', 'match_source', 'matched_description'].includes(k));
             if (keys.includes('account')) {
                 keys = keys.filter(k => k !== 'account');
                 const dateIdx = keys.indexOf('date');
@@ -2039,7 +2039,9 @@
                                         extractedNums.includes(targetNum) ||
                                         normalizedNums.includes(targetNorm) ||
                                         allTxNums.includes(targetNum) ||
-                                        (targetNorm && allTxNums.includes(targetNorm));
+                                        (targetNorm && allTxNums.includes(targetNorm)) ||
+                                        (tx.checknumber && String(tx.checknumber).trim() === targetNum) ||
+                                        (tx.checknumber && String(tx.checknumber).trim() === targetNorm);
 
                                     if (matchesCheckNum) {
                                         if (payee) tx.description = payee;
