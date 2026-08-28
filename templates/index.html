@@ -2082,14 +2082,22 @@
                                             let historyMatched = false;
                                             if (currentHistoryRecords && currentHistoryRecords.length > 0) {
                                                 const cleanPayee = payee.toUpperCase().trim();
+                                                const matchCandidates = [
+                                                    cleanPayee,
+                                                    targetNum.toUpperCase().trim(),
+                                                    (cleanPayee + ' ' + targetNum).trim()
+                                                ].filter(Boolean);
+
                                                 for (const rule of currentHistoryRecords) {
                                                     const pattern = (rule.pattern || '').toUpperCase().trim();
                                                     const acctNum = (rule.accountNumber || '').trim();
-                                                    
-                                                    const isPatternMatch = 
-                                                        (cleanPayee === pattern) ||
-                                                        (pattern.length >= 3 && cleanPayee.includes(pattern)) ||
-                                                        (pattern.length >= 2 && new RegExp('\\b' + pattern.replace(/[^A-Z0-9]/g, '') + '\\b', 'i').test(cleanPayee));
+                                                    if (!pattern || !acctNum) continue;
+
+                                                    const isPatternMatch = matchCandidates.some(txt => 
+                                                        (txt === pattern) ||
+                                                        (pattern.length >= 3 && txt.includes(pattern)) ||
+                                                        (pattern.length >= 2 && new RegExp('\\b' + pattern.replace(/[^A-Z0-9]/g, '') + '\\b', 'i').test(txt))
+                                                    );
 
                                                     if (isPatternMatch) {
                                                         tx.account = acctNum;

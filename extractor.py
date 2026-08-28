@@ -2258,10 +2258,10 @@ def extract_check_images(file_path, temp_dir, use_history=True, client_history_f
                 except ValueError:
                     pass
 
-        # 5. GL Account Matching for Check Payee
+        # 5. GL Account Matching for Check Payee & Check Number
         acct_num, acct_name, conf = None, None, 0.0
         match_src = "Default"
-        check_desc = payee or for_payee or business_name
+        check_desc = f"{payee or ''} {check_number or ''}".strip() or for_payee or business_name
         if check_desc:
             acct_num, acct_name, conf, _matched_desc = match_gl_account(
                 raw_desc=check_desc,
