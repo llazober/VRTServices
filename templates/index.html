@@ -2029,6 +2029,7 @@
                                         String(tx.reference || ''),
                                         String(tx.Reference || ''),
                                         String(tx.ref || ''),
+                                        String(tx.matched_description || ''),
                                         String(tx.description || '')
                                     ].join(' ');
 
@@ -2041,7 +2042,9 @@
                                         allTxNums.includes(targetNum) ||
                                         (targetNorm && allTxNums.includes(targetNorm)) ||
                                         (tx.checknumber && String(tx.checknumber).trim() === targetNum) ||
-                                        (tx.checknumber && String(tx.checknumber).trim() === targetNorm);
+                                        (tx.checknumber && String(tx.checknumber).trim() === targetNorm) ||
+                                        (tx.matched_description && String(tx.matched_description).trim() === targetNum) ||
+                                        (tx.matched_description && String(tx.matched_description).trim() === targetNorm);
 
                                     if (matchesCheckNum) {
                                         if (payee) tx.description = payee;
@@ -3439,10 +3442,10 @@
                         const targetNorm = targetNum.replace(/^0+/, '');
                         const payee = (chk.payee || chk.business_name || '').trim();
                         currentResult.transactions.forEach(tx => {
-                            const allNums = [tx.checknumber, tx.check_number, tx.checkNo, tx.check_no, tx.reference, tx.Reference, tx.ref, tx.description].map(v => String(v || '')).join(' ');
+                            const allNums = [tx.checknumber, tx.check_number, tx.checkNo, tx.check_no, tx.reference, tx.Reference, tx.ref, tx.matched_description, tx.description].map(v => String(v || '')).join(' ');
                             const nums = (allNums.match(/\b\d{3,8}\b/g) || []);
                             const norms = nums.map(n => n.replace(/^0+/, ''));
-                            if (nums.includes(targetNum) || norms.includes(targetNorm) || allNums.includes(targetNum)) {
+                            if (nums.includes(targetNum) || norms.includes(targetNorm) || allNums.includes(targetNum) || (tx.matched_description && String(tx.matched_description).trim() === targetNum)) {
                                 if (payee) tx.description = payee;
                                 if (chk.account && chk.match_confidence > 0) {
                                     tx.account = chk.account; tx.account_name = chk.account_name || 'Mapped Account'; tx.match_source = 'Matched';
