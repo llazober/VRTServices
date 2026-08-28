@@ -2190,13 +2190,6 @@
         }
         window.handleCheckPdfUpload = handleCheckPdfUpload;
 
-        const uploadCheckInputEl = document.getElementById('uploadCheckImagesInput');
-        if (uploadCheckInputEl) {
-            uploadCheckInputEl.addEventListener('change', function() {
-                handleCheckPdfUpload(this);
-            });
-        }
-
         // QuickBooks Online Sync Button Listener
         const syncQboBtn = document.getElementById('syncQboBtn');
         if (syncQboBtn) {
