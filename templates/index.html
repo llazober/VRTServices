@@ -1984,21 +1984,6 @@
 
             showAlert(`📷 Processing ${validFiles.length} check file(s)...`, 'info');
 
-            if (clientName && (!currentHistoryRecords || currentHistoryRecords.length === 0)) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 1500);
-                    const histRes = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}`, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    if (histRes.ok) {
-                        const histData = await histRes.json();
-                        currentHistoryRecords = histData.historyRules || [];
-                    }
-                } catch (e) {
-                    console.warn("History rules pre-fetch skipped or timed out:", e);
-                }
-            }
-
             try {
                 for (let i = 0; i < validFiles.length; i++) {
                     const file = validFiles[i];
@@ -2008,7 +1993,8 @@
                     formData.append('file', file);
                     const useHistoryChecked = document.getElementById('useHistoryGlCheckbox')?.checked ?? true;
                     formData.append('use_history', useHistoryChecked ? 'true' : 'false');
-                    formData.append('parent_name', CURRENT_PARENT_NAME);
+                    const parentNameVal = (typeof CURRENT_PARENT_NAME !== 'undefined' && CURRENT_PARENT_NAME) ? CURRENT_PARENT_NAME : 'VRT Services';
+                    formData.append('parent_name', parentNameVal);
                     if (clientName && clientName !== 'DEFAULT') {
                         formData.append('client_name', clientName);
                     }
