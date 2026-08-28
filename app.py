@@ -563,6 +563,9 @@ def init_history_table():
                     "updatedAt"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 ALTER TABLE "ClientTransactionHistory" ADD COLUMN IF NOT EXISTS "description" TEXT;
+                ALTER TABLE "ClientTransactionHistory" ADD COLUMN IF NOT EXISTS "confidenceScore" DOUBLE PRECISION DEFAULT 1.0;
+                ALTER TABLE "ClientTransactionHistory" ALTER COLUMN "confidenceScore" SET DEFAULT 1.0;
+                ALTER TABLE "ClientTransactionHistory" ALTER COLUMN "confidenceScore" DROP NOT NULL;
 
                 DELETE FROM "ClientTransactionHistory" a USING "ClientTransactionHistory" b
                 WHERE a.ctid < b.ctid 
@@ -1070,8 +1073,8 @@ def save_history_rule(client_name: str, pattern: str, account_number: str, accou
                 import uuid
                 new_id = str(uuid.uuid4())
                 cur.execute('''
-                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'USER_EDIT', 1);
+                    INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "confidenceScore", "useCount")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'USER_EDIT', 1.0, 1);
                 ''', (new_id, client_name, parent_name, pattern.upper().strip(), description.strip(), account_number.strip(), account_name.strip(), tx_type))
             conn.commit()
             return True
@@ -1190,7 +1193,7 @@ def record_login(username: str, site: str, ip: str, user_agent: str):
     conn = None
     try:
         conn = get_db_connection("datalazo")
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 'INSERT INTO "LoginLog" (username, site, "ipAddress", "userAgent") VALUES (%s, %s, %s, %s);',
                 (username, site, ip, user_agent)
@@ -3036,7 +3039,6 @@ async def delete_customer_storage_folder(customer_id: int, prefix: str, request:
             conn.close()
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
-# ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
 def format_period_label(period_str, workflow_mode="bookkeeping"):
     if not period_str:
         return "Unknown Period"
@@ -3970,7 +3972,7 @@ async def delete_parent_mapping_endpoint(request: Request, id: str = ""):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute('DELETE FROM "ParentClientMap" WHERE "id" = %s;', (id,))
             conn.commit()
             return {"success": True, "message": "Mapping deleted"}
@@ -3990,7 +3992,7 @@ async def get_history_rules_endpoint(request: Request, clientName: str = "", par
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            query = 'SELECT id, "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount" FROM "ClientTransactionHistory"'
+            query = 'SELECT id, "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "confidenceScore", "useCount" FROM "ClientTransactionHistory"'
             conditions = []
             params = []
             if clientName:
@@ -4060,8 +4062,8 @@ async def save_history_rule_endpoint(request: Request):
                     import uuid
                     new_id = str(uuid.uuid4())
                     cur.execute('''
-                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "confidenceScore", "useCount", "createdAt", "updatedAt")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MANUAL_EDIT', 1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                         RETURNING *;
                     ''', (new_id, client_name, parent_name, pattern, description, account_number, account_name, tx_type))
                     rule = cur.fetchone()
@@ -4168,8 +4170,8 @@ async def upload_history_rules_endpoint(request: Request, clientName: str = Form
                 else:
                     new_id = str(uuid.uuid4())
                     cur.execute('''
-                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "useCount", "createdAt", "updatedAt")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                        INSERT INTO "ClientTransactionHistory" ("id", "clientName", "parentName", "pattern", "description", "accountNumber", "accountName", "transactionType", "source", "confidenceScore", "useCount", "createdAt", "updatedAt")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'CSV_UPLOAD', 1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
                     ''', (new_id, clientName, parent_val, cleaned_pattern, description_val, acct_num, acct_name, tx_type))
                 count += 1
             conn.commit()
