@@ -1958,8 +1958,8 @@
 
         // Check Image Document Upload & Transaction Description Replacement Handler
         async function handleCheckPdfUpload(input) {
-            console.log("--> [CHECK UPLOAD] handleCheckPdfUpload triggered:", input.files);
-            if (!input.files || input.files.length === 0) return;
+            console.log("--> [CHECK UPLOAD] handleCheckPdfUpload triggered:", input ? input.files : "no input");
+            if (!input || !input.files || input.files.length === 0) return;
 
             const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg'];
             const validFiles = Array.from(input.files).filter(file => {
@@ -2187,6 +2187,14 @@
             } finally {
                 input.value = '';
             }
+        }
+        window.handleCheckPdfUpload = handleCheckPdfUpload;
+
+        const uploadCheckInputEl = document.getElementById('uploadCheckImagesInput');
+        if (uploadCheckInputEl) {
+            uploadCheckInputEl.addEventListener('change', function() {
+                handleCheckPdfUpload(this);
+            });
         }
 
         // QuickBooks Online Sync Button Listener
