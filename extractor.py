@@ -1071,10 +1071,61 @@ def run_pnc_pipeline(all_pages_words, pdf_path, csv_output=None):
         
     return formatted_df, reconciliation, 1, period, warnings
 
+def extract_boa_statement_date(p1_words=None, pdf_path=None):
+    """
+    Extracts statement ending date (month, 4-digit year) from Page 1 of a Bank of America statement.
+    Checks under header lines like 'for April 1, 2026 to April 30, 2026' or '04/01/26 to 04/30/26'.
+    Returns (statement_month, statement_year).
+    """
+    MONTH_MAP = {
+        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+    }
+    
+    text_candidates = []
+    
+    if pdf_path:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                text_candidates.append(doc[0].get_text('text'))
+            doc.close()
+        except Exception:
+            pass
+            
+    if p1_words:
+        words_sorted = sorted(p1_words, key=lambda w: (w.get('center_y', 0), w.get('center_x', 0)))
+        text_candidates.append(' '.join(w.get('text', '') for w in words_sorted))
+        
+    months_pat = r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+    
+    for text in text_candidates:
+        m1 = re.search(months_pat + r'\s+\d{1,2},?\s+(20\d{2}|\d{2})', text, re.IGNORECASE)
+        if m1:
+            m_num = MONTH_MAP.get(m1.group(1).lower()[:3], 1)
+            y_str = m1.group(2)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+        m2 = re.search(r'\b(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})\b', text)
+        if m2:
+            m_num = int(m2.group(1))
+            y_str = m2.group(3)
+            y_num = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            return m_num, y_num
+            
+    return 1, 2026
+
 def run_boa_pipeline(all_pages_words, pdf_path, csv_output=None):
     print("=== STARTING BANK OF AMERICA PROCESSING ===")
     
     p1_words = all_pages_words.get('page_1', [])
+    stmt_month, stmt_year = extract_boa_statement_date(p1_words, pdf_path)
+    print(f"--> EXTRACTED BOA STATEMENT DATE: Month={stmt_month}, Year={stmt_year}")
+    
     if not p1_words:
         print("Error: Page 1 not found.")
         return
@@ -1249,15 +1300,25 @@ def run_boa_pipeline(all_pages_words, pdf_path, csv_output=None):
                             
     for t in details:
         date_str = t['date'].replace('-', '')
-        match = re.search(r'(\d{2})/(\d{2})/(\d{2})', date_str)
-        if match:
-            t['date'] = f"20{match.group(3)}-{match.group(1)}-{match.group(2)}"
+        match_full = re.search(r'(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})', date_str)
+        if match_full:
+            m_int = int(match_full.group(1))
+            d_int = int(match_full.group(2))
+            y_str = match_full.group(3)
+            y_int = int(y_str) if len(y_str) == 4 else 2000 + int(y_str)
+            t['date'] = f"{m_int:02d}/{d_int:02d}/{y_int}"
         else:
-            match_short = re.search(r'(\d{2})/(\d{2})', date_str)
+            match_short = re.search(r'(\d{1,2})/(\d{1,2})', date_str)
             if match_short:
-                t['date'] = f"2026-{match_short.group(1)}-{match_short.group(2)}"
+                m_int = int(match_short.group(1))
+                d_int = int(match_short.group(2))
+                if stmt_month and m_int > stmt_month:
+                    tx_year = stmt_year - 1
+                else:
+                    tx_year = stmt_year
+                t['date'] = f"{m_int:02d}/{d_int:02d}/{tx_year}"
             else:
-                t['date'] = "2026-01-01"
+                t['date'] = f"01/01/{stmt_year}"
                 
         t['description'] = re.sub(r'\s+', ' ', t['description']).strip()
         
