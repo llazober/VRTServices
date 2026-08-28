@@ -597,11 +597,11 @@
                             </a>
                             {% endif %}
                             {% endif %}
-                            <button type="button" onclick="const el=document.getElementById('uploadCheckImagesInput'); if(el){ el.value=null; el.click(); }"
+                            <label for="uploadCheckImagesInput"
                                 style="padding: 8px 18px; font-size: 0.8rem; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; width: auto; font-weight: 600; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;"
                                 title="Upload Check Image scan to extract payee and replace Check description">
                                 📷 Upload Check Images
-                            </button>
+                            </label>
                             <input type="file" id="uploadCheckImagesInput" accept=".pdf,.png,.jpg,.jpeg" multiple style="display: none;"
                                 onchange="handleCheckPdfUpload(this)">
                             <button onclick="openDoPickerModal('checks')" style="padding: 8px 14px; font-size: 0.8rem; background: rgba(0,242,254,0.08); border: 1px solid rgba(0,242,254,0.3); color: #00f2fe; width: auto; font-weight: 600; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;" title="Pick check images from Cloud Storage" onmouseover="this.style.background='rgba(0,242,254,0.16)'" onmouseout="this.style.background='rgba(0,242,254,0.08)'">
@@ -1961,15 +1961,17 @@
             console.log("--> [CHECK UPLOAD] handleCheckPdfUpload triggered:", input ? input.files : "no input");
             if (!input || !input.files || input.files.length === 0) return;
 
+            const selectedFiles = Array.from(input.files);
+            input.value = '';
+
             const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg'];
-            const validFiles = Array.from(input.files).filter(file => {
+            const validFiles = selectedFiles.filter(file => {
                 const fileExt = '.' + file.name.split('.').pop().toLowerCase();
                 return allowedExts.includes(fileExt);
             });
 
             if (validFiles.length === 0) {
                 showAlert('Please select valid check document files (.pdf, .png, .jpg, .jpeg).', 'error');
-                input.value = '';
                 return;
             }
 
