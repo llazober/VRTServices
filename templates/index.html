@@ -1211,7 +1211,12 @@
           <div style="flex:1; overflow-y:auto; padding:0 8px;">
             <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
               <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.08); color:#64748b; font-size:0.7rem; text-transform:uppercase;">
-                <th style="padding:8px 12px; text-align:left;">Name</th>
+                <th style="padding:8px 12px; text-align:left;">
+                  <div style="display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="doPickerSelectAllCb" onclick="toggleDoPickerSelectAll(this.checked)" style="accent-color:#00f2fe; width:15px; height:15px; cursor:pointer; display:none;" title="Select / Deselect All Files in folder">
+                    <span>NAME</span>
+                  </div>
+                </th>
                 <th style="padding:8px 12px; width:80px;">Size</th>
                 <th style="padding:8px 12px; width:100px; text-align:right;">Action</th>
               </tr></thead>
@@ -1221,7 +1226,10 @@
         </div>
         <!-- Action Bar -->
         <div id="doPickerActionBar" style="display:none; padding:12px 24px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.25); justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <span id="doPickerSelectedInfo" style="font-size:0.78rem; color:#00f2fe; font-family:monospace;"></span>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <button id="doPickerSelectAllBtn" onclick="toggleDoPickerSelectAllBtn()" style="display:none; padding:6px 14px; background:rgba(0,242,254,0.12); border:1px solid rgba(0,242,254,0.3); color:#00f2fe; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(0,242,254,0.2)'" onmouseout="this.style.background='rgba(0,242,254,0.12)'">☑️ Select All</button>
+            <span id="doPickerSelectedInfo" style="font-size:0.78rem; color:#00f2fe; font-family:monospace;"></span>
+          </div>
           <button id="doPickerConfirmChecksBtn" onclick="processDoChecks()" style="display:none; padding:8px 20px; background:linear-gradient(135deg,#00f2fe,#4facfe); border:none; color:#000; font-weight:800; border-radius:10px; font-size:0.8rem; cursor:pointer;">✅ Process Selected Check Files</button>
         </div>
       </div>
@@ -1526,6 +1534,7 @@
         var doPickerCurrentPrefix = '';
         var doPickerRootFolder = '';
         var doPickerSelectedCheckKeys = [];
+        var doPickerCurrentFolderFiles = [];
 
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
@@ -3299,6 +3308,11 @@
             const current = doPickerCurrentPrefix;
             let html = '';
 
+            doPickerCurrentFolderFiles = files.filter(f => {
+                const ext = '.' + f.name.split('.').pop().toLowerCase();
+                return allowedExts.includes(ext);
+            });
+
             // Back button if not at root
             if (current !== root && current.startsWith(root)) {
                 const up = current.endsWith('/') ? current.slice(0, -1) : current;
@@ -3378,11 +3392,59 @@
                     } else {
                         doPickerSelectedCheckKeys = doPickerSelectedCheckKeys.filter(k => k !== key);
                     }
+                    updateDoPickerMasterCheckboxState();
                     updateDoPickerCheckCount();
                 });
             });
 
+            updateDoPickerMasterCheckboxState();
             updateDoPickerCheckCount();
+        }
+
+        function updateDoPickerMasterCheckboxState() {
+            const selectAllCb = document.getElementById('doPickerSelectAllCb');
+            const selectAllBtn = document.getElementById('doPickerSelectAllBtn');
+            if (doPickerMode === 'checks' && doPickerCurrentFolderFiles.length > 0) {
+                if (selectAllCb) selectAllCb.style.display = 'inline-block';
+                if (selectAllBtn) selectAllBtn.style.display = 'inline-flex';
+
+                const allSelected = doPickerCurrentFolderFiles.every(f => doPickerSelectedCheckKeys.includes(f.key));
+                if (selectAllCb) selectAllCb.checked = allSelected;
+                if (selectAllBtn) selectAllBtn.textContent = allSelected ? '☐ Deselect All' : '☑️ Select All';
+            } else {
+                if (selectAllCb) selectAllCb.style.display = 'none';
+                if (selectAllBtn) selectAllBtn.style.display = 'none';
+            }
+        }
+
+        function toggleDoPickerSelectAll(forceState) {
+            if (doPickerMode !== 'checks' || !doPickerCurrentFolderFiles.length) return;
+            const allSelected = doPickerCurrentFolderFiles.every(f => doPickerSelectedCheckKeys.includes(f.key));
+            const shouldSelect = (typeof forceState === 'boolean') ? forceState : !allSelected;
+
+            doPickerCurrentFolderFiles.forEach(f => {
+                if (shouldSelect) {
+                    if (!doPickerSelectedCheckKeys.includes(f.key)) doPickerSelectedCheckKeys.push(f.key);
+                } else {
+                    doPickerSelectedCheckKeys = doPickerSelectedCheckKeys.filter(k => k !== f.key);
+                }
+            });
+
+            const tbody = document.getElementById('doPickerFilesTbody');
+            if (tbody) {
+                tbody.querySelectorAll('.do-check-select').forEach(cb => {
+                    const key = cb.getAttribute('data-key');
+                    cb.checked = doPickerSelectedCheckKeys.includes(key);
+                });
+            }
+
+            updateDoPickerMasterCheckboxState();
+            updateDoPickerCheckCount();
+        }
+
+        function toggleDoPickerSelectAllBtn() {
+            const allSelected = doPickerCurrentFolderFiles.every(f => doPickerSelectedCheckKeys.includes(f.key));
+            toggleDoPickerSelectAll(!allSelected);
         }
 
         function updateDoPickerCheckCount() {
