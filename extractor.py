@@ -563,7 +563,7 @@ def run_wells_fargo_pipeline(all_pages_words, pdf_path, csv_output=None):
             line_text = ' '.join(w['text'] for w in sorted_line)
             
             avg_y = sum(w['center_y'] for w in line) / len(line)
-            if avg_y >= 500:
+            if avg_y >= 600:
                 continue
                 
             matches = re.findall(r'\b\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\b', line_text)
