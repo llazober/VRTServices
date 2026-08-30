@@ -197,7 +197,7 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
         "progress_percent": overall_percent
     }
 
-def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optional[Dict] = None, passages: List[Dict] = None) -> str:
+def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optional[Dict] = None, passages: List[Dict] = None, customer_ref_not_found: bool = False, searched_ref: str = None) -> str:
     """Synthesize final Chatbot response using Gemini, OpenAI, or Fallback Synthesizer."""
     gemini_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
     openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
@@ -221,6 +221,10 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         for item in status_info["tax_checklist"]:
             status_symbol = "✅ DONE" if item["is_completed"] else "⏳ PENDING"
             context_str += f"- [{status_symbol}] {item['item_label']} (Tax Return)\n"
+    elif customer_ref_not_found and searched_ref:
+        context_str += f"\n--- CUSTOMER SEARCH NOTICE ---\n"
+        context_str += f"The customer reference code '{searched_ref}' was NOT found in the database for {company_name}.\n"
+        context_str += f"Inform the user clearly that customer reference code '{searched_ref}' does not exist in our database. Ask them to verify their reference code (e.g. CUST-1001) or contact support.\n"
             
     if passages:
         context_str += f"\n--- KNOWLEDGE BASE PASSAGES ---\n"
@@ -232,6 +236,7 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         "Your goal is to provide concise, friendly, accurate, and professional help to clients and visitors. "
         "Always use clean Markdown formatting (bolding, bullet points, checklists). "
         "If answering a customer task status query, clearly specify the Bookkeeping Period (e.g. July 2026) and Tax Preparation Year (e.g. Tax Year 2025), along with their progress and pending actions. "
+        "If a customer reference code was searched but NOT found in the database, explicitly state that the customer reference code does not exist in our records and ask them to verify their reference code (e.g., CUST-1001) or contact support. "
         "If giving general tax information, add a brief note that information is for guidance and formal advice is finalized upon review."
     )
 
@@ -316,6 +321,10 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
             res_lines.append(f"- {icon} **{item['item_label']}** (`Tax Return`)")
             
         res_lines.append("\n*To send additional files or inquire further, reply directly to your portal emails or upload via customer storage.*")
+    elif customer_ref_not_found and searched_ref:
+        res_lines.append(f"⚠️ **Customer Reference Code Not Found**\n")
+        res_lines.append(f"We could not find any active customer record matching reference code **`{searched_ref}`** for **{company_name}**.\n")
+        res_lines.append("Please verify your reference number (e.g. `CUST-1001`) and try again, or contact our support team if you need further assistance.")
     elif passages:
         res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
         for p in passages:

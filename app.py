@@ -4829,20 +4829,34 @@ async def chat_ai_assistant(request: Request):
             raise HTTPException(status_code=400, detail="Message content is required.")
 
         # Extract reference code from message if present e.g. "cust-4059", "CUST-1001", "4059"
-        m_ref = re.search(r'(?:CUST-?|\b)(\d{3,5})\b', user_message, re.IGNORECASE)
+        m_ref = re.search(r'\b(?:CUST-)?(\d{3,6})\b', user_message, re.IGNORECASE)
+        is_ref_lookup = False
         if not customer_ref and m_ref:
-            customer_ref = m_ref.group(1)
+            msg_lower = user_message.lower()
+            if "cust" in msg_lower or re.match(r'^\s*(?:check|status|my status|cust-?)?\s*\d{3,6}\s*$', msg_lower):
+                customer_ref = m_ref.group(1)
+                is_ref_lookup = True
+        elif customer_ref:
+            is_ref_lookup = True
 
         import rag_engine
         tenant_slug = rag_engine.get_tenant_slug(parent_name)
 
         status_info = None
+        customer_ref_not_found = False
+        searched_ref = None
+
+        if customer_ref:
+            searched_ref = f"CUST-{customer_ref}" if not str(customer_ref).upper().startswith("CUST-") else customer_ref
+
         conn = None
         try:
             conn = get_db_connection()
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if customer_ref:
                     status_info = rag_engine.get_customer_task_status(cur, customer_ref, parent_name)
+                    if not status_info and is_ref_lookup:
+                        customer_ref_not_found = True
         except Exception as e_db:
             print(f"[RAG DB NOTICE]: {e_db}")
         finally:
@@ -4857,7 +4871,9 @@ async def chat_ai_assistant(request: Request):
             user_query=user_message,
             parent_name=parent_name,
             status_info=status_info,
-            passages=passages
+            passages=passages,
+            customer_ref_not_found=customer_ref_not_found,
+            searched_ref=searched_ref
         )
 
         return {
