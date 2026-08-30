@@ -625,10 +625,31 @@ def run_wells_fargo_pipeline(all_pages_words, pdf_path, csv_output=None):
             w_c['center_y'] = w['center_y'] - w['center_x'] * skew
             corr_words.append(w_c)
             
-        if page_num == summary_page:
-            y_start = 550
-        else:
-            y_start = 265
+        # Group all words on the page first to detect table/heading boundaries
+        all_lines = []
+        for w in sorted(corr_words, key=lambda w: w['center_y']):
+            placed = False
+            for line in all_lines:
+                avg_y = sum(item['center_y'] for item in line) / len(line)
+                if abs(w['center_y'] - avg_y) <= 9:
+                    line.append(w)
+                    placed = True
+                    break
+            if not placed:
+                all_lines.append([w])
+
+        y_start = None
+        for line in all_lines:
+            full_line_str = ' '.join(w['text'] for w in sorted(line, key=lambda w: w['center_x'])).strip()
+            if 'transaction history' in full_line_str.lower():
+                y_start = sum(w['center_y'] for w in line) / len(line) - 5
+                break
+
+        if y_start is None:
+            if page_num == summary_page:
+                y_start = 700
+            else:
+                y_start = 265
             
         table_words = [w for w in corr_words if w['center_y'] > y_start]
         
