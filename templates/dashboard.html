@@ -3214,6 +3214,23 @@
             }
         }
 
+        function getNextCustomerNumber() {
+            let maxNum = 1000;
+            if (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords)) {
+                currentCustomerRecords.forEach(c => {
+                    const numStr = (c.custumer_number || '').toString();
+                    const match = numStr.match(/\d+/);
+                    if (match) {
+                        const val = parseInt(match[0], 10);
+                        if (!isNaN(val) && val > maxNum && val < 999999) {
+                            maxNum = val;
+                        }
+                    }
+                });
+            }
+            return 'CUST-' + (maxNum + 1);
+        }
+
         function toggleCustomerForm() {
             const form = document.getElementById('customerForm');
             const btn = document.getElementById('toggleCustomerFormBtn');
@@ -3221,7 +3238,7 @@
             if (form.style.display === 'none' || !form.style.display) {
                 const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
                 setVal('customerFormId', '');
-                setVal('customerFormNumber', 'CUST-' + Math.floor(1000 + Math.random() * 9000));
+                setVal('customerFormNumber', getNextCustomerNumber());
                 setVal('customerFormType', 'Business');
                 setVal('customerFormLegalName', '');
                 setVal('customerFormDisplayName', '');
@@ -3247,7 +3264,7 @@
             if (form.style.display === 'none' || !form.style.display) {
                 const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
                 setVal('customerPageFormId', '');
-                setVal('customerPageFormNumber', 'CUST-' + Math.floor(1000 + Math.random() * 9000));
+                setVal('customerPageFormNumber', getNextCustomerNumber());
                 setVal('customerPageFormType', 'Business');
                 setVal('customerPageFormLegalName', '');
                 setVal('customerPageFormDisplayName', '');
