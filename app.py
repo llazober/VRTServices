@@ -371,6 +371,35 @@ def sync_customer_parent_mapping(cur, parent_name: str, legal_name: str, display
         DO UPDATE SET "updatedAt" = CURRENT_TIMESTAMP;
     ''', (str(uuid.uuid4()), p_name, l_name))
 
+def delete_customer_parent_mapping(cur, parent_name: str, legal_name: str, display_name: str = None):
+    """Remove parent-client mapping and associated client data (COA & Vendor rules) when a customer is deleted."""
+    if not parent_name or not legal_name:
+        return
+    p_name = parent_name.strip()
+    l_name = legal_name.strip()
+    d_name = (display_name or "").strip()
+
+    # 1. Delete mapping entry
+    cur.execute('''
+        DELETE FROM "ParentClientMap"
+        WHERE LOWER("parentName") = LOWER(%s)
+          AND (LOWER("clientName") = LOWER(%s) OR (LOWER("clientName") = LOWER(%s) AND %s != ''));
+    ''', (p_name, l_name, d_name, d_name))
+
+    # 2. Clean up associated Chart of Accounts entries
+    cur.execute('''
+        DELETE FROM "ClientChartOfAccounts"
+        WHERE LOWER("parentName") = LOWER(%s)
+          AND (LOWER("clientName") = LOWER(%s) OR (LOWER("clientName") = LOWER(%s) AND %s != ''));
+    ''', (p_name, l_name, d_name, d_name))
+
+    # 3. Clean up associated Vendor Transaction History rules
+    cur.execute('''
+        DELETE FROM "ClientTransactionHistory"
+        WHERE LOWER("parentName") = LOWER(%s)
+          AND (LOWER("clientName") = LOWER(%s) OR (LOWER("clientName") = LOWER(%s) AND %s != ''));
+    ''', (p_name, l_name, d_name, d_name))
+
 def init_customer_table():
     conn = None
     try:
@@ -3466,13 +3495,29 @@ async def delete_customer(customer_id: int, request: Request):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM customer WHERE id = %s RETURNING id;", (customer_id,))
-            deleted = cur.fetchone()
-            if not deleted:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch customer details first to get legal_name, display_name, and parent_name
+            cur.execute("SELECT legal_name, display_name, parent_name FROM customer WHERE id = %s;", (customer_id,))
+            customer = cur.fetchone()
+            if not customer:
                 raise HTTPException(status_code=404, detail="Customer not found")
+
+            # 2. Delete customer record from main customer table
+            cur.execute("DELETE FROM customer WHERE id = %s;", (customer_id,))
+
+            # 3. Clean up matching parent-client mapping, COA, and transaction rules
+            try:
+                delete_customer_parent_mapping(
+                    cur,
+                    customer.get("parent_name"),
+                    customer.get("legal_name"),
+                    customer.get("display_name")
+                )
+            except Exception as map_err:
+                print(f"Warning: Failed to clean up parent mapping/records for customer '{customer.get('legal_name')}': {map_err}")
+
             conn.commit()
-            return {"message": "Customer deleted successfully", "id": customer_id}
+            return {"message": "Customer and associated client mappings deleted successfully", "id": customer_id}
     except HTTPException as he:
         raise he
     except Exception as e:
