@@ -5425,20 +5425,31 @@ async def get_unread_communications_summary(request: Request):
 
 @app.post("/api/communications/mark-all-read")
 async def mark_all_communications_read(request: Request):
-    """Marks all inbound unread communication records as read."""
+    """Marks all inbound unread communication records as read for the active organization."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user_parent = get_user_parent_name(username) or "VRT Services"
 
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("""
+            if user_parent.lower() == "vrt services":
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '')"
+            else:
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s))"
+
+            cur.execute(f"""
                 UPDATE customer_communications
                 SET is_read = TRUE, status = 'READ', read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
-                WHERE direction = 'INBOUND' AND (is_read = FALSE OR is_read IS NULL);
-            """)
+                FROM customer cust
+                WHERE customer_communications.customer_id = cust.id
+                AND customer_communications.direction = 'INBOUND' 
+                AND (customer_communications.is_read = FALSE OR customer_communications.is_read IS NULL)
+                AND {parent_filter};
+            """, (user_parent,))
             conn.commit()
         return {"success": True, "message": "All unread messages marked as read."}
     except Exception as e:

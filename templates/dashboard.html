@@ -870,7 +870,7 @@
                     <span>{{ company_name }}</span>
                 </div>
 
-                <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" onclick="clearAllUnreadAlerts()" title="Click to clear unread email notification badge">
+                <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" onclick="clearAllUnreadAlerts(event)" title="Click to clear unread email notification badge">
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
 
@@ -3644,7 +3644,11 @@
         setInterval(checkUnreadCommunicationsAlerts, 15000);
         document.addEventListener('DOMContentLoaded', checkUnreadCommunicationsAlerts);
 
-        async function clearAllUnreadAlerts() {
+        async function clearAllUnreadAlerts(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
             const badge = document.getElementById('headerUnreadEmailBadge');
             if (badge) badge.style.display = 'none';
             try {
