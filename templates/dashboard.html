@@ -870,7 +870,7 @@
                     <span>{{ company_name }}</span>
                 </div>
 
-                <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" onclick="clearAllUnreadAlerts(event)" title="Click to clear unread email notification badge">
+                <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: default; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" title="Unread email replies indicator — automatically disappears when all replies are read">
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
 
@@ -3644,18 +3644,10 @@
         setInterval(checkUnreadCommunicationsAlerts, 15000);
         document.addEventListener('DOMContentLoaded', checkUnreadCommunicationsAlerts);
 
-        async function clearAllUnreadAlerts(event) {
+        function clearAllUnreadAlerts(event) {
             if (event) {
                 event.preventDefault();
                 event.stopPropagation();
-            }
-            const badge = document.getElementById('headerUnreadEmailBadge');
-            if (badge) badge.style.display = 'none';
-            try {
-                await fetch('/api/communications/mark-all-read', { method: 'POST' });
-                await checkUnreadCommunicationsAlerts();
-            } catch (e) {
-                console.error("Error clearing all unread alerts:", e);
             }
         }
 
