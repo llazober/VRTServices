@@ -1848,8 +1848,20 @@
             loadWorkloadSummary();
         });
 
+        // --- Helper to close all open app modals ---
+        function closeAllAppModals() {
+            ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal'].forEach(id => {
+                const modal = document.getElementById(id);
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.style.opacity = '0';
+                }
+            });
+        }
+
         // --- Support Modal Logic ---
         function openSupportModal() {
+            closeAllAppModals();
             const modal = document.getElementById('supportModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -1957,6 +1969,7 @@
 
         // --- COA Modal Functions ---
         async function openCoaModal() {
+            closeAllAppModals();
             const modal = document.getElementById('coaModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -2125,6 +2138,7 @@
 
         // --- Parent Mappings Modal Functions ---
         async function openMappingsModal() {
+            closeAllAppModals();
             const modal = document.getElementById('mappingsModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -2278,6 +2292,7 @@
 
         // --- History Rules Modal Functions ---
         async function openHistoryModal() {
+            closeAllAppModals();
             const modal = document.getElementById('historyModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -2491,6 +2506,7 @@
         let currentCustomerRecords = [];
 
         async function openCustomerModal() {
+            closeAllAppModals();
             const modal = document.getElementById('customerModal');
             if (!modal) return;
             modal.style.display = 'flex';
@@ -3341,10 +3357,9 @@
             }
         }
 
-        // Auto open customer modal if active tab is customers or URL pathname is /customers
+        // Load customer page data if active tab is customers or URL pathname is /customers
         if (window.location.pathname === '/customers' || '{{ active_tab }}' === 'customers') {
             fetchCustomerRecords(true);
-            openCustomerModal();
         }
 
         // --- PDF Viewer Modal Functions ---
