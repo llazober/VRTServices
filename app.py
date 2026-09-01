@@ -6264,25 +6264,8 @@ async def health_check():
         else:
             resend_detail = "Invalid API Key format (Must start with 're_')"
             
-    from_email = (
-        os.environ.get("RESEND_FROM_EMAIL") or
-        os.environ.get("FROM_EMAIL") or
-        os.environ.get("SENDER_EMAIL") or
-        "support@datalazo.net"
-    )
-    if from_email:
-        from_email = from_email.strip().strip('\'"')
-        if "receive.datalazo.net" in from_email.lower():
-            from_email = from_email.lower().replace("receive.datalazo.net", "datalazo.net")
-        
-    to_email = (
-        os.environ.get("RESEND_TO_EMAIL") or
-        os.environ.get("TO_EMAIL") or
-        os.environ.get("SUPPORT_EMAIL") or
-        "luislazo@datalazo.net"
-    )
-    if to_email:
-        to_email = to_email.strip().strip('\'"')
+    from_email = get_resend_from_email()
+    to_email = get_resend_to_email()
 
     # Overall health check status (depends primarily on extraction pipeline's Google Vision capability)
     overall_status = "ok" if google_status == "ok" else "error"
