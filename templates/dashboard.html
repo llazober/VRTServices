@@ -507,6 +507,35 @@
         }
 
         /* ── Responsive & Small Screen Optimizations ─────────────────── */
+        div[style*="overflow-x: auto"], .table-responsive {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        div[style*="overflow-x: auto"] table, .table-responsive table {
+            min-width: 1100px !important;
+            width: 100% !important;
+        }
+
+        /* Custom sleek horizontal scrollbar */
+        div[style*="overflow-x: auto"]::-webkit-scrollbar {
+            height: 8px;
+        }
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb {
+            background: linear-gradient(90deg, #7f00ff, #e100ff);
+            border-radius: 4px;
+        }
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb:hover {
+            background: #e100ff;
+        }
+
         @media screen and (max-width: 1200px) {
             header.top-header {
                 padding: 0 16px;
@@ -564,13 +593,6 @@
             }
             .company-pill, .user-info {
                 display: none;
-            }
-            /* Table & Modal responsiveness */
-            table {
-                display: block;
-                max-width: 100%;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
             }
             div[style*="max-width: 600px"], div[style*="max-width: 700px"], div[style*="max-width: 800px"] {
                 max-width: 95vw !important;
