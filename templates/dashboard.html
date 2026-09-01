@@ -506,6 +506,80 @@
             fill: currentColor;
         }
 
+        /* ── Responsive & Small Screen Optimizations ─────────────────── */
+        @media screen and (max-width: 1200px) {
+            header.top-header {
+                padding: 0 16px;
+                flex-wrap: wrap;
+                height: auto;
+                min-height: var(--header-height);
+                gap: 10px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            .content-body {
+                padding: 16px;
+                gap: 16px;
+            }
+        }
+
+        @media screen and (max-width: 992px) {
+            body:not(.sidebar-collapsed) main.main-content {
+                margin-left: var(--sidebar-collapsed-width);
+            }
+            body:not(.sidebar-collapsed) aside.sidebar {
+                width: var(--sidebar-collapsed-width);
+            }
+            body:not(.sidebar-collapsed) .logo-text,
+            body:not(.sidebar-collapsed) .nav-label,
+            body:not(.sidebar-collapsed) .nav-text {
+                display: none !important;
+            }
+            .header-right {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .welcome-banner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+                padding: 20px;
+            }
+        }
+
+        @media screen and (max-width: 768px) {
+            aside.sidebar {
+                z-index: 1000;
+            }
+            main.main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            body {
+                overflow-x: hidden !important;
+            }
+            .search-bar {
+                width: 100%;
+                max-width: 100%;
+            }
+            .company-pill, .user-info {
+                display: none;
+            }
+            /* Table & Modal responsiveness */
+            table {
+                display: block;
+                max-width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            div[style*="max-width: 600px"], div[style*="max-width: 700px"], div[style*="max-width: 800px"] {
+                max-width: 95vw !important;
+                width: 95vw !important;
+                margin: 10px auto !important;
+                padding: 16px !important;
+            }
+        }
+
         /* ── Dashboard Body ─────────────────────────────────────────── */
         .content-body {
             padding: 24px 32px;
