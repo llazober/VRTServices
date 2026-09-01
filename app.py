@@ -136,10 +136,10 @@ def get_resend_to_email() -> str:
         os.environ.get("resend_to_email") or
         os.environ.get("resend_to-email") or
         os.environ.get("RESEND_TO-EMAIL") or
-        "luislazo@datalazo.net"
+        "luislazober@gmail.com"
     )
     cleaned = parse_clean_email(val)
-    return cleaned if cleaned else "luislazo@datalazo.net"
+    return cleaned if cleaned else "luislazober@gmail.com"
 
 def get_resend_reply_to_email() -> str:
     """Fetch reply-to email address for sent emails, checking multiple env var aliases."""
