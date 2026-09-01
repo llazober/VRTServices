@@ -141,8 +141,25 @@ def get_resend_to_email() -> str:
     cleaned = parse_clean_email(val)
     return cleaned if cleaned else "luislazober@gmail.com"
 
+def parse_reply_to_list(val) -> list[str]:
+    """Parse single or multiple comma-separated reply-to email addresses into a list of clean email strings."""
+    if not val:
+        return ["crm@ostooechei.resend.app"]
+    if isinstance(val, list):
+        items = val
+    else:
+        items = str(val).replace(";", ",").split(",")
+    
+    cleaned_list = []
+    for item in items:
+        cleaned = parse_clean_email(item)
+        if cleaned and "receive.datalazo.net" not in cleaned.lower():
+            if cleaned not in cleaned_list:
+                cleaned_list.append(cleaned)
+    return cleaned_list if cleaned_list else ["crm@ostooechei.resend.app"]
+
 def get_resend_reply_to_email() -> str:
-    """Fetch reply-to email address for sent emails, checking multiple env var aliases."""
+    """Fetch reply-to email string (comma-separated if multiple) for UI templates and environment lookups."""
     val = (
         os.environ.get("RESEND_REPLY_TO_EMAIL") or
         os.environ.get("RESEND_REPLY_TO") or
@@ -153,10 +170,8 @@ def get_resend_reply_to_email() -> str:
         os.environ.get("RESEND_REPLY_TO-EMAIL") or
         "crm@ostooechei.resend.app"
     )
-    cleaned = parse_clean_email(val)
-    if cleaned and "receive.datalazo.net" not in cleaned.lower():
-        return cleaned
-    return "crm@ostooechei.resend.app"
+    res_list = parse_reply_to_list(val)
+    return ", ".join(res_list)
 
 # Session tracking:
 # valid_sessions: token -> {"username": str}
@@ -5199,9 +5214,9 @@ async def send_customer_email(customer_id: int, request: Request):
                 conn.commit()
             cust["email"] = recipient_email
 
-        clean_reply_to = parse_clean_email(custom_reply_to) or default_reply_to
-        if "receive.datalazo.net" in clean_reply_to.lower():
-            clean_reply_to = "crm@ostooechei.resend.app"
+        reply_to_list = parse_reply_to_list(custom_reply_to or default_reply_to)
+        clean_reply_to = ", ".join(reply_to_list)
+        reply_to_payload = reply_to_list if len(reply_to_list) > 1 else reply_to_list[0]
 
         parent_name = (cust.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
         sender_display_name = f"{parent_name} Portal" if "Portal" not in parent_name else parent_name
@@ -5251,7 +5266,7 @@ async def send_customer_email(customer_id: int, request: Request):
         payload = {
             "from": f"{sender_display_name} <{clean_from}>",
             "to": [recipient_email],
-            "reply_to": clean_reply_to,
+            "reply_to": reply_to_payload,
             "subject": full_subject,
             "html": formatted_html,
             "text": message_text
