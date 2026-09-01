@@ -156,6 +156,8 @@ def parse_reply_to_list(val) -> list[str]:
         if cleaned and "receive.datalazo.net" not in cleaned.lower():
             if cleaned not in cleaned_list:
                 cleaned_list.append(cleaned)
+    return cleaned_list if cleaned_list else ["crm@ostooechei.resend.app"]
+
 def get_resend_from_email() -> str:
     """Fetch clean from email address, checking multiple env var aliases."""
     raw = (
