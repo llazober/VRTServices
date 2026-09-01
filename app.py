@@ -5,7 +5,7 @@ import os
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     pass
 import datetime
@@ -125,6 +125,38 @@ def parse_clean_email(email_str: str) -> str:
     if match:
         return match.group(0).strip()
     return s
+
+def get_resend_to_email() -> str:
+    """Fetch target recipient email for system/support alerts, checking multiple env var aliases."""
+    val = (
+        os.environ.get("RESEND_TO_EMAIL") or
+        os.environ.get("RESEND_TO") or
+        os.environ.get("TO_EMAIL") or
+        os.environ.get("SUPPORT_EMAIL") or
+        os.environ.get("resend_to_email") or
+        os.environ.get("resend_to-email") or
+        os.environ.get("RESEND_TO-EMAIL") or
+        "luislazo@datalazo.net"
+    )
+    cleaned = parse_clean_email(val)
+    return cleaned if cleaned else "luislazo@datalazo.net"
+
+def get_resend_reply_to_email() -> str:
+    """Fetch reply-to email address for sent emails, checking multiple env var aliases."""
+    val = (
+        os.environ.get("RESEND_REPLY_TO_EMAIL") or
+        os.environ.get("RESEND_REPLY_TO") or
+        os.environ.get("REPLY_TO_EMAIL") or
+        os.environ.get("REPLY_TO") or
+        os.environ.get("resend_reply_to_email") or
+        os.environ.get("resend_reply_to-email") or
+        os.environ.get("RESEND_REPLY_TO-EMAIL") or
+        "crm@ostooechei.resend.app"
+    )
+    cleaned = parse_clean_email(val)
+    if cleaned and "receive.datalazo.net" not in cleaned.lower():
+        return cleaned
+    return "crm@ostooechei.resend.app"
 
 # Session tracking:
 # valid_sessions: token -> {"username": str}
@@ -1656,7 +1688,7 @@ async def logout(request: Request, reason: str = ""):
 def get_user_email(username: str) -> str:
     """Fetch the email address for the logged in user or parent client organization."""
     if not username:
-        return os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net"
+        return get_resend_to_email()
 
     user = get_client_user(username)
     if user:
@@ -1684,7 +1716,7 @@ def get_user_email(username: str) -> str:
     if "@" in str(username):
         return str(username).strip()
 
-    return os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net"
+    return get_resend_to_email()
 
 # ── Protected routes ───────────────────────────────────────────────────────────
 def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
@@ -1796,8 +1828,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
 
         user_parent_name = get_user_parent_name(username) or company_name or "VRT Services"
 
-        env_reply_to = (os.environ.get("RESEND_REPLY_TO_EMAIL") or "").strip()
-        ctx_reply_to = env_reply_to if env_reply_to and "receive.datalazo.net" not in env_reply_to.lower() else "crm@ostooechei.resend.app"
+        ctx_reply_to = get_resend_reply_to_email()
 
         created_at_fmt = ""
         if user and user.get("createdAt"):
@@ -2074,7 +2105,7 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
             "notification@datalazo.net"
         )
         clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
-        reply_to = "crm@ostooechei.resend.app"
+        reply_to = get_resend_reply_to_email()
 
         if resend_key:
             try:
@@ -4632,13 +4663,7 @@ async def support_submit(
         clean_from = "support@datalazo.net"
     from_email = clean_from
         
-    raw_to = (
-        os.environ.get("RESEND_TO_EMAIL") or
-        os.environ.get("TO_EMAIL") or
-        os.environ.get("SUPPORT_EMAIL") or
-        "luislazo@datalazo.net"
-    )
-    clean_to = parse_clean_email(raw_to) or "luislazo@datalazo.net"
+    clean_to = get_resend_to_email()
     
     subject = "Support Request - Bank Statement OCR Extractor"
     
@@ -5147,11 +5172,7 @@ async def send_customer_email(customer_id: int, request: Request):
     body = await request.json()
     subject = (body.get("subject") or "").strip()
     message_text = (body.get("message") or "").strip()
-    env_reply_to = (os.environ.get("RESEND_REPLY_TO_EMAIL") or "").strip()
-    if env_reply_to and "receive.datalazo.net" not in env_reply_to.lower():
-        default_reply_to = env_reply_to
-    else:
-        default_reply_to = "crm@ostooechei.resend.app"
+    default_reply_to = get_resend_reply_to_email()
     custom_reply_to = (body.get("reply_to") or "").strip()
     if not custom_reply_to or "@" not in custom_reply_to or "receive.datalazo.net" in custom_reply_to.lower():
         custom_reply_to = default_reply_to
@@ -6087,7 +6108,7 @@ async def resend_inbound_webhook(request: Request):
             # Send instant email alert notification to team/staff
             try:
                 resend_key = os.environ.get("RESEND_API_KEY")
-                team_email = parse_clean_email(os.environ.get("RESEND_TO_EMAIL") or "luislazo@datalazo.net")
+                team_email = get_resend_to_email()
                 raw_from = os.environ.get("RESEND_FROM_EMAIL", "notification@datalazo.net")
                 clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
                 if "receive.datalazo.net" in clean_from.lower():
@@ -6277,8 +6298,8 @@ async def health_check():
             "status": resend_status,
             "detail": resend_detail,
             "from_email": from_email,
-            "to_email": to_email,
-            "reply_to_email": os.environ.get("RESEND_REPLY_TO_EMAIL") or "crm@ostooechei.resend.app"
+            "to_email": get_resend_to_email(),
+            "reply_to_email": get_resend_reply_to_email()
         }
     }
 
