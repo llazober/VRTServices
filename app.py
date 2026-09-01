@@ -156,7 +156,29 @@ def parse_reply_to_list(val) -> list[str]:
         if cleaned and "receive.datalazo.net" not in cleaned.lower():
             if cleaned not in cleaned_list:
                 cleaned_list.append(cleaned)
-    return cleaned_list if cleaned_list else ["crm@ostooechei.resend.app"]
+def get_resend_from_email() -> str:
+    """Fetch clean from email address, checking multiple env var aliases."""
+    raw = (
+        os.environ.get("RESEND_FROM_EMAIL") or
+        os.environ.get("FROM_EMAIL") or
+        os.environ.get("SENDER_EMAIL") or
+        os.environ.get("resend_from_email") or
+        os.environ.get("resend_from-email") or
+        os.environ.get("RESEND_FROM-EMAIL") or
+        "notification@vrtservices12.com"
+    ).strip().strip('\'"')
+    cleaned = parse_clean_email(raw)
+    if cleaned and "receive.datalazo.net" not in cleaned.lower():
+        return cleaned
+    return "notification@vrtservices12.com"
+
+def format_resend_from_header(display_name: str = "") -> str:
+    """Format full RFC email 'From' string e.g. 'VRT Services Portal <notification@vrtservices12.com>'."""
+    clean_addr = get_resend_from_email()
+    name = (display_name or "").strip()
+    if not name or name.lower() == clean_addr.lower() or "@" in name:
+        name = "VRT Services Portal"
+    return f"{name} <{clean_addr}>"
 
 def get_resend_reply_to_email() -> str:
     """Fetch reply-to email string (comma-separated if multiple) for UI templates and environment lookups."""
@@ -2114,18 +2136,13 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
         if resend_key:
             resend_key = resend_key.strip().strip('\'"')
 
-        raw_from = (
-            os.environ.get("RESEND_FROM_EMAIL") or
-            os.environ.get("FROM_EMAIL") or
-            "notification@datalazo.net"
-        )
-        clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
+        clean_from = get_resend_from_email()
         reply_to = get_resend_reply_to_email()
 
         if resend_key:
             try:
                 payload = {
-                    "from": f"{sender_display_name} <{clean_from}>",
+                    "from": format_resend_from_header(sender_display_name),
                     "to": [recipient_email],
                     "reply_to": reply_to,
                     "subject": subject,
@@ -4667,15 +4684,7 @@ async def support_submit(
             detail="Support email feature is not configured: Resend API Key is missing or invalid on the server. Please add your Resend API Key (e.g., RESEND_API_KEY) in Easypanel environment variables."
         )
 
-    raw_from = (
-        os.environ.get("RESEND_FROM_EMAIL") or
-        os.environ.get("FROM_EMAIL") or
-        os.environ.get("SENDER_EMAIL") or
-        "support@datalazo.net"
-    )
-    clean_from = parse_clean_email(raw_from) or "support@datalazo.net"
-    if "receive.datalazo.net" in clean_from.lower():
-        clean_from = "support@datalazo.net"
+    clean_from = get_resend_from_email()
     from_email = clean_from
         
     clean_to = get_resend_to_email()
@@ -5249,22 +5258,14 @@ async def send_customer_email(customer_id: int, request: Request):
         )
         if resend_key:
             resend_key = resend_key.strip().strip('\'"')
-        raw_from = (
-            os.environ.get("RESEND_FROM_EMAIL") or
-            os.environ.get("FROM_EMAIL") or
-            os.environ.get("SENDER_EMAIL") or
-            "notification@datalazo.net"
-        )
-        clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
-        if "receive.datalazo.net" in clean_from.lower():
-            clean_from = "notification@datalazo.net"
+        clean_from = get_resend_from_email()
         from_email = clean_from
 
         if not resend_key:
             raise HTTPException(status_code=500, detail="RESEND_API_KEY is not configured in environment variables.")
 
         payload = {
-            "from": f"{sender_display_name} <{clean_from}>",
+            "from": format_resend_from_header(sender_display_name),
             "to": [recipient_email],
             "reply_to": reply_to_payload,
             "subject": full_subject,
@@ -6124,15 +6125,12 @@ async def resend_inbound_webhook(request: Request):
             try:
                 resend_key = os.environ.get("RESEND_API_KEY")
                 team_email = get_resend_to_email()
-                raw_from = os.environ.get("RESEND_FROM_EMAIL", "notification@datalazo.net")
-                clean_from = parse_clean_email(raw_from) or "notification@datalazo.net"
-                if "receive.datalazo.net" in clean_from.lower():
-                    clean_from = "notification@datalazo.net"
+                clean_from = get_resend_from_email()
 
                 if resend_key:
                     att_note = f"\n\n📎 {len(saved_attachments)} File Attachment(s) Saved to CRM Storage!" if saved_attachments else ""
                     alert_payload = {
-                        "from": f"Datalazo CRM Alerts <{clean_from}>",
+                        "from": format_resend_from_header(f"{parent_name or 'VRT Services'} CRM Alerts"),
                         "to": [team_email],
                         "subject": f"📩 New Reply Received: {legal_name} - {subject}",
                         "html": f"""
