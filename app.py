@@ -144,7 +144,7 @@ def get_resend_to_email() -> str:
 def parse_reply_to_list(val) -> list[str]:
     """Parse single or multiple comma-separated reply-to email addresses into a list of clean email strings."""
     if not val:
-        return ["crm@ostooechei.resend.app"]
+        return ["vrt@ostooechei.resend.app"]
     if isinstance(val, list):
         items = val
     else:
@@ -156,7 +156,7 @@ def parse_reply_to_list(val) -> list[str]:
         if cleaned and "receive.datalazo.net" not in cleaned.lower():
             if cleaned not in cleaned_list:
                 cleaned_list.append(cleaned)
-    return cleaned_list if cleaned_list else ["crm@ostooechei.resend.app"]
+    return cleaned_list if cleaned_list else ["vrt@ostooechei.resend.app"]
 
 def get_resend_from_email() -> str:
     """Fetch clean from email address, checking multiple env var aliases."""
@@ -192,7 +192,7 @@ def get_resend_reply_to_email() -> str:
         os.environ.get("resend_reply_to_email") or
         os.environ.get("resend_reply_to-email") or
         os.environ.get("RESEND_REPLY_TO-EMAIL") or
-        "crm@ostooechei.resend.app"
+        "vrt@ostooechei.resend.app"
     )
     res_list = parse_reply_to_list(val)
     return ", ".join(res_list)
@@ -1917,7 +1917,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_connected": False,
             "qbo_realm_id": "",
             "qbo_company_name": "",
-            "resend_reply_to_email": "crm@ostooechei.resend.app",
+            "resend_reply_to_email": "vrt@ostooechei.resend.app",
             "error": f"Context notice: {str(e)}"
         }
 
@@ -5314,7 +5314,7 @@ async def send_customer_email(customer_id: int, request: Request):
         err_text = he_err.read().decode("utf-8")
         print(f"Resend HTTP Error: {err_text}")
         if "not verified" in err_text.lower():
-            err_text += " (Note: To send without domain verification, use 'crm@ostooechei.resend.app' as Reply-To, or add & verify your custom domain at https://resend.com/domains)"
+            err_text += " (Note: To send without domain verification, use 'vrt@ostooechei.resend.app' as Reply-To, or add & verify your custom domain at https://resend.com/domains)"
         raise HTTPException(status_code=500, detail=f"Resend Email API error: {err_text}")
     except Exception as e:
         print(f"Error sending email to customer {customer_id}: {e}")
