@@ -36,6 +36,12 @@ app = FastAPI(title="Bank Statement OCR Extractor")
 
 @app.middleware("http")
 async def add_security_and_cache_headers(request: Request, call_next):
+    # Enforce HTTPS redirect if request came in via plain HTTP
+    proto = request.headers.get("x-forwarded-proto", "").lower()
+    if proto == "http":
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url=str(url), status_code=301)
+
     response = await call_next(request)
     # Security headers
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
