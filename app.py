@@ -5628,15 +5628,20 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
+BUILD_VERSION = "89ea83c-20260903"
+
 @app.get("/api/version")
 async def get_version():
-    """Public endpoint — returns the git commit hash of the running server."""
+    """Public endpoint — returns the version tag and git commit hash of the running server."""
     import subprocess, os
+    commit = BUILD_VERSION
     try:
-        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)) or ".", stderr=subprocess.DEVNULL).decode().strip()
+        git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)) or ".", stderr=subprocess.DEVNULL).decode().strip()
+        if git_hash:
+            commit = f"{git_hash} ({BUILD_VERSION})"
     except Exception:
-        commit = "unknown"
-    return {"git_commit": commit, "note": "00c2bd4 = latest with save-first fix"}
+        pass
+    return {"git_commit": commit, "build_version": BUILD_VERSION, "status": "active"}
 
 @app.get("/api/debug/inbound-status")
 async def get_inbound_status_public():
