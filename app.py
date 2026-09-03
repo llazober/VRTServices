@@ -5628,9 +5628,20 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
+@app.get("/api/version")
+async def get_version():
+    """Public endpoint — returns the git commit hash of the running server."""
+    import subprocess, os
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)) or ".", stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        commit = "unknown"
+    return {"git_commit": commit, "note": "00c2bd4 = latest with save-first fix"}
+
 @app.get("/api/debug/inbound-status")
 async def get_inbound_status_public():
     """Public diagnostic: checks CUST-0000 existence, last 5 webhook logs, last 5 INBOUND communications."""
+
     result = {}
     conn = None
     try:
