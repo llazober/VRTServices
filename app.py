@@ -6248,88 +6248,90 @@ async def resend_inbound_webhook(request: Request):
                             break
 
             client, err = get_s3_client()
-            if client:
-                bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-                p_prefix = get_customer_root_folder_path(cust) if cust else (f"{sanitize_folder_name(parent_name)}/{sanitize_folder_name(legal_name)}/" if parent_name else f"{sanitize_folder_name(legal_name)}/")
-                if not p_prefix.endswith('/'):
-                    p_prefix += '/'
+            try:
+                if client:
+                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                    # Build S3 folder path from customer fields directly (no separate helper needed)
+                    _s3_parent = sanitize_folder_name(cust.get("parent_name") or parent_name or "VRT Services") if cust else sanitize_folder_name(parent_name or "VRT Services")
+                    _s3_legal  = sanitize_folder_name(cust.get("legal_name")  or legal_name  or "Unknown")     if cust else sanitize_folder_name(legal_name  or "Unknown")
+                    p_prefix = f"{_s3_parent}/{_s3_legal}/"
+                    target_folder = f"{p_prefix}Inbox/"
 
-                # Routing rule: For all customer business types, save incoming email attachments to the Inbox/ subfolder
-                target_folder = f"{p_prefix}Inbox/"
+                    # First upload any MIME extracted binary files
+                    if mime_att_list:
+                        for m_att in mime_att_list:
+                            m_name = m_att.get("filename") or "attached_file.pdf"
+                            m_bytes = m_att.get("bytes")
+                            if m_bytes:
+                                file_key = f"{target_folder}{m_name}"
+                                client.put_object(Bucket=bucket, Key=file_key, Body=m_bytes, ACL='private')
+                                if file_key not in saved_attachments:
+                                    saved_attachments.append(file_key)
+                                print(f"[INBOUND MIME ATTACHMENT SAVED TO S3] Key: '{file_key}'")
 
-                # First upload any MIME extracted binary files
-                if mime_att_list:
-                    for m_att in mime_att_list:
-                        m_name = m_att.get("filename") or "attached_file.pdf"
-                        m_bytes = m_att.get("bytes")
-                        if m_bytes:
-                            file_key = f"{target_folder}{m_name}"
-                            client.put_object(Bucket=bucket, Key=file_key, Body=m_bytes, ACL='private')
-                            if file_key not in saved_attachments:
-                                saved_attachments.append(file_key)
-                            print(f"[INBOUND MIME ATTACHMENT SAVED TO S3] Key: '{file_key}'")
+                    # Next process structured attachment objects list
+                    if attachments and isinstance(attachments, list):
+                        for att in attachments:
+                            file_bytes = None
+                            att_name = "attached_file.pdf"
+                            att_id = None
+                            att_url_direct = None
 
-                # Next process structured attachment objects list
-                if attachments and isinstance(attachments, list):
-                    for att in attachments:
-                        file_bytes = None
-                        att_name = "attached_file.pdf"
-                        att_id = None
-                        att_url_direct = None
+                            if isinstance(att, dict):
+                                att_name = att.get("filename") or att.get("name") or att.get("title") or "attached_file.pdf"
+                                att_content_b64 = att.get("content") or att.get("data") or ""
+                                att_id = att.get("id")
+                                att_url_direct = att.get("url") or att.get("download_url") or att.get("href") or att.get("content_url")
 
-                        if isinstance(att, dict):
-                            att_name = att.get("filename") or att.get("name") or att.get("title") or "attached_file.pdf"
-                            att_content_b64 = att.get("content") or att.get("data") or ""
-                            att_id = att.get("id")
-                            att_url_direct = att.get("url") or att.get("download_url") or att.get("href") or att.get("content_url")
+                                if att_content_b64:
+                                    try:
+                                        import base64
+                                        file_bytes = base64.b64decode(att_content_b64)
+                                    except Exception as e_b64:
+                                        print(f"[ATTACHMENT B64 DECODE ERROR]: {e_b64}")
 
-                            if att_content_b64:
-                                try:
-                                    import base64
-                                    file_bytes = base64.b64decode(att_content_b64)
-                                except Exception as e_b64:
-                                    print(f"[ATTACHMENT B64 DECODE ERROR]: {e_b64}")
+                                # Direct download URL from attachment object
+                                if not file_bytes and att_url_direct:
+                                    try:
+                                        dir_req = urllib.request.Request(
+                                            att_url_direct,
+                                            headers={
+                                                "Authorization": f"Bearer {resend_key.strip()}" if resend_key else "",
+                                                "User-Agent": "Mozilla/5.0"
+                                            },
+                                            method="GET"
+                                        )
+                                        with urllib.request.urlopen(dir_req) as dir_resp:
+                                            file_bytes = dir_resp.read()
+                                    except Exception as e_dir:
+                                        print(f"[ATTACHMENT DIRECT URL NOTICE] {att_url_direct}: {e_dir}")
+                            elif isinstance(att, str):
+                                att_name = att.split('/')[-1] or "attached_file.pdf"
+                                if att.startswith("http://") or att.startswith("https://"):
+                                    try:
+                                        dir_req = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                                        with urllib.request.urlopen(dir_req) as dir_resp:
+                                            file_bytes = dir_resp.read()
+                                    except Exception:
+                                        pass
 
-                            # Direct download URL from attachment object
-                            if not file_bytes and att_url_direct:
-                                try:
-                                    dir_req = urllib.request.Request(
-                                        att_url_direct,
-                                        headers={
-                                            "Authorization": f"Bearer {resend_key.strip()}" if resend_key else "",
-                                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                        },
-                                        method="GET"
-                                    )
-                                    with urllib.request.urlopen(dir_req) as dir_resp:
-                                        file_bytes = dir_resp.read()
-                                        print(f"[ATTACHMENT DIRECT URL SUCCESS] Downloaded {len(file_bytes)} bytes from {att_url_direct}")
-                                except Exception as e_dir:
-                                    print(f"[ATTACHMENT DIRECT URL NOTICE] {att_url_direct}: {e_dir}")
-                        elif isinstance(att, str):
-                            att_name = att.split('/')[-1] or "attached_file.pdf"
-                            if att.startswith("http://") or att.startswith("https://"):
-                                try:
-                                    dir_req = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                                    with urllib.request.urlopen(dir_req) as dir_resp:
-                                        file_bytes = dir_resp.read()
-                                except Exception:
-                                    pass
+                            # Fallback: Fetch attachment using helper function
+                            if not file_bytes and email_id and resend_key:
+                                file_bytes = download_resend_attachment(email_id, att_id, att_name, resend_key)
 
-                        # Fallback: Fetch attachment using helper function
-                        if not file_bytes and email_id and resend_key:
-                            file_bytes = download_resend_attachment(email_id, att_id, att_name, resend_key)
-
-                        if file_bytes:
-                            file_key = f"{target_folder}{att_name}"
-                            client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-                            if file_key not in saved_attachments:
-                                saved_attachments.append(file_key)
-                            print(f"[INBOUND ATTACHMENT SAVED TO S3] Key: '{file_key}'")
-            else:
-                print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
+                            if file_bytes:
+                                file_key = f"{target_folder}{att_name}"
+                                client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+                                if file_key not in saved_attachments:
+                                    saved_attachments.append(file_key)
+                                print(f"[INBOUND ATTACHMENT SAVED TO S3] Key: '{file_key}'")
+                else:
+                    print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
+            except Exception as e_s3:
+                print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
 
             # Log inbound communication as UNREAD
+
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO customer_communications (
