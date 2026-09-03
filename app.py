@@ -5903,7 +5903,8 @@ async def resend_inbound_webhook(request: Request):
 
         # 1. Filter out webhook status events (like email.sent, email.delivered, email.bounced)
         event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
-        if event_type and event_type not in ["email.received", "inbound", "email_received"]:
+        ignored_status_events = {"email.sent", "email.delivered", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "delivered", "bounced", "complained", "opened", "clicked"}
+        if event_type in ignored_status_events:
             print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
             return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
 
