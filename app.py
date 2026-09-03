@@ -714,12 +714,50 @@ def init_history_table():
     except Exception as e:
         print(f"Error initializing ClientTransactionHistory table: {e}")
 
+def init_coa_table():
+    """Ensure ClientChartOfAccounts table exists with a UNIQUE index on (clientName, accountNumber)."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS "ClientChartOfAccounts" (
+                    "id"            VARCHAR(100) PRIMARY KEY,
+                    "clientName"    VARCHAR(200) NOT NULL,
+                    "parentName"    VARCHAR(200),
+                    "accountNumber" VARCHAR(50) NOT NULL,
+                    "accountName"   VARCHAR(200) NOT NULL,
+                    "type"          VARCHAR(50),
+                    "subType"       VARCHAR(100),
+                    "level"         INT DEFAULT 0,
+                    "createdAt"     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt"     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Deduplicate any existing duplicates before creating unique index
+                DELETE FROM "ClientChartOfAccounts" a USING "ClientChartOfAccounts" b
+                WHERE a."id" < b."id" 
+                  AND a."clientName" = b."clientName" 
+                  AND a."accountNumber" = b."accountNumber";
+
+                CREATE UNIQUE INDEX IF NOT EXISTS "ClientChartOfAccounts_clientName_accountNumber_key" 
+                ON "ClientChartOfAccounts" ("clientName", "accountNumber");
+            """)
+            conn.commit()
+        print("ClientChartOfAccounts table initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing ClientChartOfAccounts table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 try:
     init_customer_table()
     init_checklist_table()
     init_communications_table()
     init_webhook_debug_table()
     init_history_table()
+    init_coa_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -3954,6 +3992,11 @@ async def save_client_coa_endpoint(request: Request):
                     RETURNING *;
                 ''', (parent_name, account_number, account_name, acct_type, sub_type, level, record_id))
             else:
+                try:
+                    cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS "ClientChartOfAccounts_clientName_accountNumber_key" ON "ClientChartOfAccounts" ("clientName", "accountNumber");')
+                except Exception:
+                    pass
+
                 import uuid
                 new_id = str(uuid.uuid4())
                 cur.execute('''
@@ -4021,6 +4064,10 @@ async def upload_client_coa_endpoint(request: Request, clientName: str = Form(..
     count = 0
     try:
         with conn.cursor() as cur:
+            try:
+                cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS "ClientChartOfAccounts_clientName_accountNumber_key" ON "ClientChartOfAccounts" ("clientName", "accountNumber");')
+            except Exception:
+                pass
             for row in reader:
                 if not row or len(row) <= max(acct_num_idx, acct_name_idx):
                     continue
