@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "full-debug-log-v24"
+BUILD_VERSION = "full-debug-log-v25"
 
 @app.get("/api/version")
 async def get_version():
@@ -6178,25 +6178,6 @@ async def resend_inbound_webhook(request: Request):
             ""
         ).strip()
         fetched_data = {}
-        if email_id and resend_key and not body_text:
-            try:
-                fetch_req = urllib.request.Request(
-                    f"https://api.resend.com/emails/{email_id}",
-                    headers={
-                        "Authorization": f"Bearer {resend_key.strip()}",
-                        "Content-Type": "application/json"
-                    },
-                    method="GET"
-                )
-                with urllib.request.urlopen(fetch_req, timeout=1) as fetch_resp:
-                    fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
-                    if isinstance(fetched_data, dict):
-                        target_dict = fetched_data.get("data") if isinstance(fetched_data.get("data"), dict) else fetched_data
-                        fetched_body = extract_email_body({}, target_dict)
-                        if fetched_body:
-                            body_text = fetched_body
-            except Exception as e_f:
-                print(f"[RESEND API FETCH NOTICE]: {e_f}")
 
         def extract_all_customer_candidates(subj_str: str, body_str: str):
             def scan_text(txt: str):
