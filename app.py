@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "instant-execution-v16"
+BUILD_VERSION = "raw-body-subject-fix-v17"
 
 @app.get("/api/version")
 async def get_version():
@@ -6142,7 +6142,12 @@ async def resend_inbound_webhook(request: Request):
 
             return ""
 
-        subject = str(data.get("subject") or "").strip()
+        subject = str(
+            data.get("subject") or 
+            (raw_body.get("subject") if isinstance(raw_body, dict) else "") or 
+            (raw_body.get("data", {}).get("subject") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else "") or 
+            ""
+        ).strip()
         body_text = extract_email_body(raw_body if isinstance(raw_body, dict) else {}, data if isinstance(data, dict) else {})
         attachments = (
             data.get("attachments") or 
