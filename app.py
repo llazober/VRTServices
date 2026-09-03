@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "89ea83c-20260903"
+BUILD_VERSION = "catchall-direct-v2"
 
 @app.get("/api/version")
 async def get_version():
@@ -5685,11 +5685,19 @@ async def get_inbound_status_public():
                 result["cust_0000_comms"] = []
                 result["cust_0000_comms_count"] = 0
 
-            # 5. Total customer count
-            cur.execute("SELECT COUNT(*) as total FROM customer;")
-            result["total_customers"] = cur.fetchone()["total"]
+            # 5. All customer email mappings
+            cur.execute("SELECT id, custumer_number, legal_name, email FROM customer ORDER BY id ASC;")
+            result["all_customers"] = [dict(r) for r in cur.fetchall()]
+            result["total_customers"] = len(result["all_customers"])
 
-            # 6. Webhook processing summary (RECEIVED vs SUCCESS vs ERROR in last 24h)
+            # 6. Last 15 communications overall
+            cur.execute("""
+                SELECT id, customer_id, sender_email, recipient_email, subject, direction, is_read, created_at
+                FROM customer_communications ORDER BY id DESC LIMIT 15;
+            """, ())
+            result["last_15_comms"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+
+            # 7. Webhook processing summary (RECEIVED vs SUCCESS vs ERROR in last 24h)
             cur.execute("""
                 SELECT status, COUNT(*) as cnt FROM webhook_debug_log
                 WHERE created_at > (CURRENT_TIMESTAMP - INTERVAL '24 hours')
@@ -6198,16 +6206,7 @@ async def resend_inbound_webhook(request: Request):
                 """, (cust_number, cust_num_with_prefix, cust_num_raw))
                 cust = cur.fetchone()
 
-            # Tier 2: Match by Sender Email address if Tier 1 yielded no match
-            if not cust and sender_email:
-                cur.execute("""
-                    SELECT id, legal_name, parent_name, customer_type FROM customer
-                    WHERE LOWER(email) = LOWER(%s)
-                    ORDER BY id ASC LIMIT 1;
-                """, (sender_email,))
-                cust = cur.fetchone()
-
-            # Tier 3: Fallback to Catch-All Customer (CUST-0000 - Unassigned Inbound Emails)
+            # Tier 2: Catch-All Customer (CUST-0000 - Unassigned Inbound Emails) for ALL emails without reference tag
             if not cust:
                 cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
                 cust = cur.fetchone()
