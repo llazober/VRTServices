@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "full-debug-log-v25"
+BUILD_VERSION = "full-debug-log-v26"
 
 @app.get("/api/version")
 async def get_version():
@@ -6227,65 +6227,71 @@ async def resend_inbound_webhook(request: Request):
         cust_candidates = extract_all_customer_candidates(subject, body_text)
         print(f"[RESEND INBOUND ROUTING] Extracted Customer Candidates for Subject='{subject}': {cust_candidates}")
 
-        conn = get_db_connection()
         customer_id = None
         legal_name = ""
         parent_name = ""
 
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cust = None
+        conn_lookup = None
+        try:
+            conn_lookup = get_db_connection()
+            with conn_lookup.cursor(cursor_factory=RealDictCursor) as cur:
+                cust = None
 
-            # Tier 1: Match by Customer ID candidate in subject or body
-            for cand in cust_candidates:
-                raw_digits = re.sub(r'[^\d]', '', cand)
-                if not raw_digits or raw_digits == "0000":
-                    continue
-                clean_cust = f"CUST-{raw_digits}"
-                clean_cust_no_dash = f"CUST{raw_digits}"
-                cur.execute("""
-                    SELECT id, legal_name, parent_name, customer_type FROM customer 
-                    WHERE custumer_number ILIKE %s 
-                       OR custumer_number ILIKE %s 
-                       OR custumer_number ILIKE %s
-                       OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s
-                       OR id::text = %s;
-                """, (cand, clean_cust, clean_cust_no_dash, raw_digits, raw_digits))
-                found = cur.fetchone()
-                if found:
-                    cust = found
-                    print(f"[RESEND INBOUND ROUTING] ✅ Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
-                    break
+                # Tier 1: Match by Customer ID candidate in subject or body
+                for cand in cust_candidates:
+                    raw_digits = re.sub(r'[^\d]', '', cand)
+                    if not raw_digits or raw_digits == "0000":
+                        continue
+                    clean_cust = f"CUST-{raw_digits}"
+                    clean_cust_no_dash = f"CUST{raw_digits}"
+                    cur.execute("""
+                        SELECT id, legal_name, parent_name, customer_type FROM customer 
+                        WHERE custumer_number ILIKE %s 
+                           OR custumer_number ILIKE %s 
+                           OR custumer_number ILIKE %s
+                           OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s
+                           OR id::text = %s;
+                    """, (cand, clean_cust, clean_cust_no_dash, raw_digits, raw_digits))
+                    found = cur.fetchone()
+                    if found:
+                        cust = found
+                        print(f"[RESEND INBOUND ROUTING] ✅ Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                        break
 
-            # Step 2: Fallback to CUST-0000 (Unassigned Inbound Emails) if Customer ID is missing or unmatched
-            if not cust:
-                print(f"[RESEND INBOUND ROUTING] ℹ️ No Customer ID matched for subject '{subject}'. Routing directly to CUST-0000 catch-all.")
-                cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
-                cust = cur.fetchone()
+                # Step 2: Fallback to CUST-0000 (Unassigned Inbound Emails) if Customer ID is missing or unmatched
                 if not cust:
-                    try:
-                        cur.execute("""
-                            INSERT INTO customer (
-                                custumer_number, customer_type, legal_name, display_name,
-                                status, parent_name, created_at, updated_at
-                            ) VALUES (
-                                'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
-                                'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                            ) RETURNING id, legal_name, parent_name, customer_type;
-                        """)
-                        cust = cur.fetchone()
-                        conn.commit()
-                    except Exception as e_c0:
-                        print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
-                if cust:
-                    print(f"[RESEND INBOUND ROUTING] Fallback -> Catch-All CUST-0000 (#{cust['id']})")
+                    print(f"[RESEND INBOUND ROUTING] ℹ️ No Customer ID matched for subject '{subject}'. Routing directly to CUST-0000 catch-all.")
+                    cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
+                    cust = cur.fetchone()
+                    if not cust:
+                        try:
+                            cur.execute("""
+                                INSERT INTO customer (
+                                    custumer_number, customer_type, legal_name, display_name,
+                                    status, parent_name, created_at, updated_at
+                                ) VALUES (
+                                    'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
+                                    'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                                ) RETURNING id, legal_name, parent_name, customer_type;
+                            """)
+                            cust = cur.fetchone()
+                            conn_lookup.commit()
+                        except Exception as e_c0:
+                            print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
+                    if cust:
+                        print(f"[RESEND INBOUND ROUTING] Fallback -> Catch-All CUST-0000 (#{cust['id']})")
 
-            if cust:
-                customer_id = cust["id"]
-                legal_name = cust["legal_name"]
-                parent_name = cust.get("parent_name") or "VRT Services"
-                customer_type = cust.get("customer_type") or "System"
-            else:
-                print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
+                if cust:
+                    customer_id = cust["id"]
+                    legal_name = cust["legal_name"]
+                    parent_name = cust.get("parent_name") or "VRT Services"
+                    customer_type = cust.get("customer_type") or "System"
+                else:
+                    print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
+        finally:
+            if conn_lookup:
+                try: conn_lookup.close()
+                except Exception: pass
 
         if customer_id:
             # ── Step 1: Atomic email_id Deduplication Check ──────────────────────
