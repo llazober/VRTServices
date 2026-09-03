@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "deep-payload-scan-v9"
+BUILD_VERSION = "candidate-engine-v10"
 
 @app.get("/api/version")
 async def get_version():
@@ -6183,41 +6183,52 @@ async def resend_inbound_webhook(request: Request):
             except Exception as e_fetch:
                 print(f"[RESEND FETCH ERROR]: {e_fetch}")
 
-        def extract_customer_id_from_text(text_content: str):
+        def extract_all_possible_customer_numbers(text_content: str):
             if not text_content or not isinstance(text_content, str):
-                return None
+                return []
             
-            # 1. Match CUST-XXXX / CUST XXXX / CUSTXXXX anywhere in text
-            m_cust = re.search(r'\bCUST[-_\s]*(\d{1,6})\b', text_content, re.IGNORECASE)
-            if m_cust:
-                return f"CUST-{m_cust.group(1)}"
+            candidates = []
+            # 1. Match explicit CUST-XXXX / CUST XXXX / CUSTXXXX
+            for m in re.finditer(r'\bCUST[-_\s]*(\d{1,6})\b', text_content, re.IGNORECASE):
+                candidates.append(f"CUST-{m.group(1)}")
+                candidates.append(m.group(1))
 
             # 2. Match [Ref: ...] or Ref: ...
-            m_ref = re.search(r'\[?Ref:\s*(?:CUST-)?([\w-]+)\]?', text_content, re.IGNORECASE)
-            if m_ref:
-                val = m_ref.group(1).strip()
-                return f"CUST-{val}" if not val.upper().startswith("CUST-") else val.upper()
+            for m in re.finditer(r'\[?Ref:\s*(?:CUST-)?([\w-]+)\]?', text_content, re.IGNORECASE):
+                val = m.group(1).strip()
+                candidates.append(val)
+                if not val.upper().startswith("CUST-"):
+                    candidates.append(f"CUST-{val}")
 
-            # 3. Match Customer ID: XXXX / Cust ID: XXXX / Customer # XXXX / Cust # XXXX
-            m_id = re.search(r'(?:Customer|Cust)\s*(?:ID|#)?\s*:?\s*(?:CUST-)?(\d{1,6})\b', text_content, re.IGNORECASE)
-            if m_id:
-                return f"CUST-{m_id.group(1)}"
+            # 3. Match Customer/Cust/Client/Account/Ref/ID/# followed by digits
+            for m in re.finditer(r'\b(?:Customer|Cust|Client|Account|Ref|ID|#)\s*:?\s*#?\s*(?:CUST-)?(\d{1,6})\b', text_content, re.IGNORECASE):
+                candidates.append(m.group(1))
+                candidates.append(f"CUST-{m.group(1)}")
 
-            # 4. Fallback: Standalone 4 to 6 digit number preceded by ID or # or Ref
-            m_num = re.search(r'\b(?:ID|#|Ref)\s*:?\s*(\d{3,6})\b', text_content, re.IGNORECASE)
-            if m_num:
-                return f"CUST-{m_num.group(1)}"
+            # 4. Match any standalone 4 to 5 digit number (e.g. 4050, 4060, 4061, 1001)
+            for m in re.finditer(r'\b(\d{4,5})\b', text_content):
+                num = m.group(1)
+                if num != "0000":
+                    candidates.append(num)
+                    candidates.append(f"CUST-{num}")
 
-            return None
+            seen = set()
+            unique_candidates = []
+            for c in candidates:
+                c_clean = str(c).strip().upper()
+                if c_clean and c_clean not in seen:
+                    seen.add(c_clean)
+                    unique_candidates.append(c_clean)
+            return unique_candidates
 
-        # Parse customer reference code from subject, body, or full raw payload string
+        # Parse all potential customer reference codes from subject, body, or full raw payload string
         raw_body_str = json.dumps(raw_body) if isinstance(raw_body, (dict, list)) else str(raw_body or "")
-        cust_number = (
-            extract_customer_id_from_text(subject) or 
-            extract_customer_id_from_text(body_text) or 
-            extract_customer_id_from_text(raw_body_str)
-        )
-        print(f"[RESEND INBOUND DEBUG] Sender='{sender_email}', Subject='{subject}', Extracted Customer ID='{cust_number}'")
+        candidate_numbers = list(dict.fromkeys(
+            extract_all_possible_customer_numbers(subject) + 
+            extract_all_possible_customer_numbers(body_text) + 
+            extract_all_possible_customer_numbers(raw_body_str)
+        ))
+        print(f"[RESEND INBOUND DEBUG] Sender='{sender_email}', Subject='{subject}', Extracted Candidate Numbers={candidate_numbers}")
 
         conn = get_db_connection()
         customer_id = None
@@ -6227,11 +6238,10 @@ async def resend_inbound_webhook(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cust = None
 
-            # Tier 1: PRIORITY MATCH by Customer ID or Numeric Digits in subject/body
-            if cust_number:
-                raw_digits = re.sub(r'[^\d]', '', cust_number)
-                clean_cust = f"CUST-{raw_digits}" if raw_digits else cust_number
-                
+            # Tier 1: PRIORITY MATCH by testing extracted candidate customer numbers against DB
+            for cand in candidate_numbers:
+                raw_digits = re.sub(r'[^\d]', '', cand)
+                clean_cust = f"CUST-{raw_digits}" if raw_digits else cand
                 cur.execute("""
                     SELECT id, legal_name, parent_name, customer_type FROM customer 
                     WHERE custumer_number ILIKE %s 
@@ -6239,10 +6249,12 @@ async def resend_inbound_webhook(request: Request):
                        OR (LENGTH(%s) > 0 AND custumer_number ILIKE %s)
                        OR (LENGTH(%s) > 0 AND regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s)
                        OR (LENGTH(%s) > 0 AND id::text = %s);
-                """, (cust_number, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
-                cust = cur.fetchone()
-                if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cust_number}' (digits: {raw_digits}) -> Customer #{cust['id']} ({cust['legal_name']})")
+                """, (cand, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
+                found = cur.fetchone()
+                if found:
+                    cust = found
+                    print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for candidate '{cand}' (digits: {raw_digits}) -> Customer #{cust['id']} ({cust['legal_name']})")
+                    break
 
             # Tier 2: Match by Sender Email address if Tier 1 found no Customer ID match
             if not cust and sender_email:
