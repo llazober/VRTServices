@@ -747,12 +747,32 @@ def init_coa_table():
         print("ClientChartOfAccounts table initialized successfully.")
     except Exception as e:
         print(f"Error initializing ClientChartOfAccounts table: {e}")
+def ensure_catchall_customer():
+    """Ensure system catch-all customer (CUST-0000) exists for routing unassigned inbound emails."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO customer (
+                    custumer_number, customer_type, legal_name, display_name,
+                    status, parent_name, created_at, updated_at
+                ) VALUES (
+                    'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
+                    'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (custumer_number) DO NOTHING;
+            """)
+            conn.commit()
+    except Exception as e:
+        print(f"Notice ensuring catch-all customer CUST-0000: {e}")
     finally:
         if conn:
             conn.close()
 
 try:
     init_customer_table()
+    ensure_catchall_customer()
     init_checklist_table()
     init_communications_table()
     init_webhook_debug_table()
@@ -6084,6 +6104,8 @@ async def resend_inbound_webhook(request: Request):
         parent_name = ""
 
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cust = None
+            # Tier 1: Match by [Ref: CUST-XXXX] in subject or body
             if cust_number:
                 cust_num_with_prefix = f"CUST-{cust_number}" if not cust_number.upper().startswith("CUST-") else cust_number
                 cust_num_raw = cust_number.replace("CUST-", "").replace("cust-", "")
@@ -6092,16 +6114,43 @@ async def resend_inbound_webhook(request: Request):
                     WHERE custumer_number ILIKE %s OR custumer_number ILIKE %s OR id::text = %s;
                 """, (cust_number, cust_num_with_prefix, cust_num_raw))
                 cust = cur.fetchone()
-            else:
-                cust = None
+
+            # Tier 2: Match by Sender Email address if Tier 1 yielded no match
+            if not cust and sender_email:
+                cur.execute("""
+                    SELECT id, legal_name, parent_name, customer_type FROM customer
+                    WHERE LOWER(email) = LOWER(%s)
+                    ORDER BY id ASC LIMIT 1;
+                """, (sender_email,))
+                cust = cur.fetchone()
+
+            # Tier 3: Fallback to Catch-All Customer (CUST-0000 - Unassigned Inbound Emails)
+            if not cust:
+                cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
+                cust = cur.fetchone()
+                if not cust:
+                    try:
+                        cur.execute("""
+                            INSERT INTO customer (
+                                custumer_number, customer_type, legal_name, display_name,
+                                status, parent_name, created_at, updated_at
+                            ) VALUES (
+                                'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
+                                'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                            ) RETURNING id, legal_name, parent_name, customer_type;
+                        """)
+                        cust = cur.fetchone()
+                        conn.commit()
+                    except Exception as e_c0:
+                        print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
 
             if cust:
                 customer_id = cust["id"]
                 legal_name = cust["legal_name"]
-                parent_name = cust.get("parent_name")
-                customer_type = cust.get("customer_type") or ""
+                parent_name = cust.get("parent_name") or "VRT Services"
+                customer_type = cust.get("customer_type") or "System"
             else:
-                print(f"[RESEND INBOUND WARNING] No matching customer ID found for ref: '{cust_number}', subject: '{subject}'. Skipping unlinked email.")
+                print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
 
         if customer_id:
             # Deduplicate by subject + customer_id within the last 10 seconds
