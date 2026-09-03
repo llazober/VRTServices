@@ -46,7 +46,7 @@ async def add_security_and_cache_headers(request: Request, call_next):
         red_resp.headers["X-Frame-Options"] = "SAMEORIGIN"
         red_resp.headers["X-XSS-Protection"] = "1; mode=block"
         red_resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        red_resp.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;"
+        red_resp.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https:;"
         red_resp.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
         return red_resp
 
@@ -57,7 +57,7 @@ async def add_security_and_cache_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;"
+    response.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https:;"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     
     if request.url.path in ["/", "/index", "/dashboard", "/customers"]:
