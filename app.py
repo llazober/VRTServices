@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "cust-id-priority-v7"
+BUILD_VERSION = "robust-cust-id-v8"
 
 @app.get("/api/version")
 async def get_version():
@@ -6187,26 +6187,26 @@ async def resend_inbound_webhook(request: Request):
             if not text_content or not isinstance(text_content, str):
                 return None
             
-            # 1. Match [Ref: CUST-XXXX] or [Ref: XXXX] or Ref: CUST-XXXX or Ref: XXXX
+            # 1. Match CUST-XXXX / CUST XXXX / CUSTXXXX anywhere in text
+            m_cust = re.search(r'\bCUST[-_\s]*(\d{1,6})\b', text_content, re.IGNORECASE)
+            if m_cust:
+                return f"CUST-{m_cust.group(1)}"
+
+            # 2. Match [Ref: ...] or Ref: ...
             m_ref = re.search(r'\[?Ref:\s*(?:CUST-)?([\w-]+)\]?', text_content, re.IGNORECASE)
             if m_ref:
                 val = m_ref.group(1).strip()
                 return f"CUST-{val}" if not val.upper().startswith("CUST-") else val.upper()
-
-            # 2. Match CUST-XXXX anywhere in text (e.g. CUST-4061, CUST-1001)
-            m_cust = re.search(r'\b(CUST-\d{1,6})\b', text_content, re.IGNORECASE)
-            if m_cust:
-                return m_cust.group(1).upper()
 
             # 3. Match Customer ID: XXXX / Cust ID: XXXX / Customer # XXXX / Cust # XXXX
             m_id = re.search(r'(?:Customer|Cust)\s*(?:ID|#)?\s*:?\s*(?:CUST-)?(\d{1,6})\b', text_content, re.IGNORECASE)
             if m_id:
                 return f"CUST-{m_id.group(1)}"
 
-            # 4. Match CUSTXXXX standalone (e.g. CUST4061)
-            m_sa = re.search(r'\bCUST(\d{1,6})\b', text_content, re.IGNORECASE)
-            if m_sa:
-                return f"CUST-{m_sa.group(1)}"
+            # 4. Fallback: Standalone 4 to 6 digit number preceded by ID or # or Ref
+            m_num = re.search(r'\b(?:ID|#|Ref)\s*:?\s*(\d{3,6})\b', text_content, re.IGNORECASE)
+            if m_num:
+                return f"CUST-{m_num.group(1)}"
 
             return None
 
@@ -6221,17 +6221,22 @@ async def resend_inbound_webhook(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cust = None
 
-            # Tier 1: PRIORITY MATCH by Customer ID in subject or body text
+            # Tier 1: PRIORITY MATCH by Customer ID or Numeric Digits in subject/body
             if cust_number:
-                cust_num_with_prefix = f"CUST-{cust_number}" if not cust_number.upper().startswith("CUST-") else cust_number
-                cust_num_raw = cust_number.replace("CUST-", "").replace("cust-", "")
+                raw_digits = re.sub(r'[^\d]', '', cust_number)
+                clean_cust = f"CUST-{raw_digits}" if raw_digits else cust_number
+                
                 cur.execute("""
                     SELECT id, legal_name, parent_name, customer_type FROM customer 
-                    WHERE custumer_number ILIKE %s OR custumer_number ILIKE %s OR id::text = %s;
-                """, (cust_number, cust_num_with_prefix, cust_num_raw))
+                    WHERE custumer_number ILIKE %s 
+                       OR custumer_number ILIKE %s 
+                       OR (LENGTH(%s) > 0 AND custumer_number ILIKE %s)
+                       OR (LENGTH(%s) > 0 AND regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s)
+                       OR (LENGTH(%s) > 0 AND id::text = %s);
+                """, (cust_number, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
                 cust = cur.fetchone()
                 if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 1 match for Customer ID '{cust_number}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                    print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cust_number}' (digits: {raw_digits}) -> Customer #{cust['id']} ({cust['legal_name']})")
 
             # Tier 2: Match by Sender Email address if Tier 1 found no Customer ID match
             if not cust and sender_email:
