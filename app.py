@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "cust-id-routing-fix-v23"
+BUILD_VERSION = "full-debug-log-v24"
 
 @app.get("/api/version")
 async def get_version():
@@ -6368,9 +6368,18 @@ async def resend_inbound_webhook(request: Request):
                 fresh_conn.close()
                 print(f"[RESEND INBOUND WEBHOOK] ✅ Saved comm id={comm_id} from '{sender_email}' → customer '{legal_name}' (ID: {customer_id})")
             except Exception as e_comm:
-                print(f"[CUSTOMER COMM INSERT ERROR] {e_comm}")
+                err_str = f"COMM_INSERT_ERROR: {e_comm}"
+                print(f"[CUSTOMER COMM INSERT ERROR] {err_str}")
                 import traceback
                 traceback.print_exc()
+                if debug_log_id:
+                    try:
+                        conn_err = get_db_connection()
+                        with conn_err.cursor() as cur_e:
+                            cur_e.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;", (err_str[:200], customer_id, debug_log_id))
+                            conn_err.commit()
+                        conn_err.close()
+                    except Exception: pass
 
             # ── Step 3: S3 Attachment Upload (optional, non-blocking) ────────────
             try:
@@ -6516,7 +6525,8 @@ async def resend_inbound_webhook(request: Request):
         return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
     except Exception as e:
         import traceback
-        print(f"Error handling Resend Inbound Webhook: {e}")
+        err_msg = f"OUTER_ERROR: {e}"
+        print(f"Error handling Resend Inbound Webhook: {err_msg}")
         traceback.print_exc()
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.now()),
@@ -6530,15 +6540,19 @@ async def resend_inbound_webhook(request: Request):
             _subj = subject if 'subject' in locals() else ''
             _body = body_text if 'body_text' in locals() else ''
             _cid  = customer_id if 'customer_id' in locals() else None
+            _log_id = debug_log_id if 'debug_log_id' in locals() else None
             with db_c.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                """, (
-                    json.dumps(raw_body) if 'raw_body' in locals() else "{}",
-                    _s_em, _r_em, _subj, _body, _cid,
-                    f"ERROR: {str(e)[:200]}"
-                ))
+                if _log_id:
+                    cur.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;", (err_msg[:200], _cid, _log_id))
+                else:
+                    cur.execute("""
+                        INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """, (
+                        json.dumps(raw_body) if 'raw_body' in locals() else "{}",
+                        _s_em, _r_em, _subj, _body, _cid,
+                        err_msg[:200]
+                    ))
                 db_c.commit()
             db_c.close()
         except Exception:
