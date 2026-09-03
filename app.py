@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "pure-cust-id-only-v20"
+BUILD_VERSION = "exact-cust-id-match-v21"
 
 @app.get("/api/version")
 async def get_version():
@@ -6194,41 +6194,44 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND API FETCH NOTICE]: {e_f}")
 
         def extract_all_customer_candidates(subj_str: str, body_str: str):
-            candidates = []
-            for txt in [subj_str, body_str]:
+            def scan_text(txt: str):
+                res = []
                 if not txt or not isinstance(txt, str):
-                    continue
-                
-                # 1. Match [CUST-XXXX] or [CUST XXXX] or [CUSTXXXX] or [Ref: ...]
+                    return res
+                # 1. [Ref: CUST-XXXX], [CUST-XXXX], [Ref: XXXX], [XXXX]
                 for m in re.finditer(r'\[\s*(?:Ref:\s*)?(?:CUST[-_\s]*)?(\d{1,6})\s*\]', txt, re.IGNORECASE):
-                    candidates.append(f"CUST-{m.group(1)}")
-                    candidates.append(m.group(1))
+                    res.append(f"CUST-{m.group(1)}")
+                    res.append(m.group(1))
 
-                # 2. Match explicit CUST-XXXX or CUST XXXX or CUSTXXXX
+                # 2. CUST-XXXX or CUST XXXX or CUSTXXXX
                 for m in re.finditer(r'\bCUST[-_\s]*(\d{1,6})\b', txt, re.IGNORECASE):
-                    candidates.append(f"CUST-{m.group(1)}")
-                    candidates.append(m.group(1))
+                    res.append(f"CUST-{m.group(1)}")
+                    res.append(m.group(1))
 
-                # 3. Match Ref: CUST-XXXX or Ref: XXXX
+                # 3. Ref: CUST-XXXX or Ref: XXXX
                 for m in re.finditer(r'\bRef:\s*(?:CUST-)?(\d{1,6})\b', txt, re.IGNORECASE):
-                    candidates.append(f"CUST-{m.group(1)}")
-                    candidates.append(m.group(1))
+                    res.append(f"CUST-{m.group(1)}")
+                    res.append(m.group(1))
 
-                # 4. Match Customer/Cust/Client/Account/ID/# followed by digits
+                # 4. Customer/Cust/Client/Account/ID/# followed by digits
                 for m in re.finditer(r'\b(?:Customer|Cust|Client|Account|ID|#)\s*:?\s*#?\s*(?:CUST-)?(\d{1,6})\b', txt, re.IGNORECASE):
-                    candidates.append(f"CUST-{m.group(1)}")
-                    candidates.append(m.group(1))
+                    res.append(f"CUST-{m.group(1)}")
+                    res.append(m.group(1))
 
-                # 5. Match standalone 4-5 digit numbers (e.g. 4060, 4059, 1001)
+                # 5. Standalone 4-5 digit numbers
                 for m in re.finditer(r'\b(\d{4,5})\b', txt):
                     num = m.group(1)
                     if num != "0000":
-                        candidates.append(f"CUST-{num}")
-                        candidates.append(num)
+                        res.append(f"CUST-{num}")
+                        res.append(num)
+                return res
+
+            subj_cands = scan_text(subj_str)
+            body_cands = scan_text(body_str)
 
             seen = set()
             unique = []
-            for c in candidates:
+            for c in subj_cands + body_cands:
                 c_clean = str(c).strip().upper()
                 if c_clean and c_clean not in seen:
                     seen.add(c_clean)
@@ -6249,19 +6252,21 @@ async def resend_inbound_webhook(request: Request):
             # Tier 1: Match by Customer ID candidate in subject or body
             for cand in cust_candidates:
                 raw_digits = re.sub(r'[^\d]', '', cand)
-                clean_cust = f"CUST-{raw_digits}" if raw_digits else cand
+                if not raw_digits or raw_digits == "0000":
+                    continue
+                clean_cust = f"CUST-{raw_digits}"
+                clean_cust_no_dash = f"CUST{raw_digits}"
                 cur.execute("""
                     SELECT id, legal_name, parent_name, customer_type FROM customer 
                     WHERE custumer_number ILIKE %s 
                        OR custumer_number ILIKE %s 
-                       OR (LENGTH(%s) > 0 AND custumer_number ILIKE %s)
-                       OR (LENGTH(%s) > 0 AND regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s)
-                       OR (LENGTH(%s) > 0 AND id::text = %s);
-                """, (cand, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
+                       OR custumer_number ILIKE %s
+                       OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s;
+                """, (cand, clean_cust, clean_cust_no_dash, raw_digits))
                 found = cur.fetchone()
                 if found:
                     cust = found
-                    print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                    print(f"[RESEND INBOUND ROUTING] ✅ Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                     break
 
             # Step 2: Fallback to CUST-0000 (Unassigned Inbound Emails) if Customer ID is missing or unmatched
