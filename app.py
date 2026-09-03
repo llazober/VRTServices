@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "no-false-dedup-v11"
+BUILD_VERSION = "process-delivered-events-v12"
 
 @app.get("/api/version")
 async def get_version():
@@ -5991,9 +5991,9 @@ async def resend_inbound_webhook(request: Request):
         except Exception as e_dbg_init:
             print(f"[WEBHOOK DB LOG INIT ERROR]: {e_dbg_init}")
 
-        # 1. Filter out webhook status events (like email.sent, email.delivered, email.bounced)
+        # 1. Filter out webhook status events (like email.sent, email.bounced)
         event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
-        ignored_status_events = {"email.sent", "email.delivered", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "delivered", "bounced", "complained", "opened", "clicked"}
+        ignored_status_events = {"email.sent", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "bounced", "complained", "opened", "clicked"}
         if event_type in ignored_status_events:
             print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
             return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
