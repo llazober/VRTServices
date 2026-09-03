@@ -189,14 +189,12 @@ def get_resend_from_email() -> str:
         os.environ.get("FROM_EMAIL") or
         os.environ.get("SENDER_EMAIL") or
         os.environ.get("resend_from_email") or
-        os.environ.get("resend_from-email") or
-        os.environ.get("RESEND_FROM-EMAIL") or
-        "notification@vrtservices12.com"
+        "onboarding@resend.dev"
     ).strip().strip('\'"')
     cleaned = parse_clean_email(raw)
-    if cleaned and "receive.datalazo.net" not in cleaned.lower():
+    if cleaned and "datalazo.net" not in cleaned.lower() and "vrtservices12.com" not in cleaned.lower():
         return cleaned
-    return "notification@vrtservices12.com"
+    return "onboarding@resend.dev"
 
 def format_resend_from_header(display_name: str = "") -> str:
     """Format full RFC email 'From' string e.g. 'VRT Services Portal <notification@vrtservices12.com>'."""
@@ -5953,7 +5951,7 @@ def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend
                 print(f"[RESEND ATTACHMENT FETCH NOTICE] {target_url}: {e_try}")
     return None
 
-BUILD_VERSION = "full-debug-log-v28-robust-routing"
+BUILD_VERSION = "full-debug-log-v29-onboarding-sender"
 
 @app.post("/api/webhooks/resend-inbound")
 @app.post("/api/webhook/resend-inbound")
