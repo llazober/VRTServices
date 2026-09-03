@@ -1040,7 +1040,7 @@
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Legal Name *</label>
-                        <input type="text" id="customerPageFormLegalName" readonly required placeholder="e.g. Acme Corporation LLC" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #94a3b8; cursor: not-allowed;">
+                        <input type="text" id="customerPageFormLegalName" required placeholder="e.g. Acme Corporation LLC" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Display Name</label>
@@ -1568,7 +1568,7 @@
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Legal Name *</label>
-                    <input type="text" id="customerFormLegalName" readonly required placeholder="e.g. Acme Corporation LLC" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #94a3b8; cursor: not-allowed;">
+                    <input type="text" id="customerFormLegalName" required placeholder="e.g. Acme Corporation LLC" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Display Name</label>
@@ -3336,6 +3336,23 @@
             return 'CUST-' + (maxNum + 1);
         }
 
+        function setLegalNameReadOnly(prefix, isReadOnly) {
+            const el = document.getElementById(`${prefix}LegalName`);
+            if (!el) return;
+            el.readOnly = isReadOnly;
+            if (isReadOnly) {
+                el.style.background = 'rgba(255,255,255,0.03)';
+                el.style.color = '#94a3b8';
+                el.style.cursor = 'not-allowed';
+                el.title = 'Legal Name cannot be modified when updating an existing customer.';
+            } else {
+                el.style.background = 'rgba(255,255,255,0.05)';
+                el.style.color = '#ffffff';
+                el.style.cursor = 'text';
+                el.title = '';
+            }
+        }
+
         function toggleCustomerForm() {
             const form = document.getElementById('customerForm');
             const btn = document.getElementById('toggleCustomerFormBtn');
@@ -3353,6 +3370,7 @@
                 setVal('customerFormEmail', '');
                 setVal('customerFormWebsite', '');
                 setVal('customerFormNotes', '');
+                setLegalNameReadOnly('customerForm', false);
                 const subBtn = document.getElementById('customerFormSubmitBtn');
                 if (subBtn) subBtn.textContent = 'Save Customer';
                 form.style.display = 'grid';
@@ -3379,6 +3397,7 @@
                 setVal('customerPageFormEmail', '');
                 setVal('customerPageFormWebsite', '');
                 setVal('customerPageFormNotes', '');
+                setLegalNameReadOnly('customerPageForm', false);
                 const subBtn = document.getElementById('customerPageFormSubmitBtn');
                 if (subBtn) subBtn.textContent = 'Save Customer';
                 form.style.display = 'grid';
@@ -3407,6 +3426,7 @@
                 setVal('Email', rec.email || '');
                 setVal('Website', rec.website || '');
                 setVal('Notes', rec.notes || '');
+                setLegalNameReadOnly(prefix, true);
                 const subBtn = document.getElementById(`${prefix}SubmitBtn`);
                 if (subBtn) subBtn.textContent = 'Update Customer';
                 targetForm.style.display = 'grid';
