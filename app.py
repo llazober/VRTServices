@@ -5628,6 +5628,44 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
+@app.get("/api/debug/inbound-status")
+async def get_inbound_status_public():
+    """Public diagnostic: checks CUST-0000 existence, last 5 webhook logs, last 5 INBOUND communications."""
+    result = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Check CUST-0000 exists
+            cur.execute("SELECT id, custumer_number, legal_name, status FROM customer WHERE custumer_number = 'CUST-0000';")
+            cust0 = cur.fetchone()
+            result["cust_0000"] = dict(cust0) if cust0 else None
+
+            # 2. Last 5 webhook debug log entries
+            cur.execute("""
+                SELECT id, sender_email, recipient_email, subject, customer_id, status, created_at
+                FROM webhook_debug_log ORDER BY id DESC LIMIT 5;
+            """)
+            result["last_webhook_logs"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+
+            # 3. Last 5 INBOUND communications
+            cur.execute("""
+                SELECT id, customer_id, sender_email, recipient_email, subject, direction, is_read, created_at
+                FROM customer_communications ORDER BY id DESC LIMIT 5;
+            """)
+            result["last_inbound_comms"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+
+            # 4. Total customer count
+            cur.execute("SELECT COUNT(*) as total FROM customer;")
+            result["total_customers"] = cur.fetchone()["total"]
+
+    except Exception as e:
+        result["error"] = str(e)
+    finally:
+        if conn:
+            conn.close()
+    return result
+
 @app.get("/api/debug/last-inbound")
 async def get_last_inbound_debug():
     """Diagnostic endpoint to inspect raw payload and extraction of last received webhooks and communications."""
