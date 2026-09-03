@@ -5640,24 +5640,46 @@ async def get_inbound_status_public():
             cur.execute("SELECT id, custumer_number, legal_name, status FROM customer WHERE custumer_number = 'CUST-0000';")
             cust0 = cur.fetchone()
             result["cust_0000"] = dict(cust0) if cust0 else None
+            cust0_id = cust0["id"] if cust0 else None
 
-            # 2. Last 5 webhook debug log entries
+            # 2. Last 10 webhook debug log entries (all statuses)
             cur.execute("""
                 SELECT id, sender_email, recipient_email, subject, customer_id, status, created_at
-                FROM webhook_debug_log ORDER BY id DESC LIMIT 5;
+                FROM webhook_debug_log ORDER BY id DESC LIMIT 10;
             """)
             result["last_webhook_logs"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
 
-            # 3. Last 5 INBOUND communications
+            # 3. Last 5 communications overall
             cur.execute("""
                 SELECT id, customer_id, sender_email, recipient_email, subject, direction, is_read, created_at
                 FROM customer_communications ORDER BY id DESC LIMIT 5;
             """)
-            result["last_inbound_comms"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+            result["last_comms_overall"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
 
-            # 4. Total customer count
+            # 4. CUST-0000 specific communications (unlinked inbound emails)
+            if cust0_id:
+                cur.execute("""
+                    SELECT id, customer_id, sender_email, recipient_email, subject, direction, is_read, created_at
+                    FROM customer_communications WHERE customer_id = %s ORDER BY id DESC LIMIT 10;
+                """, (cust0_id,))
+                rows = cur.fetchall()
+                result["cust_0000_comms"] = [dict(r) | {"created_at": str(r["created_at"])} for r in rows]
+                result["cust_0000_comms_count"] = len(rows)
+            else:
+                result["cust_0000_comms"] = []
+                result["cust_0000_comms_count"] = 0
+
+            # 5. Total customer count
             cur.execute("SELECT COUNT(*) as total FROM customer;")
             result["total_customers"] = cur.fetchone()["total"]
+
+            # 6. Webhook processing summary (RECEIVED vs SUCCESS vs ERROR in last 24h)
+            cur.execute("""
+                SELECT status, COUNT(*) as cnt FROM webhook_debug_log
+                WHERE created_at > (CURRENT_TIMESTAMP - INTERVAL '24 hours')
+                GROUP BY status ORDER BY cnt DESC;
+            """)
+            result["webhook_status_summary_24h"] = [dict(r) for r in cur.fetchall()]
 
     except Exception as e:
         result["error"] = str(e)
@@ -5665,6 +5687,7 @@ async def get_inbound_status_public():
         if conn:
             conn.close()
     return result
+
 
 @app.get("/api/debug/last-inbound")
 async def get_last_inbound_debug():
