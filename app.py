@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "process-delivered-events-v12"
+BUILD_VERSION = "pure-cust-id-only-v13"
 
 @app.get("/api/version")
 async def get_version():
@@ -6238,7 +6238,7 @@ async def resend_inbound_webhook(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cust = None
 
-            # Tier 1: PRIORITY MATCH by testing extracted candidate customer numbers against DB
+            # ── STEP 1: MATCH BY CUSTOMER ID ONLY ──────────────────────────────
             for cand in candidate_numbers:
                 raw_digits = re.sub(r'[^\d]', '', cand)
                 clean_cust = f"CUST-{raw_digits}" if raw_digits else cand
@@ -6253,22 +6253,12 @@ async def resend_inbound_webhook(request: Request):
                 found = cur.fetchone()
                 if found:
                     cust = found
-                    print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for candidate '{cand}' (digits: {raw_digits}) -> Customer #{cust['id']} ({cust['legal_name']})")
+                    print(f"[RESEND INBOUND ROUTING] ✅ Customer ID Match SUCCESS for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                     break
 
-            # Tier 2: Match by Sender Email address if Tier 1 found no Customer ID match
-            if not cust and sender_email:
-                cur.execute("""
-                    SELECT id, legal_name, parent_name, customer_type FROM customer
-                    WHERE LOWER(email) = LOWER(%s)
-                    ORDER BY id ASC LIMIT 1;
-                """, (sender_email,))
-                cust = cur.fetchone()
-                if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 2 match for Sender Email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
-
-            # Tier 3: Fallback to Catch-All Customer (CUST-0000 - Unassigned Inbound Emails)
+            # ── STEP 2: FALLBACK TO CUST-0000 IF CUSTOMER ID IS NULL OR NOT FOUND (NO SENDER EMAIL LOOKUP) ─
             if not cust:
+                print(f"[RESEND INBOUND ROUTING] ℹ️ No Customer ID matched in database for subject '{subject}'. Routing directly to CUST-0000 catch-all.")
                 cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
                 cust = cur.fetchone()
                 if not cust:
@@ -6287,7 +6277,7 @@ async def resend_inbound_webhook(request: Request):
                     except Exception as e_c0:
                         print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
                 if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 3 fallback -> Catch-All CUST-0000 (#{cust['id']})")
+                    print(f"[RESEND INBOUND ROUTING] Tier 2 fallback -> Catch-All CUST-0000 (#{cust['id']})")
 
             if cust:
                 customer_id = cust["id"]
