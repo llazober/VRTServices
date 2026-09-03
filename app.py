@@ -40,15 +40,25 @@ async def add_security_and_cache_headers(request: Request, call_next):
     proto = request.headers.get("x-forwarded-proto", "").lower()
     if proto == "http":
         url = request.url.replace(scheme="https")
-        return RedirectResponse(url=str(url), status_code=301)
+        red_resp = RedirectResponse(url=str(url), status_code=301)
+        red_resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        red_resp.headers["X-Content-Type-Options"] = "nosniff"
+        red_resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+        red_resp.headers["X-XSS-Protection"] = "1; mode=block"
+        red_resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        red_resp.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;"
+        red_resp.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        return red_resp
 
     response = await call_next(request)
-    # Security headers
+    # Security headers for SecurityHeaders.com / SSL Labs A+ rating
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     
     if request.url.path in ["/", "/index", "/dashboard", "/customers"]:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
@@ -1934,8 +1944,8 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "error": f"Context notice: {str(e)}"
         }
 
-@app.get("/", response_class=HTMLResponse)
-@app.get("/home", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
+@app.api_route("/home", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def read_home_page(request: Request):
     username = get_current_username(request)
     return templates.TemplateResponse(
