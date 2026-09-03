@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "dedup-fix-v3"
+BUILD_VERSION = "dedup-fixed-v4"
 
 @app.get("/api/version")
 async def get_version():
@@ -6235,26 +6235,39 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
 
         if customer_id:
-            # ── Step 1: Strict Deduplicate Check (60-second window across fresh connection) ────
+            # ── Step 1: Strict Deduplicate Check (Resend email_id or identical body_text within 10s) ────
             try:
                 fresh_dedup = get_db_connection()
                 with fresh_dedup.cursor() as cur:
+                    if email_id:
+                        cur.execute("""
+                            SELECT id FROM customer_communications
+                            WHERE customer_id = %s AND direction = 'INBOUND'
+                              AND (attachments_json->>'email_id' = %s OR body_text ILIKE %s);
+                        """, (customer_id, str(email_id), f"%{email_id}%"))
+                        if cur.fetchone():
+                            print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' for customer {customer_id}")
+                            fresh_dedup.close()
+                            try:
+                                if conn: conn.close()
+                            except Exception: pass
+                            return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
+
                     cur.execute("""
                         SELECT id FROM customer_communications
                         WHERE customer_id = %s AND direction = 'INBOUND'
-                          AND (
-                            (LOWER(sender_email) = LOWER(%s) AND COALESCE(subject, '') = COALESCE(%s, '') AND created_at > (CURRENT_TIMESTAMP - INTERVAL '60 seconds'))
-                            OR (subject = %s AND created_at > (CURRENT_TIMESTAMP - INTERVAL '30 seconds'))
-                          );
-                    """, (customer_id, sender_email, subject, subject))
+                          AND LOWER(sender_email) = LOWER(%s)
+                          AND COALESCE(subject, '') = COALESCE(%s, '')
+                          AND COALESCE(body_text, '') = COALESCE(%s, '')
+                          AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
+                    """, (customer_id, sender_email, subject, body_text))
                     if cur.fetchone():
-                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate inbound email for customer {customer_id} within window")
+                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate content for customer {customer_id} within 10s")
                         fresh_dedup.close()
                         try:
                             if conn: conn.close()
-                        except Exception:
-                            pass
-                        return {"status": "ignored", "reason": "Duplicate inbound email within 60 seconds"}
+                        except Exception: pass
+                        return {"status": "ignored", "reason": "Duplicate inbound content within 10 seconds"}
                 fresh_dedup.close()
             except Exception as e_dup:
                 print(f"[DEDUP CHECK ERROR - continuing] {e_dup}")
@@ -6266,6 +6279,7 @@ async def resend_inbound_webhook(request: Request):
             try:
                 fresh_conn = get_db_connection()
                 with fresh_conn.cursor() as cur:
+                    init_atts = [{"email_id": str(email_id)}] if email_id else []
                     cur.execute("""
                         INSERT INTO customer_communications (
                             customer_id, direction, sender_email, recipient_email,
@@ -6273,7 +6287,7 @@ async def resend_inbound_webhook(request: Request):
                         ) VALUES (
                             %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
                         ) RETURNING id;
-                    """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps([])))
+                    """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps(init_atts)))
                     row = cur.fetchone()
                     comm_id = row[0] if row else None
                     fresh_conn.commit()
