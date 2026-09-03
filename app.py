@@ -5567,9 +5567,9 @@ async def get_unread_communications_summary(request: Request):
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if user_parent.lower() == "vrt services":
-                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '')"
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '' OR cust.custumer_number = 'CUST-0000')"
             else:
-                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s))"
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.custumer_number = 'CUST-0000')"
 
             cur.execute(f"""
                 SELECT c.customer_id, cust.legal_name, COUNT(*) as unread_count
@@ -5604,9 +5604,9 @@ async def mark_all_communications_read(request: Request):
         conn = get_db_connection()
         with conn.cursor() as cur:
             if user_parent.lower() == "vrt services":
-                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '')"
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '' OR cust.custumer_number = 'CUST-0000')"
             else:
-                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s))"
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.custumer_number = 'CUST-0000')"
 
             cur.execute(f"""
                 UPDATE customer_communications
@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "catchall-direct-v2"
+BUILD_VERSION = "dedup-fix-v3"
 
 @app.get("/api/version")
 async def get_version():
@@ -6235,18 +6235,27 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
 
         if customer_id:
-            # ── Step 1: Deduplicate (10-second window) ───────────────────────────
+            # ── Step 1: Strict Deduplicate Check (60-second window across fresh connection) ────
             try:
-                with conn.cursor() as cur:
+                fresh_dedup = get_db_connection()
+                with fresh_dedup.cursor() as cur:
                     cur.execute("""
                         SELECT id FROM customer_communications
-                        WHERE customer_id = %s AND direction = 'INBOUND' AND subject = %s
-                          AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
-                    """, (customer_id, subject))
+                        WHERE customer_id = %s AND direction = 'INBOUND'
+                          AND (
+                            (LOWER(sender_email) = LOWER(%s) AND COALESCE(subject, '') = COALESCE(%s, '') AND created_at > (CURRENT_TIMESTAMP - INTERVAL '60 seconds'))
+                            OR (subject = %s AND created_at > (CURRENT_TIMESTAMP - INTERVAL '30 seconds'))
+                          );
+                    """, (customer_id, sender_email, subject, subject))
                     if cur.fetchone():
-                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate for customer {customer_id} within 10 secs")
-                        if conn: conn.close()
-                        return {"status": "ignored", "reason": "Duplicate inbound email within 10 seconds"}
+                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate inbound email for customer {customer_id} within window")
+                        fresh_dedup.close()
+                        try:
+                            if conn: conn.close()
+                        except Exception:
+                            pass
+                        return {"status": "ignored", "reason": "Duplicate inbound email within 60 seconds"}
+                fresh_dedup.close()
             except Exception as e_dup:
                 print(f"[DEDUP CHECK ERROR - continuing] {e_dup}")
 
