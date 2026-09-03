@@ -983,6 +983,10 @@
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
 
+                <button onclick="openCatchallInboxModal()" style="background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(168, 85, 247, 0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'" title="Open Unassigned General Inbox (CUST-0000)">
+                    <span>📥</span> <span>Unassigned Inbox</span>
+                </button>
+
                 <div class="user-profile">
                     <div class="user-avatar" title="{{ user_email or username }}">
                         {{ (user_email or username or 'U')[0]|upper }}
@@ -3917,6 +3921,22 @@
         }
 
         let activeHistoryCustomerId = null;
+
+        async function openCatchallInboxModal() {
+            try {
+                const res = await fetch('/api/customers');
+                const data = await res.json();
+                const custs = data.customers || [];
+                const c0 = custs.find(c => c.custumer_number === 'CUST-0000');
+                if (c0) {
+                    await openCustomerCommsHistoryModal(c0.id);
+                } else {
+                    alert("Catch-all customer (CUST-0000) was not found in customer directory.");
+                }
+            } catch(err) {
+                console.error("Error opening catch-all inbox:", err);
+            }
+        }
 
         async function openCustomerCommsHistoryModal(customerId) {
             const cid = customerId || currentEmailCustomerId;

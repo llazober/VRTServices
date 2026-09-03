@@ -2419,7 +2419,7 @@ async def get_customers(request: Request, query: str = "", parentName: str = "")
             if where_clauses:
                 sql += " WHERE " + " AND ".join(where_clauses)
 
-            sql += " ORDER BY id DESC;"
+            sql += " ORDER BY CASE WHEN custumer_number = 'CUST-0000' THEN 0 ELSE 1 END, id DESC;"
             cur.execute(sql, tuple(params))
             records = cur.fetchall()
             
@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "dedup-fixed-v4"
+BUILD_VERSION = "catchall-pinned-v5"
 
 @app.get("/api/version")
 async def get_version():
