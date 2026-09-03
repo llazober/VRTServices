@@ -6394,17 +6394,22 @@ async def resend_inbound_webhook(request: Request):
 
         # Save persistent log to PostgreSQL table
         try:
-            with conn.cursor() as cur:
+            db_s = get_db_connection()
+            with db_s.cursor() as cur:
                 cur.execute("""
                     INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
                     VALUES (%s, %s, %s, %s, %s, %s, 'SUCCESS');
                 """, (json.dumps(raw_body), sender_email, recipient_email, subject, body_text, customer_id))
-                conn.commit()
+                db_s.commit()
+            db_s.close()
         except Exception as e_db_log:
             print(f"Error logging to webhook_debug_log DB table: {e_db_log}")
 
-        if conn:
-            conn.close()
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
         return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
     except Exception as e:
         import traceback
