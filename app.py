@@ -140,13 +140,14 @@ def parse_clean_email(email_str: str) -> str:
     """Extract clean, raw email address from potential RFC email header strings e.g. 'John <john@domain.com>' -> 'john@domain.com'."""
     if not email_str:
         return ""
-    s = str(email_str).strip().strip('\'"')
-    name, addr = email.utils.parseaddr(s)
-    if addr and "@" in addr:
-        return addr.strip()
+    s = str(email_str).strip().strip("[]'\"` ")
+    # First attempt direct regex extraction for explicit email patterns
     match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', s)
     if match:
         return match.group(0).strip()
+    name, addr = email.utils.parseaddr(s)
+    if addr and "@" in addr:
+        return addr.strip()
     return s
 
 def get_resend_to_email() -> str:
@@ -5946,36 +5947,13 @@ def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend
                 req = urllib.request.Request(target_url, headers=headers, method="GET")
                 with urllib.request.urlopen(req) as resp:
                     raw_resp = resp.read()
-                    if not raw_resp:
-                        continue
-                    
-                    try:
-                        resp_json = json.loads(raw_resp.decode("utf-8"))
-                        if isinstance(resp_json, dict):
-                            b64_str = resp_json.get("content") or resp_json.get("data") or resp_json.get("content_base64") or resp_json.get("file")
-                            if b64_str and isinstance(b64_str, str):
-                                import base64
-                                decoded = base64.b64decode(b64_str)
-                                if decoded and len(decoded) > 0:
-                                    print(f"[RESEND ATTACHMENT DOWNLOAD SUCCESS]: {len(decoded)} bytes from {target_url}")
-                                    return decoded
-                            
-                            download_url = resp_json.get("url") or resp_json.get("download_url") or resp_json.get("href")
-                            if download_url and isinstance(download_url, str):
-                                req_dl = urllib.request.Request(download_url, headers=headers, method="GET")
-                                with urllib.request.urlopen(req_dl) as resp_dl:
-                                    dl_bytes = resp_dl.read()
-                                    if dl_bytes and len(dl_bytes) > 0:
-                                        print(f"[RESEND ATTACHMENT DIRECT URL DOWNLOAD SUCCESS]: {len(dl_bytes)} bytes from {download_url}")
-                                        return dl_bytes
-                    except Exception:
-                        if raw_resp and len(raw_resp) > 50:
-                            print(f"[RESEND ATTACHMENT BINARY DIRECT SUCCESS]: {len(raw_resp)} bytes from {target_url}")
-                            return raw_resp
+                    if raw_resp and len(raw_resp) > 0:
+                        return raw_resp
             except Exception as e_try:
                 print(f"[RESEND ATTACHMENT FETCH NOTICE] {target_url}: {e_try}")
-    
     return None
+
+BUILD_VERSION = "full-debug-log-v28-robust-routing"
 
 @app.post("/api/webhooks/resend-inbound")
 @app.post("/api/webhook/resend-inbound")
@@ -5986,9 +5964,23 @@ def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend
 async def resend_inbound_webhook(request: Request):
     """Public webhook receiver for customer reply emails forwarded from Resend."""
     global LAST_INBOUND_DEBUG
-    fetch_logs = []
+    raw_body = {}
+    data = {}
+    debug_log_id = None
+    customer_id = None
+    sender_email = ""
+    recipient_email = ""
+    subject = ""
+    body_text = ""
+    attachments = []
+    cust = None
+
     try:
-        raw_body = await request.json()
+        try:
+            raw_body = await request.json()
+        except Exception:
+            raw_body = {}
+
         print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
 
         # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
@@ -5997,55 +5989,19 @@ async def resend_inbound_webhook(request: Request):
         else:
             data = raw_body if isinstance(raw_body, dict) else {}
 
-        # Immediately record raw webhook payload to DB for diagnostics
-        debug_log_id = None
-        try:
-            conn_dbg = get_db_connection()
-            with conn_dbg.cursor() as cur_dbg:
-                cur_dbg.execute("""
-                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED')
-                    RETURNING id;
-                """, (
-                    json.dumps(raw_body),
-                    str(data.get("from") or raw_body.get("from") or ""),
-                    str(data.get("to") or raw_body.get("to") or ""),
-                    str(data.get("subject") or raw_body.get("subject") or ""),
-                    str(data.get("text") or data.get("html") or ""),
-                    None
-                ))
-                row_dbg = cur_dbg.fetchone()
-                if row_dbg:
-                    debug_log_id = row_dbg[0] if isinstance(row_dbg, (list, tuple)) else row_dbg.get("id")
-                conn_dbg.commit()
-            conn_dbg.close()
-        except Exception as e_dbg_init:
-            print(f"[WEBHOOK DB LOG INIT ERROR]: {e_dbg_init}")
-
-        # 1. Filter out webhook status events (like email.sent, email.bounced)
-        event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
-        ignored_status_events = {"email.sent", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "bounced", "complained", "opened", "clicked"}
-        if event_type in ignored_status_events:
-            print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
-            return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
-
-        # 2. Filter out self-generated system notification alerts
-        raw_subj = str(data.get("subject") or raw_body.get("subject") or "").strip()
-        if raw_subj.startswith("📩 New Reply Received") or "Datalazo CRM Alerts" in str(raw_body):
-            print(f"[RESEND WEBHOOK IGNORED] Ignoring self-generated CRM alert email")
-            return {"status": "ignored", "reason": "Self-generated CRM alert email"}
-
         def extract_email_str(val):
             if isinstance(val, list):
                 val = val[0] if len(val) > 0 else ""
             if isinstance(val, dict):
                 val = val.get("email") or val.get("address") or str(val)
-            return str(val or "").strip()
+            s = str(val or "").strip()
+            s = re.sub(r"[\[\]'\"`]", "", s).strip()
+            return s
 
-        raw_sender = extract_email_str(data.get("from") or data.get("sender"))
+        raw_sender = extract_email_str(data.get("from") or data.get("sender") or raw_body.get("from"))
         sender_email = parse_clean_email(raw_sender) or raw_sender
 
-        raw_recipient = extract_email_str(data.get("to") or data.get("recipient"))
+        raw_recipient = extract_email_str(data.get("to") or data.get("recipient") or raw_body.get("to"))
         recipient_email = parse_clean_email(raw_recipient) or raw_recipient
 
         def clean_html_to_text(html_str: str) -> str:
@@ -6059,7 +6015,6 @@ async def resend_inbound_webhook(request: Request):
             return text
 
         def extract_email_body(raw_b: dict, d: dict) -> str:
-            # 1. Try MIME raw string parsing if present
             for obj in [d, raw_b]:
                 if isinstance(obj, dict):
                     raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
@@ -6073,44 +6028,31 @@ async def resend_inbound_webhook(request: Request):
                                 for part in msg.walk():
                                     ctype = part.get_content_type()
                                     cdisp = str(part.get('Content-Disposition') or '')
-                                    if 'attachment' in cdisp.lower():
-                                        continue
+                                    if 'attachment' in cdisp.lower(): continue
                                     payload_bytes = part.get_payload(decode=True)
                                     if payload_bytes:
                                         charset = part.get_content_charset() or 'utf-8'
                                         decoded = payload_bytes.decode(charset, errors='ignore')
-                                        if ctype == 'text/plain' and not plain_body:
-                                            plain_body = decoded.strip()
-                                        elif ctype == 'text/html' and not html_body:
-                                            html_body = decoded.strip()
+                                        if ctype == 'text/plain' and not plain_body: plain_body = decoded.strip()
+                                        elif ctype == 'text/html' and not html_body: html_body = decoded.strip()
                             else:
                                 payload_bytes = msg.get_payload(decode=True)
                                 if payload_bytes:
                                     charset = msg.get_content_charset() or 'utf-8'
                                     decoded = payload_bytes.decode(charset, errors='ignore')
-                                    if msg.get_content_type() == 'text/plain':
-                                        plain_body = decoded.strip()
-                                    else:
-                                        html_body = decoded.strip()
-
-                            if plain_body:
-                                return plain_body
+                                    if msg.get_content_type() == 'text/plain': plain_body = decoded.strip()
+                                    else: html_body = decoded.strip()
+                            if plain_body: return plain_body
                             if html_body:
                                 cleaned = clean_html_to_text(html_body)
-                                if cleaned:
-                                    return cleaned
+                                if cleaned: return cleaned
                         except Exception as e_mime:
                             print(f"[MIME PARSE NOTICE]: {e_mime}")
-
-            # 2. Check plain text fields first across objects
             for obj in [d, raw_b]:
                 if isinstance(obj, dict):
                     for key in ["text", "plain", "text_body", "body_text", "snippet", "preview"]:
                         val = obj.get(key)
-                        if val and isinstance(val, str) and val.strip():
-                            return val.strip()
-
-            # 3. Check HTML fields next
+                        if val and isinstance(val, str) and val.strip(): return val.strip()
             for obj in [d, raw_b]:
                 if isinstance(obj, dict):
                     for key in ["html", "html_body", "body", "content", "message"]:
@@ -6120,91 +6062,82 @@ async def resend_inbound_webhook(request: Request):
                             if cleaned:
                                 return cleaned
 
-            # 4. Deep recursive inspection
-            def search_dict(target, depth=0):
-                if depth > 4 or not isinstance(target, dict):
-                    return ""
-                for k, v in target.items():
-                    if k.lower() in ["headers", "auth", "attachments"]:
-                        continue
-                    if isinstance(v, str) and len(v.strip()) > 0:
-                        if k.lower() in ["text", "plain", "html", "body", "content", "message", "snippet", "preview"]:
-                            cleaned = clean_html_to_text(v)
-                            if cleaned:
-                                return cleaned
-                    elif isinstance(v, dict):
-                        res = search_dict(v, depth + 1)
-                        if res:
-                            return res
-                return ""
-
-            res = search_dict(d)
-            if res:
-                return res
-            res_raw = search_dict(raw_b)
-            if res_raw:
-                return res_raw
-
             return ""
 
         subject = str(
             data.get("subject") or 
             (raw_body.get("subject") if isinstance(raw_body, dict) else "") or 
-            (raw_body.get("data", {}).get("subject") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else "") or 
             ""
         ).strip()
+
         body_text = extract_email_body(raw_body if isinstance(raw_body, dict) else {}, data if isinstance(data, dict) else {})
         attachments = (
             data.get("attachments") or 
             data.get("files") or 
             data.get("documents") or 
             (raw_body.get("attachments") if isinstance(raw_body, dict) else None) or 
-            (raw_body.get("files") if isinstance(raw_body, dict) else None) or 
-            (raw_body.get("data", {}).get("attachments") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or 
             []
         )
 
-        # Always fetch full email object and attachments from Resend API if email_id is present
         email_id = (
             data.get("email_id") or data.get("id") or 
             (raw_body.get("email_id") if isinstance(raw_body, dict) else None) or
-            (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None) or
-            (raw_body.get("data", {}).get("id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
+            (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
         )
-        resend_key = (
-            os.environ.get("RESEND_API_KEY") or 
-            os.environ.get("RESEND_KEY") or 
-            os.environ.get("RESEND_TOKEN") or 
-            ""
-        ).strip()
-        fetched_data = {}
+
+        # Record raw initial log entry
+        try:
+            conn_dbg = get_db_connection()
+            with conn_dbg.cursor() as cur_dbg:
+                cur_dbg.execute("""
+                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED')
+                    RETURNING id;
+                """, (
+                    json.dumps(raw_body),
+                    sender_email,
+                    recipient_email,
+                    subject,
+                    body_text[:1000] if body_text else "",
+                    None
+                ))
+                row_dbg = cur_dbg.fetchone()
+                if row_dbg:
+                    debug_log_id = row_dbg[0] if isinstance(row_dbg, (list, tuple)) else row_dbg.get("id")
+                conn_dbg.commit()
+            conn_dbg.close()
+        except Exception as e_dbg_init:
+            print(f"[WEBHOOK DB LOG INIT ERROR]: {e_dbg_init}")
+
+        # 1. Filter status events
+        event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
+        ignored_status_events = {"email.sent", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "bounced", "complained", "opened", "clicked"}
+        if event_type in ignored_status_events:
+            print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
+            return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
+
+        # 2. Filter self-generated CRM alerts
+        if subject.startswith("📩 New Reply Received") or "Datalazo CRM Alerts" in str(raw_body):
+            print(f"[RESEND WEBHOOK IGNORED] Ignoring self-generated CRM alert email")
+            return {"status": "ignored", "reason": "Self-generated CRM alert email"}
 
         def extract_all_customer_candidates(subj_str: str, body_str: str):
             def scan_text(txt: str):
                 res = []
                 if not txt or not isinstance(txt, str):
                     return res
-                # 1. [Ref: CUST-XXXX], [CUST-XXXX], [Ref: XXXX], [XXXX]
                 for m in re.finditer(r'\[\s*(?:Ref:\s*)?(?:CUST[-_\s]*)?(\d{1,6})\s*\]', txt, re.IGNORECASE):
                     res.append(f"CUST-{m.group(1)}")
                     res.append(m.group(1))
-
-                # 2. CUST-XXXX or CUST XXXX or CUSTXXXX
                 for m in re.finditer(r'\bCUST[-_\s]*(\d{1,6})\b', txt, re.IGNORECASE):
                     res.append(f"CUST-{m.group(1)}")
                     res.append(m.group(1))
-
-                # 3. Ref: CUST-XXXX or Ref: XXXX
                 for m in re.finditer(r'\bRef:\s*(?:CUST-)?(\d{1,6})\b', txt, re.IGNORECASE):
                     res.append(f"CUST-{m.group(1)}")
                     res.append(m.group(1))
-
-                # 4. Customer/Cust/Client/Account/ID/# followed by digits
                 for m in re.finditer(r'\b(?:Customer|Cust|Client|Account|ID|#)\s*:?\s*#?\s*(?:CUST-)?(\d{1,6})\b', txt, re.IGNORECASE):
                     res.append(f"CUST-{m.group(1)}")
                     res.append(m.group(1))
-
-                # 5. Standalone 4-5 digit numbers
                 for m in re.finditer(r'\b(\d{4,5})\b', txt):
                     num = m.group(1)
                     if num != "0000":
@@ -6214,7 +6147,6 @@ async def resend_inbound_webhook(request: Request):
 
             subj_cands = scan_text(subj_str)
             body_cands = scan_text(body_str)
-
             seen = set()
             unique = []
             for c in subj_cands + body_cands:
@@ -6225,19 +6157,28 @@ async def resend_inbound_webhook(request: Request):
             return unique
 
         cust_candidates = extract_all_customer_candidates(subject, body_text)
-        print(f"[RESEND INBOUND ROUTING] Extracted Customer Candidates for Subject='{subject}': {cust_candidates}")
+        print(f"[RESEND INBOUND ROUTING] Extracted candidates for '{subject}': {cust_candidates}")
 
-        customer_id = None
-        legal_name = ""
-        parent_name = ""
-
-        conn_lookup = None
+        # Execute DB steps inside single dedicated database connection
+        conn_proc = get_db_connection()
         try:
-            conn_lookup = get_db_connection()
-            with conn_lookup.cursor(cursor_factory=RealDictCursor) as cur:
-                cust = None
+            with conn_proc.cursor(cursor_factory=RealDictCursor) as cur:
+                # ── Step 1: Deduplication Check ──
+                if email_id and len(str(email_id).strip()) > 3:
+                    clean_eid = str(email_id).strip()
+                    cur.execute("""
+                        SELECT id FROM customer_communications
+                        WHERE direction = 'INBOUND'
+                          AND (attachments_json::text LIKE %s OR body_text LIKE %s);
+                    """, (f'%"{clean_eid}"%', f'%{clean_eid}%'))
+                    if cur.fetchone():
+                        print(f"[RESEND DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
+                        if debug_log_id:
+                            cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
+                            conn_proc.commit()
+                        return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
 
-                # Tier 1: Match by Customer ID candidate in subject or body
+                # ── Step 2: Customer Matching ──
                 for cand in cust_candidates:
                     raw_digits = re.sub(r'[^\d]', '', cand)
                     if not raw_digits or raw_digits == "0000":
@@ -6255,234 +6196,58 @@ async def resend_inbound_webhook(request: Request):
                     found = cur.fetchone()
                     if found:
                         cust = found
-                        print(f"[RESEND INBOUND ROUTING] ✅ Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                        print(f"[RESEND ROUTING MATCH] Candidate '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                         break
 
-                # Step 2: Fallback to CUST-0000 (Unassigned Inbound Emails) if Customer ID is missing or unmatched
                 if not cust:
-                    print(f"[RESEND INBOUND ROUTING] ℹ️ No Customer ID matched for subject '{subject}'. Routing directly to CUST-0000 catch-all.")
+                    print(f"[RESEND ROUTING FALLBACK] No Customer ID match for '{subject}'. Routing to CUST-0000.")
                     cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
                     cust = cur.fetchone()
                     if not cust:
-                        try:
-                            cur.execute("""
-                                INSERT INTO customer (
-                                    custumer_number, customer_type, legal_name, display_name,
-                                    status, parent_name, created_at, updated_at
-                                ) VALUES (
-                                    'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
-                                    'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                                ) RETURNING id, legal_name, parent_name, customer_type;
-                            """)
-                            cust = cur.fetchone()
-                            conn_lookup.commit()
-                        except Exception as e_c0:
-                            print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
-                    if cust:
-                        print(f"[RESEND INBOUND ROUTING] Fallback -> Catch-All CUST-0000 (#{cust['id']})")
-
-                if cust:
-                    customer_id = cust["id"]
-                    legal_name = cust["legal_name"]
-                    parent_name = cust.get("parent_name") or "VRT Services"
-                    customer_type = cust.get("customer_type") or "System"
-                else:
-                    print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
-        finally:
-            if conn_lookup:
-                try: conn_lookup.close()
-                except Exception: pass
-
-        if customer_id:
-            # ── Step 1: Atomic email_id Deduplication Check ──────────────────────
-            try:
-                fresh_dedup = get_db_connection()
-                with fresh_dedup.cursor() as cur:
-                    if email_id and len(str(email_id).strip()) > 3:
-                        clean_eid = str(email_id).strip()
                         cur.execute("""
-                            SELECT id FROM customer_communications
-                            WHERE direction = 'INBOUND'
-                              AND (attachments_json::text LIKE %s OR body_text LIKE %s);
-                        """, (f'%"{clean_eid}"%', f'%{clean_eid}%'))
-                        if cur.fetchone():
-                            print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
-                            fresh_dedup.close()
-                            if debug_log_id:
-                                try:
-                                    conn_upd = get_db_connection()
-                                    with conn_upd.cursor() as cur_upd:
-                                        cur_upd.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP', customer_id = %s WHERE id = %s;", (customer_id, debug_log_id))
-                                        conn_upd.commit()
-                                    conn_upd.close()
-                                except Exception: pass
-                            return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
-                fresh_dedup.close()
-            except Exception as e_dup:
-                print(f"[DEDUP CHECK NOTICE]: {e_dup}")
+                            INSERT INTO customer (
+                                custumer_number, customer_type, legal_name, display_name,
+                                status, parent_name, created_at, updated_at
+                            ) VALUES (
+                                'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
+                                'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                            ) RETURNING id, legal_name, parent_name, customer_type;
+                        """)
+                        cust = cur.fetchone()
 
+                customer_id = cust["id"] if cust else None
+                legal_name = cust["legal_name"] if cust else "Unassigned Customer"
+                parent_name = (cust.get("parent_name") if cust else None) or "VRT Services"
 
-            # ── Step 2: Save to customer_communications (ALWAYS, fresh connection) ─
-            saved_attachments = []
-            comm_id = None
-            try:
-                fresh_conn = get_db_connection()
-                with fresh_conn.cursor() as cur:
-                    init_atts = [{"email_id": str(email_id)}] if email_id else []
-                    final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
-                    cur.execute("""
-                        INSERT INTO customer_communications (
-                            customer_id, direction, sender_email, recipient_email,
-                            subject, body_text, attachments_json, status, is_read, created_at
-                        ) VALUES (
-                            %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                        ) RETURNING id;
-                    """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts)))
-                    row = cur.fetchone()
-                    comm_id = row[0] if row else None
-                    
-                    if debug_log_id:
-                        cur.execute("""
-                            UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
-                            WHERE id = %s;
-                        """, (customer_id, debug_log_id))
-                    else:
-                        cur.execute("""
-                            UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
-                            WHERE id = (SELECT max(id) FROM webhook_debug_log);
-                        """, (customer_id,))
-                    fresh_conn.commit()
-                fresh_conn.close()
-                print(f"[RESEND INBOUND WEBHOOK] ✅ Saved comm id={comm_id} from '{sender_email}' → customer '{legal_name}' (ID: {customer_id})")
-            except Exception as e_comm:
-                err_str = f"COMM_INSERT_ERROR: {e_comm}"
-                print(f"[CUSTOMER COMM INSERT ERROR] {err_str}")
-                import traceback
-                traceback.print_exc()
+                # ── Step 3: Insert into customer_communications ──
+                init_atts = [{"email_id": str(email_id)}] if email_id else []
+                final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
+
+                cur.execute("""
+                    INSERT INTO customer_communications (
+                        customer_id, direction, sender_email, recipient_email,
+                        subject, body_text, attachments_json, status, is_read, created_at
+                    ) VALUES (
+                        %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                    ) RETURNING id;
+                """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts)))
+                comm_row = cur.fetchone()
+                comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
+
+                # ── Step 4: Update webhook_debug_log status to SUCCESS ──
                 if debug_log_id:
-                    try:
-                        conn_err = get_db_connection()
-                        with conn_err.cursor() as cur_e:
-                            cur_e.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;", (err_str[:200], customer_id, debug_log_id))
-                            conn_err.commit()
-                        conn_err.close()
-                    except Exception: pass
+                    cur.execute("""
+                        UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
+                    """, (customer_id, debug_log_id))
+                conn_proc.commit()
+                print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
 
-            # ── Step 3: S3 Attachment Upload (optional, non-blocking) ────────────
-            try:
-                _fetched_data_safe = fetched_data if ('fetched_data' in locals() and isinstance(fetched_data, dict)) else {}
-                mime_att_list = []
-                for obj in [data, raw_body, _fetched_data_safe]:
-                    if isinstance(obj, dict):
-                        raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
-                        if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
-                            mime_att_list = extract_attachments_from_mime(raw_mime)
-                            if mime_att_list:
-                                break
-
-                _att_list = attachments if ('attachments' in locals() and isinstance(attachments, list)) else []
-                _email_id = email_id if 'email_id' in locals() else None
-                _resend_key = os.environ.get("RESEND_API_KEY") or ""
-
-                if mime_att_list or _att_list:
-                    s3client, s3err = get_s3_client()
-                    if s3client:
-                        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-                        _s3_parent = sanitize_folder_name((cust.get("parent_name") if cust else None) or parent_name or "VRT Services")
-                        _s3_legal  = sanitize_folder_name((cust.get("legal_name")  if cust else None) or legal_name  or "Unknown")
-                        target_folder = f"{_s3_parent}/{_s3_legal}/Inbox/"
-
-                        for m_att in mime_att_list:
-                            m_name  = m_att.get("filename") or "attached_file.pdf"
-                            m_bytes = m_att.get("bytes")
-                            if m_bytes:
-                                fk = f"{target_folder}{m_name}"
-                                s3client.put_object(Bucket=bucket, Key=fk, Body=m_bytes, ACL='private')
-                                saved_attachments.append(fk)
-
-                        for att in _att_list:
-                            file_bytes, att_name, att_id = None, "attached_file.pdf", None
-                            if isinstance(att, dict):
-                                att_name = att.get("filename") or att.get("name") or "attached_file.pdf"
-                                att_id   = att.get("id")
-                                b64 = att.get("content") or att.get("data") or ""
-                                if b64:
-                                    try:
-                                        import base64; file_bytes = base64.b64decode(b64)
-                                    except Exception: pass
-                                if not file_bytes:
-                                    dl_url = att.get("url") or att.get("download_url") or ""
-                                    if dl_url:
-                                        try:
-                                            r = urllib.request.Request(dl_url, headers={"Authorization": f"Bearer {_resend_key}", "User-Agent": "Mozilla/5.0"}, method="GET")
-                                            with urllib.request.urlopen(r) as resp: file_bytes = resp.read()
-                                        except Exception: pass
-                            elif isinstance(att, str) and att.startswith("http"):
-                                att_name = att.split('/')[-1] or "attached_file.pdf"
-                                try:
-                                    r = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                                    with urllib.request.urlopen(r) as resp: file_bytes = resp.read()
-                                except Exception: pass
-                            if not file_bytes and _email_id and _resend_key:
-                                file_bytes = download_resend_attachment(_email_id, att_id, att_name, _resend_key)
-                            if file_bytes:
-                                fk = f"{target_folder}{att_name}"
-                                s3client.put_object(Bucket=bucket, Key=fk, Body=file_bytes, ACL='private')
-                                saved_attachments.append(fk)
-
-                        # Update attachments_json in customer_communications if any saved
-                        if saved_attachments and comm_id:
-                            try:
-                                upd_conn = get_db_connection()
-                                with upd_conn.cursor() as cur:
-                                    cur.execute("UPDATE customer_communications SET attachments_json = %s WHERE id = %s;",
-                                                (json.dumps(saved_attachments), comm_id))
-                                    upd_conn.commit()
-                                upd_conn.close()
-                            except Exception as e_upd:
-                                print(f"[ATTACHMENT UPDATE ERROR] {e_upd}")
-            except Exception as e_s3:
-                print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
-
-            # ── Step 4: Team email alert (optional, non-blocking) ─────────────────
-            try:
-                _alert_key = os.environ.get("RESEND_API_KEY")
-                team_email = get_resend_to_email()
-                if _alert_key and team_email:
-                    att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
-                    alert_payload = {
-                        "from": format_resend_from_header(f"{parent_name or 'VRT Services'} CRM Alerts"),
-                        "to": [team_email],
-                        "subject": f"📩 New Reply Received: {legal_name} - {subject}",
-                        "html": f"""
-                        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #7f00ff; border-radius: 12px; background: #0f172a; color: #f8fafc;">
-                            <h2 style="color: #38bdf8; margin-top: 0;">📩 New Customer Email Reply Received</h2>
-                            <p><strong>Customer:</strong> {legal_name} (ID: {customer_id})</p>
-                            <p><strong>From:</strong> {sender_email}</p>
-                            <p><strong>Subject:</strong> {subject}</p>
-                            <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; margin: 16px 0; border-left: 4px solid #38bdf8; color: #e2e8f0;">
-                                {body_text[:800] if body_text else '(no body)'}
-                            </div>
-                            {f'<p style="color: #34d399;"><strong>{att_note}</strong></p>' if saved_attachments else ''}
-                        </div>
-                        """
-                    }
-                    alert_req = urllib.request.Request(
-                        "https://api.resend.com/emails",
-                        data=json.dumps(alert_payload).encode("utf-8"),
-                        headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                        method="POST"
-                    )
-                    with urllib.request.urlopen(alert_req) as _:
-                        print(f"[TEAM ALERT SENT] to {team_email}")
-            except Exception as e_alert:
-                print(f"[TEAM ALERT ERROR] {e_alert}")
-
+        finally:
+            conn_proc.close()
 
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.now()),
             "raw_body": raw_body,
-            "data": data,
             "sender_email": sender_email,
             "recipient_email": recipient_email,
             "subject": subject,
@@ -6491,20 +6256,111 @@ async def resend_inbound_webhook(request: Request):
             "attachments_count": len(attachments) if 'attachments' in locals() else 0
         }
 
-        # Save persistent log to PostgreSQL table
+        # Optional S3 Attachment Storage & Team Email Alert
+        saved_attachments = []
         try:
-            db_s = get_db_connection()
-            with db_s.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'SUCCESS');
-                """, (json.dumps(raw_body), sender_email, recipient_email, subject, body_text, customer_id))
-                db_s.commit()
-            db_s.close()
-        except Exception as e_db_log:
-            print(f"Error logging to webhook_debug_log DB table: {e_db_log}")
+            mime_att_list = []
+            for obj in [data, raw_body]:
+                if isinstance(obj, dict):
+                    raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
+                    if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
+                        mime_att_list = extract_attachments_from_mime(raw_mime)
+                        if mime_att_list:
+                            break
+
+            _att_list = attachments if ('attachments' in locals() and isinstance(attachments, list)) else []
+            _email_id = email_id if 'email_id' in locals() else None
+            _resend_key = os.environ.get("RESEND_API_KEY") or ""
+
+            if mime_att_list or _att_list:
+                s3client, s3err = get_s3_client()
+                if s3client:
+                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                    _s3_parent = sanitize_folder_name(parent_name or "VRT Services")
+                    _s3_legal  = sanitize_folder_name(legal_name or "Unknown")
+                    target_folder = f"{_s3_parent}/{_s3_legal}/Inbox/"
+
+                    for m_att in mime_att_list:
+                        m_name  = m_att.get("filename") or "attached_file.pdf"
+                        m_bytes = m_att.get("bytes")
+                        if m_bytes:
+                            fk = f"{target_folder}{m_name}"
+                            s3client.put_object(Bucket=bucket, Key=fk, Body=m_bytes, ACL='private')
+                            saved_attachments.append(fk)
+
+                    for att in _att_list:
+                        file_bytes, att_name, att_id = None, "attached_file.pdf", None
+                        if isinstance(att, dict):
+                            att_name = att.get("filename") or att.get("name") or "attached_file.pdf"
+                            att_id   = att.get("id")
+                            b64 = att.get("content") or att.get("data") or ""
+                            if b64:
+                                try:
+                                    import base64; file_bytes = base64.b64decode(b64)
+                                except Exception: pass
+                            if not file_bytes:
+                                dl_url = att.get("url") or att.get("download_url") or ""
+                                if dl_url:
+                                    try:
+                                        r = urllib.request.Request(dl_url, headers={"Authorization": f"Bearer {_resend_key}", "User-Agent": "Mozilla/5.0"}, method="GET")
+                                        with urllib.request.urlopen(r) as resp: file_bytes = resp.read()
+                                    except Exception: pass
+                        if not file_bytes and _email_id and _resend_key:
+                            file_bytes = download_resend_attachment(_email_id, att_id, att_name, _resend_key)
+                        if file_bytes:
+                            fk = f"{target_folder}{att_name}"
+                            s3client.put_object(Bucket=bucket, Key=fk, Body=file_bytes, ACL='private')
+                            saved_attachments.append(fk)
+
+                    if saved_attachments and 'comm_id' in locals() and comm_id:
+                        try:
+                            upd_conn = get_db_connection()
+                            with upd_conn.cursor() as cur:
+                                cur.execute("UPDATE customer_communications SET attachments_json = %s WHERE id = %s;",
+                                            (json.dumps(saved_attachments), comm_id))
+                                upd_conn.commit()
+                            upd_conn.close()
+                        except Exception as e_upd:
+                            print(f"[ATTACHMENT UPDATE ERROR] {e_upd}")
+        except Exception as e_s3:
+            print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
+
+        # Non-blocking Team Email Alert
+        try:
+            _alert_key = os.environ.get("RESEND_API_KEY")
+            team_email = get_resend_to_email()
+            if _alert_key and team_email:
+                att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
+                alert_payload = {
+                    "from": format_resend_from_header(f"{parent_name or 'VRT Services'} CRM Alerts"),
+                    "to": [team_email],
+                    "subject": f"📩 New Reply Received: {legal_name} - {subject}",
+                    "html": f"""
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #7f00ff; border-radius: 12px; background: #0f172a; color: #f8fafc;">
+                        <h2 style="color: #38bdf8; margin-top: 0;">📩 New Customer Email Reply Received</h2>
+                        <p><strong>Customer:</strong> {legal_name} (ID: {customer_id})</p>
+                        <p><strong>From:</strong> {sender_email}</p>
+                        <p><strong>Subject:</strong> {subject}</p>
+                        <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; margin: 16px 0; border-left: 4px solid #38bdf8; color: #e2e8f0;">
+                            {body_text[:800] if body_text else '(no body)'}
+                        </div>
+                        {f'<p style="color: #34d399;"><strong>{att_note}</strong></p>' if saved_attachments else ''}
+                    </div>
+                    """
+                }
+                alert_req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=json.dumps(alert_payload).encode("utf-8"),
+                    headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(alert_req) as _:
+                    print(f"[TEAM ALERT SENT] to {team_email}")
+        except Exception as e_alert:
+            print(f"[TEAM ALERT ERROR] {e_alert}")
 
         return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
+
     except Exception as e:
         import traceback
         err_msg = f"OUTER_ERROR: {e}"
