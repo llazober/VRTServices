@@ -6220,139 +6220,126 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
 
         if customer_id:
-            # Deduplicate by subject + customer_id within the last 10 seconds
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id FROM customer_communications
-                    WHERE customer_id = %s AND direction = 'INBOUND' AND subject = %s
-                      AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
-                """, (customer_id, subject))
-                if cur.fetchone():
-                    print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email for customer {customer_id} within 10 secs")
-                    if conn:
-                        conn.close()
-                    return {"status": "ignored", "reason": "Duplicate inbound email within 10 seconds"}
-
-            # Process & Upload File Attachments if present
-            saved_attachments = []
-            
-            # 1. Try extracting attachments directly from raw RFC-822 MIME string if present
-            mime_att_list = []
-            _fetched_data_safe = fetched_data if ('fetched_data' in locals() and isinstance(fetched_data, dict)) else {}
-            for obj in [data, raw_body, _fetched_data_safe]:
-                if isinstance(obj, dict):
-                    raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
-                    if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
-                        mime_att_list = extract_attachments_from_mime(raw_mime)
-                        if mime_att_list:
-                            break
-
-            client, err = get_s3_client()
+            # ── Step 1: Deduplicate (10-second window) ───────────────────────────
             try:
-                if client:
-                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-                    # Build S3 folder path from customer fields directly (no separate helper needed)
-                    _s3_parent = sanitize_folder_name(cust.get("parent_name") or parent_name or "VRT Services") if cust else sanitize_folder_name(parent_name or "VRT Services")
-                    _s3_legal  = sanitize_folder_name(cust.get("legal_name")  or legal_name  or "Unknown")     if cust else sanitize_folder_name(legal_name  or "Unknown")
-                    p_prefix = f"{_s3_parent}/{_s3_legal}/"
-                    target_folder = f"{p_prefix}Inbox/"
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT id FROM customer_communications
+                        WHERE customer_id = %s AND direction = 'INBOUND' AND subject = %s
+                          AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
+                    """, (customer_id, subject))
+                    if cur.fetchone():
+                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate for customer {customer_id} within 10 secs")
+                        if conn: conn.close()
+                        return {"status": "ignored", "reason": "Duplicate inbound email within 10 seconds"}
+            except Exception as e_dup:
+                print(f"[DEDUP CHECK ERROR - continuing] {e_dup}")
 
-                    # First upload any MIME extracted binary files
-                    if mime_att_list:
+
+            # ── Step 2: Save to customer_communications (ALWAYS, fresh connection) ─
+            saved_attachments = []
+            comm_id = None
+            try:
+                fresh_conn = get_db_connection()
+                with fresh_conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO customer_communications (
+                            customer_id, direction, sender_email, recipient_email,
+                            subject, body_text, attachments_json, status, is_read, created_at
+                        ) VALUES (
+                            %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                        ) RETURNING id;
+                    """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps([])))
+                    row = cur.fetchone()
+                    comm_id = row[0] if row else None
+                    fresh_conn.commit()
+                fresh_conn.close()
+                print(f"[RESEND INBOUND WEBHOOK] ✅ Saved comm id={comm_id} from '{sender_email}' → customer '{legal_name}' (ID: {customer_id})")
+            except Exception as e_comm:
+                print(f"[CUSTOMER COMM INSERT ERROR] {e_comm}")
+
+            # ── Step 3: S3 Attachment Upload (optional, non-blocking) ────────────
+            try:
+                _fetched_data_safe = fetched_data if ('fetched_data' in locals() and isinstance(fetched_data, dict)) else {}
+                mime_att_list = []
+                for obj in [data, raw_body, _fetched_data_safe]:
+                    if isinstance(obj, dict):
+                        raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
+                        if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
+                            mime_att_list = extract_attachments_from_mime(raw_mime)
+                            if mime_att_list:
+                                break
+
+                _att_list = attachments if ('attachments' in locals() and isinstance(attachments, list)) else []
+                _email_id = email_id if 'email_id' in locals() else None
+                _resend_key = os.environ.get("RESEND_API_KEY") or ""
+
+                if mime_att_list or _att_list:
+                    s3client, s3err = get_s3_client()
+                    if s3client:
+                        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                        _s3_parent = sanitize_folder_name((cust.get("parent_name") if cust else None) or parent_name or "VRT Services")
+                        _s3_legal  = sanitize_folder_name((cust.get("legal_name")  if cust else None) or legal_name  or "Unknown")
+                        target_folder = f"{_s3_parent}/{_s3_legal}/Inbox/"
+
                         for m_att in mime_att_list:
-                            m_name = m_att.get("filename") or "attached_file.pdf"
+                            m_name  = m_att.get("filename") or "attached_file.pdf"
                             m_bytes = m_att.get("bytes")
                             if m_bytes:
-                                file_key = f"{target_folder}{m_name}"
-                                client.put_object(Bucket=bucket, Key=file_key, Body=m_bytes, ACL='private')
-                                if file_key not in saved_attachments:
-                                    saved_attachments.append(file_key)
-                                print(f"[INBOUND MIME ATTACHMENT SAVED TO S3] Key: '{file_key}'")
+                                fk = f"{target_folder}{m_name}"
+                                s3client.put_object(Bucket=bucket, Key=fk, Body=m_bytes, ACL='private')
+                                saved_attachments.append(fk)
 
-                    # Next process structured attachment objects list
-                    if attachments and isinstance(attachments, list):
-                        for att in attachments:
-                            file_bytes = None
-                            att_name = "attached_file.pdf"
-                            att_id = None
-                            att_url_direct = None
-
+                        for att in _att_list:
+                            file_bytes, att_name, att_id = None, "attached_file.pdf", None
                             if isinstance(att, dict):
-                                att_name = att.get("filename") or att.get("name") or att.get("title") or "attached_file.pdf"
-                                att_content_b64 = att.get("content") or att.get("data") or ""
-                                att_id = att.get("id")
-                                att_url_direct = att.get("url") or att.get("download_url") or att.get("href") or att.get("content_url")
-
-                                if att_content_b64:
+                                att_name = att.get("filename") or att.get("name") or "attached_file.pdf"
+                                att_id   = att.get("id")
+                                b64 = att.get("content") or att.get("data") or ""
+                                if b64:
                                     try:
-                                        import base64
-                                        file_bytes = base64.b64decode(att_content_b64)
-                                    except Exception as e_b64:
-                                        print(f"[ATTACHMENT B64 DECODE ERROR]: {e_b64}")
-
-                                # Direct download URL from attachment object
-                                if not file_bytes and att_url_direct:
-                                    try:
-                                        dir_req = urllib.request.Request(
-                                            att_url_direct,
-                                            headers={
-                                                "Authorization": f"Bearer {resend_key.strip()}" if resend_key else "",
-                                                "User-Agent": "Mozilla/5.0"
-                                            },
-                                            method="GET"
-                                        )
-                                        with urllib.request.urlopen(dir_req) as dir_resp:
-                                            file_bytes = dir_resp.read()
-                                    except Exception as e_dir:
-                                        print(f"[ATTACHMENT DIRECT URL NOTICE] {att_url_direct}: {e_dir}")
-                            elif isinstance(att, str):
+                                        import base64; file_bytes = base64.b64decode(b64)
+                                    except Exception: pass
+                                if not file_bytes:
+                                    dl_url = att.get("url") or att.get("download_url") or ""
+                                    if dl_url:
+                                        try:
+                                            r = urllib.request.Request(dl_url, headers={"Authorization": f"Bearer {_resend_key}", "User-Agent": "Mozilla/5.0"}, method="GET")
+                                            with urllib.request.urlopen(r) as resp: file_bytes = resp.read()
+                                        except Exception: pass
+                            elif isinstance(att, str) and att.startswith("http"):
                                 att_name = att.split('/')[-1] or "attached_file.pdf"
-                                if att.startswith("http://") or att.startswith("https://"):
-                                    try:
-                                        dir_req = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                                        with urllib.request.urlopen(dir_req) as dir_resp:
-                                            file_bytes = dir_resp.read()
-                                    except Exception:
-                                        pass
-
-                            # Fallback: Fetch attachment using helper function
-                            if not file_bytes and email_id and resend_key:
-                                file_bytes = download_resend_attachment(email_id, att_id, att_name, resend_key)
-
+                                try:
+                                    r = urllib.request.Request(att, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                                    with urllib.request.urlopen(r) as resp: file_bytes = resp.read()
+                                except Exception: pass
+                            if not file_bytes and _email_id and _resend_key:
+                                file_bytes = download_resend_attachment(_email_id, att_id, att_name, _resend_key)
                             if file_bytes:
-                                file_key = f"{target_folder}{att_name}"
-                                client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-                                if file_key not in saved_attachments:
-                                    saved_attachments.append(file_key)
-                                print(f"[INBOUND ATTACHMENT SAVED TO S3] Key: '{file_key}'")
-                else:
-                    print(f"[S3 CLIENT ERROR] Could not initialize S3 client: {err}")
+                                fk = f"{target_folder}{att_name}"
+                                s3client.put_object(Bucket=bucket, Key=fk, Body=file_bytes, ACL='private')
+                                saved_attachments.append(fk)
+
+                        # Update attachments_json in customer_communications if any saved
+                        if saved_attachments and comm_id:
+                            try:
+                                upd_conn = get_db_connection()
+                                with upd_conn.cursor() as cur:
+                                    cur.execute("UPDATE customer_communications SET attachments_json = %s WHERE id = %s;",
+                                                (json.dumps(saved_attachments), comm_id))
+                                    upd_conn.commit()
+                                upd_conn.close()
+                            except Exception as e_upd:
+                                print(f"[ATTACHMENT UPDATE ERROR] {e_upd}")
             except Exception as e_s3:
                 print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
 
-            # Log inbound communication as UNREAD
-
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO customer_communications (
-                        customer_id, direction, sender_email, recipient_email,
-                        subject, body_text, attachments_json, status, is_read, created_at
-                    ) VALUES (
-                        %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                    );
-                """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps(saved_attachments)))
-                conn.commit()
-
-            print(f"[RESEND INBOUND WEBHOOK] Logged reply from '{sender_email}' for customer '{legal_name}' (ID: {customer_id})")
-
-            # Send instant email alert notification to team/staff
+            # ── Step 4: Team email alert (optional, non-blocking) ─────────────────
             try:
-                resend_key = os.environ.get("RESEND_API_KEY")
+                _alert_key = os.environ.get("RESEND_API_KEY")
                 team_email = get_resend_to_email()
-                clean_from = get_resend_from_email()
-
-                if resend_key:
-                    att_note = f"\n\n📎 {len(saved_attachments)} File Attachment(s) Saved to CRM Storage!" if saved_attachments else ""
+                if _alert_key and team_email:
+                    att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
                     alert_payload = {
                         "from": format_resend_from_header(f"{parent_name or 'VRT Services'} CRM Alerts"),
                         "to": [team_email],
@@ -6364,27 +6351,23 @@ async def resend_inbound_webhook(request: Request):
                             <p><strong>From:</strong> {sender_email}</p>
                             <p><strong>Subject:</strong> {subject}</p>
                             <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; margin: 16px 0; border-left: 4px solid #38bdf8; color: #e2e8f0;">
-                                {body_text[:1000]}
+                                {body_text[:800] if body_text else '(no body)'}
                             </div>
-                            {'<p style="color: #34d399;"><strong>' + att_note + '</strong></p>' if saved_attachments else ''}
-                            <p><a href="http://localhost:8000/dashboard" style="background: #3b82f6; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Open CRM Dashboard</a></p>
+                            {f'<p style="color: #34d399;"><strong>{att_note}</strong></p>' if saved_attachments else ''}
                         </div>
                         """
                     }
                     alert_req = urllib.request.Request(
                         "https://api.resend.com/emails",
                         data=json.dumps(alert_payload).encode("utf-8"),
-                        headers={
-                            "Authorization": f"Bearer {resend_key.strip()}",
-                            "Content-Type": "application/json",
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                        },
+                        headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
                         method="POST"
                     )
-                    with urllib.request.urlopen(alert_req) as alert_resp:
-                        print(f"[TEAM ALERT SENT] Inbound email notification sent to {team_email}")
+                    with urllib.request.urlopen(alert_req) as _:
+                        print(f"[TEAM ALERT SENT] to {team_email}")
             except Exception as e_alert:
-                print(f"[TEAM ALERT ERROR] Failed to send team email alert: {e_alert}")
+                print(f"[TEAM ALERT ERROR] {e_alert}")
+
 
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.now()),
