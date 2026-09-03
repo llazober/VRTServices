@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "pure-cust-id-only-v13"
+BUILD_VERSION = "no-dups-all-match-v14"
 
 @app.get("/api/version")
 async def get_version():
@@ -6248,8 +6248,10 @@ async def resend_inbound_webhook(request: Request):
                        OR custumer_number ILIKE %s 
                        OR (LENGTH(%s) > 0 AND custumer_number ILIKE %s)
                        OR (LENGTH(%s) > 0 AND regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s)
-                       OR (LENGTH(%s) > 0 AND id::text = %s);
-                """, (cand, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
+                       OR (LENGTH(%s) > 0 AND id::text = %s)
+                       OR (LENGTH(%s) > 0 AND legal_name ILIKE %s)
+                       OR (LENGTH(%s) > 0 AND COALESCE(display_name, '') ILIKE %s);
+                """, (cand, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits, raw_digits, f"%{raw_digits}%", raw_digits, f"%{raw_digits}%"))
                 found = cur.fetchone()
                 if found:
                     cust = found
@@ -6288,27 +6290,42 @@ async def resend_inbound_webhook(request: Request):
                 print(f"[RESEND INBOUND WARNING] Fallback failed for subject: '{subject}'.")
 
         if customer_id:
-            # ── Step 1: Strict Deduplicate Check (Resend email_id or identical body_text within 10s) ────
+            # ── Step 1: Global Deduplicate Check (Resend email_id or 5s identical content) ────
             try:
                 fresh_dedup = get_db_connection()
                 with fresh_dedup.cursor() as cur:
                     if email_id and len(str(email_id).strip()) > 3:
                         cur.execute("""
                             SELECT id FROM customer_communications
-                            WHERE customer_id = %s AND direction = 'INBOUND'
+                            WHERE direction = 'INBOUND'
                               AND attachments_json->>'email_id' = %s;
-                        """, (customer_id, str(email_id).strip()))
+                        """, (str(email_id).strip(),))
                         if cur.fetchone():
-                            print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' for customer {customer_id}")
+                            print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
                             fresh_dedup.close()
                             try:
                                 if conn: conn.close()
                             except Exception: pass
                             return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
 
+                    cur.execute("""
+                        SELECT id FROM customer_communications
+                        WHERE direction = 'INBOUND'
+                          AND LOWER(sender_email) = LOWER(%s)
+                          AND COALESCE(subject, '') = COALESCE(%s, '')
+                          AND created_at > (CURRENT_TIMESTAMP - INTERVAL '5 seconds');
+                    """, (sender_email, subject))
+                    if cur.fetchone():
+                        print(f"[RESEND WEBHOOK DUP IGNORED] Concurrent payload for '{subject}' within 5s")
+                        fresh_dedup.close()
+                        try:
+                            if conn: conn.close()
+                        except Exception: pass
+                        return {"status": "ignored", "reason": "Concurrent duplicate payload within 5s"}
+
                 fresh_dedup.close()
             except Exception as e_dup:
-                print(f"[DEDUP CHECK ERROR - continuing] {e_dup}")
+                print(f"[DEDUP CHECK NOTICE]: {e_dup}")
 
 
             # ── Step 2: Save to customer_communications (ALWAYS, fresh connection) ─
