@@ -5951,7 +5951,7 @@ def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend
                 print(f"[RESEND ATTACHMENT FETCH NOTICE] {target_url}: {e_try}")
     return None
 
-BUILD_VERSION = "full-debug-log-v29-onboarding-sender"
+BUILD_VERSION = "full-debug-log-v30-safe-json"
 
 @app.post("/api/webhooks/resend-inbound")
 @app.post("/api/webhook/resend-inbound")
@@ -5979,7 +5979,10 @@ async def resend_inbound_webhook(request: Request):
         except Exception:
             raw_body = {}
 
-        print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body)}")
+        try:
+            print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body, default=str)}")
+        except Exception:
+            pass
 
         # Resend webhooks wrap email payload inside "data" object if top-level has "type" or "data"
         if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
@@ -6092,7 +6095,7 @@ async def resend_inbound_webhook(request: Request):
                     VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED')
                     RETURNING id;
                 """, (
-                    json.dumps(raw_body),
+                    json.dumps(raw_body, default=str),
                     sender_email,
                     recipient_email,
                     subject,
@@ -6228,7 +6231,7 @@ async def resend_inbound_webhook(request: Request):
                     ) VALUES (
                         %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
                     ) RETURNING id;
-                """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts)))
+                """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts, default=str)))
                 comm_row = cur.fetchone()
                 comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
 
@@ -6315,7 +6318,7 @@ async def resend_inbound_webhook(request: Request):
                             upd_conn = get_db_connection()
                             with upd_conn.cursor() as cur:
                                 cur.execute("UPDATE customer_communications SET attachments_json = %s WHERE id = %s;",
-                                            (json.dumps(saved_attachments), comm_id))
+                                            (json.dumps(saved_attachments, default=str), comm_id))
                                 upd_conn.commit()
                             upd_conn.close()
                         except Exception as e_upd:
@@ -6348,7 +6351,7 @@ async def resend_inbound_webhook(request: Request):
                 }
                 alert_req = urllib.request.Request(
                     "https://api.resend.com/emails",
-                    data=json.dumps(alert_payload).encode("utf-8"),
+                    data=json.dumps(alert_payload, default=str).encode("utf-8"),
                     headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
                     method="POST"
                 )
@@ -6385,7 +6388,7 @@ async def resend_inbound_webhook(request: Request):
                         INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
                         VALUES (%s, %s, %s, %s, %s, %s, %s);
                     """, (
-                        json.dumps(raw_body) if 'raw_body' in locals() else "{}",
+                        json.dumps(raw_body, default=str) if 'raw_body' in locals() else "{}",
                         _s_em, _r_em, _subj, _body, _cid,
                         err_msg[:200]
                     ))
