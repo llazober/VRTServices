@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "full-trace-v15"
+BUILD_VERSION = "instant-execution-v16"
 
 @app.get("/api/version")
 async def get_version():
@@ -6168,46 +6168,25 @@ async def resend_inbound_webhook(request: Request):
             ""
         ).strip()
         fetched_data = {}
-        if email_id and resend_key:
+        if email_id and resend_key and not body_text:
             try:
-                for endpoint_url in [
-                    f"https://api.resend.com/emails/receiving/{email_id}",
+                fetch_req = urllib.request.Request(
                     f"https://api.resend.com/emails/{email_id}",
-                    f"https://api.resend.com/emails/inbound/{email_id}"
-                ]:
-                    try:
-                        fetch_req = urllib.request.Request(
-                            endpoint_url,
-                            headers={
-                                "Authorization": f"Bearer {resend_key.strip()}",
-                                "Content-Type": "application/json",
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                            },
-                            method="GET"
-                        )
-                        with urllib.request.urlopen(fetch_req) as fetch_resp:
-                            fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
-                            print(f"[RESEND FETCHED EMAIL DETAILS from {endpoint_url}]: {json.dumps(fetched_data)}")
-                            if isinstance(fetched_data, dict):
-                                target_dict = fetched_data.get("data") if isinstance(fetched_data.get("data"), dict) else fetched_data
-                                if not body_text:
-                                    fetched_body = extract_email_body({}, target_dict)
-                                    if fetched_body:
-                                        body_text = fetched_body
-                                fetched_att = (
-                                    target_dict.get("attachments") or 
-                                    target_dict.get("files") or 
-                                    target_dict.get("documents") or 
-                                    fetched_data.get("attachments") or 
-                                    []
-                                )
-                                if fetched_att:
-                                    attachments = fetched_att
-                                break
-                    except Exception as e_ep:
-                        print(f"[RESEND FETCH ENDPOINT NOTICE] {endpoint_url}: {e_ep}")
-            except Exception as e_fetch:
-                print(f"[RESEND FETCH ERROR]: {e_fetch}")
+                    headers={
+                        "Authorization": f"Bearer {resend_key.strip()}",
+                        "Content-Type": "application/json"
+                    },
+                    method="GET"
+                )
+                with urllib.request.urlopen(fetch_req, timeout=1) as fetch_resp:
+                    fetched_data = json.loads(fetch_resp.read().decode("utf-8"))
+                    if isinstance(fetched_data, dict):
+                        target_dict = fetched_data.get("data") if isinstance(fetched_data.get("data"), dict) else fetched_data
+                        fetched_body = extract_email_body({}, target_dict)
+                        if fetched_body:
+                            body_text = fetched_body
+            except Exception as e_f:
+                print(f"[RESEND API FETCH NOTICE]: {e_f}")
 
         def extract_all_possible_customer_numbers(text_content: str):
             if not text_content or not isinstance(text_content, str):
