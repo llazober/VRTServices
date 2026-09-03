@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "catchall-ready-v6"
+BUILD_VERSION = "cust-id-priority-v7"
 
 @app.get("/api/version")
 async def get_version():
@@ -6183,11 +6183,35 @@ async def resend_inbound_webhook(request: Request):
             except Exception as e_fetch:
                 print(f"[RESEND FETCH ERROR]: {e_fetch}")
 
-        # Parse customer reference code from subject or body e.g. [Ref: CUST-1001] or [Ref: 1001]
-        m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', subject, re.IGNORECASE)
-        if not m and body_text:
-            m = re.search(r'\[Ref:\s*(?:CUST-)?([\w-]+)\]', body_text, re.IGNORECASE)
-        cust_number = m.group(1).strip() if m else None
+        def extract_customer_id_from_text(text_content: str):
+            if not text_content or not isinstance(text_content, str):
+                return None
+            
+            # 1. Match [Ref: CUST-XXXX] or [Ref: XXXX] or Ref: CUST-XXXX or Ref: XXXX
+            m_ref = re.search(r'\[?Ref:\s*(?:CUST-)?([\w-]+)\]?', text_content, re.IGNORECASE)
+            if m_ref:
+                val = m_ref.group(1).strip()
+                return f"CUST-{val}" if not val.upper().startswith("CUST-") else val.upper()
+
+            # 2. Match CUST-XXXX anywhere in text (e.g. CUST-4061, CUST-1001)
+            m_cust = re.search(r'\b(CUST-\d{1,6})\b', text_content, re.IGNORECASE)
+            if m_cust:
+                return m_cust.group(1).upper()
+
+            # 3. Match Customer ID: XXXX / Cust ID: XXXX / Customer # XXXX / Cust # XXXX
+            m_id = re.search(r'(?:Customer|Cust)\s*(?:ID|#)?\s*:?\s*(?:CUST-)?(\d{1,6})\b', text_content, re.IGNORECASE)
+            if m_id:
+                return f"CUST-{m_id.group(1)}"
+
+            # 4. Match CUSTXXXX standalone (e.g. CUST4061)
+            m_sa = re.search(r'\bCUST(\d{1,6})\b', text_content, re.IGNORECASE)
+            if m_sa:
+                return f"CUST-{m_sa.group(1)}"
+
+            return None
+
+        # Parse customer reference code from subject or body
+        cust_number = extract_customer_id_from_text(subject) or extract_customer_id_from_text(body_text)
 
         conn = get_db_connection()
         customer_id = None
@@ -6196,7 +6220,8 @@ async def resend_inbound_webhook(request: Request):
 
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cust = None
-            # Tier 1: Match by [Ref: CUST-XXXX] in subject or body
+
+            # Tier 1: PRIORITY MATCH by Customer ID in subject or body text
             if cust_number:
                 cust_num_with_prefix = f"CUST-{cust_number}" if not cust_number.upper().startswith("CUST-") else cust_number
                 cust_num_raw = cust_number.replace("CUST-", "").replace("cust-", "")
@@ -6205,8 +6230,21 @@ async def resend_inbound_webhook(request: Request):
                     WHERE custumer_number ILIKE %s OR custumer_number ILIKE %s OR id::text = %s;
                 """, (cust_number, cust_num_with_prefix, cust_num_raw))
                 cust = cur.fetchone()
+                if cust:
+                    print(f"[RESEND INBOUND ROUTING] Tier 1 match for Customer ID '{cust_number}' -> Customer #{cust['id']} ({cust['legal_name']})")
 
-            # Tier 2: Catch-All Customer (CUST-0000 - Unassigned Inbound Emails) for ALL emails without reference tag
+            # Tier 2: Match by Sender Email address if Tier 1 found no Customer ID match
+            if not cust and sender_email:
+                cur.execute("""
+                    SELECT id, legal_name, parent_name, customer_type FROM customer
+                    WHERE LOWER(email) = LOWER(%s)
+                    ORDER BY id ASC LIMIT 1;
+                """, (sender_email,))
+                cust = cur.fetchone()
+                if cust:
+                    print(f"[RESEND INBOUND ROUTING] Tier 2 match for Sender Email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+
+            # Tier 3: Fallback to Catch-All Customer (CUST-0000 - Unassigned Inbound Emails)
             if not cust:
                 cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
                 cust = cur.fetchone()
@@ -6225,6 +6263,8 @@ async def resend_inbound_webhook(request: Request):
                         conn.commit()
                     except Exception as e_c0:
                         print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
+                if cust:
+                    print(f"[RESEND INBOUND ROUTING] Tier 3 fallback -> Catch-All CUST-0000 (#{cust['id']})")
 
             if cust:
                 customer_id = cust["id"]
