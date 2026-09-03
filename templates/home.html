@@ -164,6 +164,31 @@
             transform: translateY(-2px);
         }
 
+        .btn-header-portal {
+            padding: 10px 18px;
+            background: rgba(0, 242, 254, 0.12);
+            color: #00f2fe;
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            font-weight: 800;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 0.86rem;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .btn-header-portal:hover {
+            background: rgba(0, 242, 254, 0.25);
+            border-color: #00f2fe;
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 18px rgba(0, 242, 254, 0.3);
+        }
+
         .btn-header-login {
             padding: 10px 22px;
             background: var(--cyan-grad);
@@ -177,6 +202,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            white-space: nowrap;
         }
 
         .btn-header-login:hover {
@@ -648,11 +674,17 @@
 
         @media (max-width: 900px) {
             .nav-menu { display: none; }
+            .nav-actions { gap: 8px; }
+            .btn-header-portal, .btn-header-login { padding: 8px 14px; font-size: 0.8rem; }
             .hero-title { font-size: 2.8rem; }
             .services-grid { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 600px) {
+            .top-bar { padding: 12px 14px; }
+            .brand-sub { display: none; }
+            .nav-actions { gap: 6px; }
+            .btn-header-portal, .btn-header-login { padding: 7px 10px; font-size: 0.76rem; border-radius: 8px; }
             .hero-title { font-size: 2.2rem; }
             .hero-buttons { flex-direction: column; width: 100%; }
             .btn-primary-portal, .btn-secondary-action { width: 100%; justify-content: center; }
@@ -680,10 +712,12 @@
         <ul class="nav-menu">
             <li><a href="#services" class="nav-link">Our Services</a></li>
             <li><a href="#workflow" class="nav-link">Filing Process</a></li>
-            <li><a href="javascript:void(0)" onclick="openClientPortalModal()" class="nav-link" style="color: #00f2fe; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">📂 Client Portal</a></li>
         </ul>
 
         <div class="nav-actions">
+            <a href="javascript:void(0)" onclick="openClientPortalModal()" class="btn-header-portal">
+                📂 Client Portal
+            </a>
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-header-login">
                     Dashboard
