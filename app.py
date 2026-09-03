@@ -4077,12 +4077,13 @@ async def upload_client_coa_endpoint(request: Request, clientName: str = Form(..
     headers = [h.strip().replace('"', '') for h in lines[0].split(',')]
     
     import re
-    acct_num_idx = next((i for i, h in enumerate(headers) if re.search(r'account\s*number|acct\s*no|code|number', h, re.I)), -1)
-    acct_name_idx = next((i for i, h in enumerate(headers) if re.search(r'account\s*name|name|description', h, re.I)), -1)
-    type_idx = next((i for i, h in enumerate(headers) if re.search(r'type', h, re.I)), -1)
-    sub_type_idx = next((i for i, h in enumerate(headers) if re.search(r'subtype', h, re.I)), -1)
-    level_idx = next((i for i, h in enumerate(headers) if re.search(r'level', h, re.I)), -1)
-    parent_idx = next((i for i, h in enumerate(headers) if re.search(r'parent', h, re.I)), -1)
+    client_idx = next((i for i, h in enumerate(headers) if h.lower() in ('clientname', 'client_name', 'client name', 'client') or re.search(r'client\s*name', h, re.I)), -1)
+    acct_num_idx = next((i for i, h in enumerate(headers) if h.lower() in ('accountnumber', 'account_number', 'account number', 'acct_no', 'acctno', 'code', 'number') or re.search(r'account\s*number|acct\s*no', h, re.I)), -1)
+    acct_name_idx = next((i for i, h in enumerate(headers) if h.lower() in ('accountname', 'account_name', 'account name') or re.search(r'account\s*name', h, re.I) or (re.search(r'\bname\b|description', h, re.I) and 'client' not in h.lower() and 'parent' not in h.lower())), -1)
+    type_idx = next((i for i, h in enumerate(headers) if h.lower() in ('type', 'accounttype', 'account_type') or (re.search(r'\btype\b', h, re.I) and 'sub' not in h.lower())), -1)
+    sub_type_idx = next((i for i, h in enumerate(headers) if h.lower() in ('subtype', 'sub_type', 'sub type') or re.search(r'subtype|sub_type', h, re.I)), -1)
+    level_idx = next((i for i, h in enumerate(headers) if h.lower() in ('level', 'account_level') or re.search(r'level', h, re.I)), -1)
+    parent_idx = next((i for i, h in enumerate(headers) if h.lower() in ('parentname', 'parent_name', 'parent name', 'parent') or re.search(r'parent\s*name', h, re.I)), -1)
 
     if acct_num_idx == -1 or acct_name_idx == -1:
         raise HTTPException(status_code=400, detail='CSV must contain "Account Number" and "Account Name" columns.')
@@ -4104,6 +4105,7 @@ async def upload_client_coa_endpoint(request: Request, clientName: str = Form(..
                 acct_name = row[acct_name_idx].strip()
                 if not acct_num or not acct_name:
                     continue
+                client_val = row[client_idx].strip() if client_idx != -1 and client_idx < len(row) and row[client_idx].strip() else clientName
                 acct_type = row[type_idx].strip() if type_idx != -1 and type_idx < len(row) else "Expense"
                 sub_type = row[sub_type_idx].strip() if sub_type_idx != -1 and sub_type_idx < len(row) else ""
                 level_val = int(row[level_idx].strip()) if level_idx != -1 and level_idx < len(row) and row[level_idx].strip().isdigit() else 0
@@ -4115,7 +4117,7 @@ async def upload_client_coa_endpoint(request: Request, clientName: str = Form(..
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT ("clientName", "accountNumber")
                     DO UPDATE SET "parentName" = EXCLUDED."parentName", "accountName" = EXCLUDED."accountName", "type" = EXCLUDED."type", "subType" = EXCLUDED."subType", "level" = EXCLUDED."level", "updatedAt" = CURRENT_TIMESTAMP;
-                ''', (new_id, clientName, parent_val, acct_num, acct_name, acct_type, sub_type, level_val))
+                ''', (new_id, client_val, parent_val, acct_num, acct_name, acct_type, sub_type, level_val))
                 count += 1
             conn.commit()
             return {"success": True, "message": f"Successfully imported {count} accounts."}
