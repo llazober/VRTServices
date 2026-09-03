@@ -2702,7 +2702,7 @@
                         <button onclick="openCustomerStorageModal(event, ${c.id})" style="padding: 4px 8px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Open customer storage file manager">📂 Folder</button>
                         <button onclick="initCustomerStorage(event, ${c.id})" style="padding: 4px 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Initialize Storage Folders">${c.do_storage_status === 'Initialized' ? '⚡ Re-Init' : '☁️ Init'}</button>
                         <button onclick="editCustomerRecord(${c.id})" style="padding: 4px 8px; background: rgba(225, 0, 255, 0.15); border: 1px solid rgba(225, 0, 255, 0.35); color: #e100ff; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Edit Customer Account Details">✏️ Edit</button>
-                        <button onclick="deleteCustomerRecord(${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer;" title="Delete Customer Record">🗑️ Del</button>
+                        <button onclick="deleteCustomerRecord(${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}', '${(c.legal_name || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer;" title="Delete Customer Record">🗑️ Del</button>
                     </td>
                 </tr>
             `).join('');
@@ -3460,22 +3460,132 @@
             }
         }
 
-        async function deleteCustomerRecord(id, num) {
+        function showDeleteCustomerConfirmModal(customerNum, legalName) {
+            return new Promise((resolve) => {
+                let modal = document.getElementById('deleteCustomerConfirmModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'deleteCustomerConfirmModal';
+                    modal.style.cssText = 'display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px; animation: alertFadeIn 0.2s ease-out;';
+                    modal.innerHTML = `
+                        <div style="background: #0f172a; border: 1px solid rgba(244, 63, 94, 0.5); border-radius: 20px; max-width: 520px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(244, 63, 94, 0.25); color: #fff; overflow: hidden;">
+                            <div style="padding: 28px 24px 16px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;">
+                                <div style="width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #f43f5e;">
+                                    ⚠️
+                                </div>
+                                <div style="width: 100%;">
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 800; color: #f43f5e; margin: 0 0 10px 0; letter-spacing: -0.01em;">
+                                        PERMANENT DELETE WARNING
+                                    </h3>
+                                    <div id="deleteCustomerWarningText" style="font-size: 0.88rem; color: #e2e8f0; line-height: 1.6; text-align: left; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                                    </div>
+                                    <div style="text-align: left;">
+                                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+                                            🔑 Enter Admin Password to Authorize Deletion:
+                                        </label>
+                                        <input type="password" id="deleteCustomerAdminPasswordInput" placeholder="Enter admin password..." style="width: 100%; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 10px; padding: 10px 14px; font-size: 0.92rem; color: #fff; outline: none; transition: border-color 0.2s ease;">
+                                        <div id="deleteCustomerPasswordError" style="display: none; color: #fb7185; font-size: 0.78rem; font-weight: 600; margin-top: 6px;">
+                                            Please enter the Admin Password to proceed.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="padding: 16px 24px 24px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.3);">
+                                <button type="button" id="deleteCustomerCancelBtn" style="flex: 1; padding: 11px 18px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #cbd5e1; font-weight: 700; border-radius: 10px; font-size: 0.85rem; cursor: pointer;">
+                                    Cancel
+                                </button>
+                                <button type="button" id="deleteCustomerConfirmBtn" style="flex: 1; padding: 11px 18px; background: linear-gradient(135deg, #f43f5e, #be123c); color: #ffffff; font-weight: 800; border: none; border-radius: 10px; font-size: 0.85rem; cursor: pointer; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.4);">
+                                    PERMANENTLY DELETE
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                }
+
+                const warningEl = document.getElementById('deleteCustomerWarningText');
+                const pwdInput = document.getElementById('deleteCustomerAdminPasswordInput');
+                const pwdErr = document.getElementById('deleteCustomerPasswordError');
+                const cancelBtn = document.getElementById('deleteCustomerCancelBtn');
+                const confirmBtn = document.getElementById('deleteCustomerConfirmBtn');
+
+                const displayNameStr = legalName ? `'${legalName}' (${customerNum})` : `'${customerNum}'`;
+
+                warningEl.innerHTML = `
+                    <strong>This action will remove all records in all files and tables related to customer <span style="color: #f43f5e;">${safeEscapeHtml(displayNameStr)}</span></strong> (including Parent Mappings, Chart of Accounts, task checklists, and Vendor Rules).<br><br>
+                    <span style="color: #f87171; font-weight: 700;">⚠️ You will NOT be able to restore any data after this action.</span>
+                `;
+
+                pwdInput.value = '';
+                pwdErr.style.display = 'none';
+                modal.style.display = 'flex';
+
+                setTimeout(() => pwdInput.focus(), 100);
+
+                const handleCancel = () => {
+                    modal.style.display = 'none';
+                    cleanupListeners();
+                    resolve(null);
+                };
+
+                const handleConfirm = () => {
+                    const val = (pwdInput.value || '').trim();
+                    if (!val) {
+                        pwdErr.style.display = 'block';
+                        pwdInput.focus();
+                        return;
+                    }
+                    modal.style.display = 'none';
+                    cleanupListeners();
+                    resolve(val);
+                };
+
+                const handleKeyDown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleConfirm();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        handleCancel();
+                    }
+                };
+
+                function cleanupListeners() {
+                    cancelBtn.removeEventListener('click', handleCancel);
+                    confirmBtn.removeEventListener('click', handleConfirm);
+                    pwdInput.removeEventListener('keydown', handleKeyDown);
+                }
+
+                cancelBtn.addEventListener('click', handleCancel);
+                confirmBtn.addEventListener('click', handleConfirm);
+                pwdInput.addEventListener('keydown', handleKeyDown);
+            });
+        }
+
+        async function deleteCustomerRecord(id, num, legalName = '') {
             if (!id) return;
-            if (!await showCustomConfirm(`Are you sure you want to delete customer '${num}'?`)) return;
+            const adminPassword = await showDeleteCustomerConfirmModal(num, legalName);
+            if (!adminPassword) return;
+
             try {
-                const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+                const res = await fetch(`/api/customers/${id}?admin_password=${encodeURIComponent(adminPassword)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Admin-Password': adminPassword
+                    }
+                });
                 if (res.ok) {
                     await fetchCustomerRecords();
                     if (typeof fetchParentMappings === 'function') await fetchParentMappings();
                     if (typeof syncClientSelectDropdowns === 'function') await syncClientSelectDropdowns();
                     if (typeof populateCustomerDropdownForMappings === 'function') await populateCustomerDropdownForMappings();
+                    showAlert('Customer and all related records, files, and rules deleted successfully.', 'success', 'Customer Deleted');
                 } else {
                     const err = await res.json();
-                    alert('Error deleting customer: ' + (err.detail || err.error || 'Failed'));
+                    showAlert('Error deleting customer: ' + (err.detail || err.error || 'Failed'), 'error', 'Delete Failed');
                 }
             } catch (err) {
-                alert('Error deleting customer: ' + err.message);
+                showAlert('Error deleting customer: ' + err.message, 'error', 'Delete Error');
             }
         }
 

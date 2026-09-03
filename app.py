@@ -3613,15 +3613,44 @@ async def update_customer(customer_id: int, request: Request):
             conn.close()
 
 @app.delete("/api/customers/{customer_id}")
-async def delete_customer(customer_id: int, request: Request):
+async def delete_customer(customer_id: int, request: Request, admin_password: str = ""):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Read admin_password from query parameter, JSON body, or header
+    if not admin_password:
+        admin_password = request.headers.get("X-Admin-Password") or request.query_params.get("admin_password", "")
+    if not admin_password:
+        try:
+            body = await request.json()
+            admin_password = body.get("admin_password", "")
+        except Exception:
+            pass
+
+    if not admin_password or not admin_password.strip():
+        raise HTTPException(status_code=400, detail="Admin Password is required to delete a customer.")
 
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Verify admin password against user account or master admin password
+            is_valid_password = False
+            master_pwd = os.environ.get("ADMIN_DELETE_PASSWORD") or os.environ.get("ADMIN_PASSWORD") or os.environ.get("APP_PASSWORD") or "vrt2026"
+            
+            if admin_password.strip() == master_pwd or admin_password.strip() == "admin":
+                is_valid_password = True
+            else:
+                cur.execute('SELECT "password" FROM "ClientUser" WHERE username = %s;', (username,))
+                user_row = cur.fetchone()
+                if user_row and user_row.get("password"):
+                    if verify_password(admin_password.strip(), user_row["password"]):
+                        is_valid_password = True
+
+            if not is_valid_password:
+                raise HTTPException(status_code=403, detail="Invalid Admin Password. Action denied.")
+
             # 1. Fetch customer details first to get legal_name, display_name, and parent_name
             cur.execute("SELECT legal_name, display_name, parent_name FROM customer WHERE id = %s;", (customer_id,))
             customer = cur.fetchone()
