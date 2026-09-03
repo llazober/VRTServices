@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "full-debug-log-v26"
+BUILD_VERSION = "full-debug-log-v27"
 
 @app.get("/api/version")
 async def get_version():
@@ -6504,11 +6504,6 @@ async def resend_inbound_webhook(request: Request):
         except Exception as e_db_log:
             print(f"Error logging to webhook_debug_log DB table: {e_db_log}")
 
-        try:
-            if conn:
-                conn.close()
-        except Exception:
-            pass
         return {"status": "success", "customer_id": customer_id, "extracted_body_len": len(body_text)}
     except Exception as e:
         import traceback
