@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "bracket-cust-id-fix-v19"
+BUILD_VERSION = "pure-cust-id-only-v20"
 
 @app.get("/api/version")
 async def get_version():
@@ -6264,19 +6264,9 @@ async def resend_inbound_webhook(request: Request):
                     print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                     break
 
-            # Tier 2: Match by Sender Email address if Tier 1 yielded no match
-            if not cust and sender_email:
-                cur.execute("""
-                    SELECT id, legal_name, parent_name, customer_type FROM customer
-                    WHERE LOWER(email) = LOWER(%s)
-                    ORDER BY id ASC LIMIT 1;
-                """, (sender_email,))
-                cust = cur.fetchone()
-                if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match for Sender Email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
-
-            # Tier 3: Fallback to Catch-All Customer (CUST-0000 - Unassigned Inbound Emails)
+            # Step 2: Fallback to CUST-0000 (Unassigned Inbound Emails) if Customer ID is missing or unmatched
             if not cust:
+                print(f"[RESEND INBOUND ROUTING] ℹ️ No Customer ID matched for subject '{subject}'. Routing directly to CUST-0000 catch-all.")
                 cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
                 cust = cur.fetchone()
                 if not cust:
@@ -6295,7 +6285,7 @@ async def resend_inbound_webhook(request: Request):
                     except Exception as e_c0:
                         print(f"[CATCHALL CUSTOMER INIT NOTICE]: {e_c0}")
                 if cust:
-                    print(f"[RESEND INBOUND ROUTING] Tier 3 fallback -> Catch-All CUST-0000 (#{cust['id']})")
+                    print(f"[RESEND INBOUND ROUTING] Fallback -> Catch-All CUST-0000 (#{cust['id']})")
 
             if cust:
                 customer_id = cust["id"]
