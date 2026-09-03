@@ -2390,6 +2390,11 @@ async def get_customers(request: Request, query: str = "", parentName: str = "")
     user_parent = get_user_parent_name(username) or "VRT Services"
     target_parent = parentName.strip() if parentName.strip() else user_parent
 
+    try:
+        ensure_catchall_customer()
+    except Exception:
+        pass
+
     conn = None
     try:
         conn = get_db_connection()
@@ -2400,10 +2405,10 @@ async def get_customers(request: Request, query: str = "", parentName: str = "")
 
             if target_parent:
                 if target_parent.lower() == "vrt services":
-                    where_clauses.append("(LOWER(COALESCE(parent_name, '')) = LOWER(%s) OR parent_name IS NULL OR parent_name = '')")
+                    where_clauses.append("(LOWER(COALESCE(parent_name, '')) = LOWER(%s) OR parent_name IS NULL OR parent_name = '' OR custumer_number = 'CUST-0000')")
                     params.append(target_parent)
                 else:
-                    where_clauses.append("(LOWER(COALESCE(parent_name, '')) = LOWER(%s))")
+                    where_clauses.append("(LOWER(COALESCE(parent_name, '')) = LOWER(%s) OR custumer_number = 'CUST-0000')")
                     params.append(target_parent)
 
             if query.strip():
