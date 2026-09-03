@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "no-dups-all-match-v14"
+BUILD_VERSION = "full-trace-v15"
 
 @app.get("/api/version")
 async def get_version():
@@ -5711,6 +5711,32 @@ async def get_inbound_status_public():
         if conn:
             conn.close()
     return result
+
+
+@app.get("/api/debug/full-trace")
+async def get_full_trace_public():
+    """Public diagnostic endpoint — trace all customers, last 20 webhooks, and last 20 communications."""
+    trace = {}
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, custumer_number, legal_name, display_name, email, parent_name, status FROM customer ORDER BY id ASC;")
+            trace["customers"] = [dict(r) for r in cur.fetchall()]
+
+            cur.execute("SELECT id, sender_email, recipient_email, subject, customer_id, status, created_at FROM webhook_debug_log ORDER BY id DESC LIMIT 20;")
+            trace["webhook_logs"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+
+            cur.execute("""
+                SELECT c.id, c.customer_id, cust.custumer_number, cust.legal_name, c.sender_email, c.recipient_email, c.subject, c.direction, c.is_read, c.created_at
+                FROM customer_communications c
+                LEFT JOIN customer cust ON c.customer_id = cust.id
+                ORDER BY c.id DESC LIMIT 20;
+            """)
+            trace["communications"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
+        conn.close()
+    except Exception as e:
+        trace["error"] = str(e)
+    return trace
 
 
 @app.get("/api/debug/last-inbound")
