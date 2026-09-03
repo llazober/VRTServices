@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "candidate-engine-v10"
+BUILD_VERSION = "no-false-dedup-v11"
 
 @app.get("/api/version")
 async def get_version():
@@ -6316,21 +6316,6 @@ async def resend_inbound_webhook(request: Request):
                             except Exception: pass
                             return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
 
-                    cur.execute("""
-                        SELECT id FROM customer_communications
-                        WHERE customer_id = %s AND direction = 'INBOUND'
-                          AND LOWER(sender_email) = LOWER(%s)
-                          AND COALESCE(subject, '') = COALESCE(%s, '')
-                          AND COALESCE(body_text, '') = COALESCE(%s, '')
-                          AND created_at > (CURRENT_TIMESTAMP - INTERVAL '10 seconds');
-                    """, (customer_id, sender_email, subject, body_text))
-                    if cur.fetchone():
-                        print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate content for customer {customer_id} within 10s")
-                        fresh_dedup.close()
-                        try:
-                            if conn: conn.close()
-                        except Exception: pass
-                        return {"status": "ignored", "reason": "Duplicate inbound content within 10 seconds"}
                 fresh_dedup.close()
             except Exception as e_dup:
                 print(f"[DEDUP CHECK ERROR - continuing] {e_dup}")
