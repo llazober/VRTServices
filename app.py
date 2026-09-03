@@ -6215,7 +6215,8 @@ async def resend_inbound_webhook(request: Request):
             
             # 1. Try extracting attachments directly from raw RFC-822 MIME string if present
             mime_att_list = []
-            for obj in [data, raw_body, fetched_data if 'fetched_data' in locals() and isinstance(fetched_data, dict) else {}]:
+            _fetched_data_safe = fetched_data if ('fetched_data' in locals() and isinstance(fetched_data, dict)) else {}
+            for obj in [data, raw_body, _fetched_data_safe]:
                 if isinstance(obj, dict):
                     raw_mime = obj.get("raw") or obj.get("mime") or obj.get("raw_email") or obj.get("email_raw")
                     if raw_mime and isinstance(raw_mime, str) and len(raw_mime) > 20:
@@ -6397,11 +6398,20 @@ async def resend_inbound_webhook(request: Request):
         }
         try:
             db_c = get_db_connection()
+            _s_em = sender_email if 'sender_email' in locals() else ''
+            _r_em = recipient_email if 'recipient_email' in locals() else ''
+            _subj = subject if 'subject' in locals() else ''
+            _body = body_text if 'body_text' in locals() else ''
+            _cid  = customer_id if 'customer_id' in locals() else None
             with db_c.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO webhook_debug_log (payload_json, status)
-                    VALUES (%s, %s);
-                """, (json.dumps(raw_body) if 'raw_body' in locals() else "{}", f"ERROR: {str(e)}"))
+                    INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                """, (
+                    json.dumps(raw_body) if 'raw_body' in locals() else "{}",
+                    _s_em, _r_em, _subj, _body, _cid,
+                    f"ERROR: {str(e)[:200]}"
+                ))
                 db_c.commit()
             db_c.close()
         except Exception:
