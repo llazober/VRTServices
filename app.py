@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "id-text-and-log-status-v22"
+BUILD_VERSION = "cust-id-routing-fix-v23"
 
 @app.get("/api/version")
 async def get_version():
@@ -5998,12 +5998,14 @@ async def resend_inbound_webhook(request: Request):
             data = raw_body if isinstance(raw_body, dict) else {}
 
         # Immediately record raw webhook payload to DB for diagnostics
+        debug_log_id = None
         try:
             conn_dbg = get_db_connection()
             with conn_dbg.cursor() as cur_dbg:
                 cur_dbg.execute("""
                     INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED');
+                    VALUES (%s, %s, %s, %s, %s, %s, 'RECEIVED')
+                    RETURNING id;
                 """, (
                     json.dumps(raw_body),
                     str(data.get("from") or raw_body.get("from") or ""),
@@ -6012,6 +6014,9 @@ async def resend_inbound_webhook(request: Request):
                     str(data.get("text") or data.get("html") or ""),
                     None
                 ))
+                row_dbg = cur_dbg.fetchone()
+                if row_dbg:
+                    debug_log_id = row_dbg[0] if isinstance(row_dbg, (list, tuple)) else row_dbg.get("id")
                 conn_dbg.commit()
             conn_dbg.close()
         except Exception as e_dbg_init:
@@ -6307,17 +6312,23 @@ async def resend_inbound_webhook(request: Request):
                 fresh_dedup = get_db_connection()
                 with fresh_dedup.cursor() as cur:
                     if email_id and len(str(email_id).strip()) > 3:
+                        clean_eid = str(email_id).strip()
                         cur.execute("""
                             SELECT id FROM customer_communications
                             WHERE direction = 'INBOUND'
-                              AND attachments_json->>'email_id' = %s;
-                        """, (str(email_id).strip(),))
+                              AND (attachments_json::text LIKE %s OR body_text LIKE %s);
+                        """, (f'%"{clean_eid}"%', f'%{clean_eid}%'))
                         if cur.fetchone():
                             print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
                             fresh_dedup.close()
-                            try:
-                                if conn: conn.close()
-                            except Exception: pass
+                            if debug_log_id:
+                                try:
+                                    conn_upd = get_db_connection()
+                                    with conn_upd.cursor() as cur_upd:
+                                        cur_upd.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP', customer_id = %s WHERE id = %s;", (customer_id, debug_log_id))
+                                        conn_upd.commit()
+                                    conn_upd.close()
+                                except Exception: pass
                             return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
                 fresh_dedup.close()
             except Exception as e_dup:
@@ -6331,26 +6342,35 @@ async def resend_inbound_webhook(request: Request):
                 fresh_conn = get_db_connection()
                 with fresh_conn.cursor() as cur:
                     init_atts = [{"email_id": str(email_id)}] if email_id else []
+                    final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
                     cur.execute("""
                         INSERT INTO customer_communications (
                             customer_id, direction, sender_email, recipient_email,
                             subject, body_text, attachments_json, status, is_read, created_at
                         ) VALUES (
-                            %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                            %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
                         ) RETURNING id;
-                    """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps(init_atts)))
+                    """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts)))
                     row = cur.fetchone()
                     comm_id = row[0] if row else None
                     
-                    cur.execute("""
-                        UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
-                        WHERE id = (SELECT max(id) FROM webhook_debug_log);
-                    """, (customer_id,))
+                    if debug_log_id:
+                        cur.execute("""
+                            UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
+                            WHERE id = %s;
+                        """, (customer_id, debug_log_id))
+                    else:
+                        cur.execute("""
+                            UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
+                            WHERE id = (SELECT max(id) FROM webhook_debug_log);
+                        """, (customer_id,))
                     fresh_conn.commit()
                 fresh_conn.close()
                 print(f"[RESEND INBOUND WEBHOOK] ✅ Saved comm id={comm_id} from '{sender_email}' → customer '{legal_name}' (ID: {customer_id})")
             except Exception as e_comm:
                 print(f"[CUSTOMER COMM INSERT ERROR] {e_comm}")
+                import traceback
+                traceback.print_exc()
 
             # ── Step 3: S3 Attachment Upload (optional, non-blocking) ────────────
             try:
