@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "catchall-pinned-v5"
+BUILD_VERSION = "catchall-ready-v6"
 
 @app.get("/api/version")
 async def get_version():
@@ -6239,12 +6239,12 @@ async def resend_inbound_webhook(request: Request):
             try:
                 fresh_dedup = get_db_connection()
                 with fresh_dedup.cursor() as cur:
-                    if email_id:
+                    if email_id and len(str(email_id).strip()) > 3:
                         cur.execute("""
                             SELECT id FROM customer_communications
                             WHERE customer_id = %s AND direction = 'INBOUND'
-                              AND (attachments_json->>'email_id' = %s OR body_text ILIKE %s);
-                        """, (customer_id, str(email_id), f"%{email_id}%"))
+                              AND attachments_json->>'email_id' = %s;
+                        """, (customer_id, str(email_id).strip()))
                         if cur.fetchone():
                             print(f"[RESEND WEBHOOK DUP IGNORED] Duplicate email_id '{email_id}' for customer {customer_id}")
                             fresh_dedup.close()
