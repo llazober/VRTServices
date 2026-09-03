@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "robust-cust-id-v8"
+BUILD_VERSION = "deep-payload-scan-v9"
 
 @app.get("/api/version")
 async def get_version():
@@ -6210,8 +6210,14 @@ async def resend_inbound_webhook(request: Request):
 
             return None
 
-        # Parse customer reference code from subject or body
-        cust_number = extract_customer_id_from_text(subject) or extract_customer_id_from_text(body_text)
+        # Parse customer reference code from subject, body, or full raw payload string
+        raw_body_str = json.dumps(raw_body) if isinstance(raw_body, (dict, list)) else str(raw_body or "")
+        cust_number = (
+            extract_customer_id_from_text(subject) or 
+            extract_customer_id_from_text(body_text) or 
+            extract_customer_id_from_text(raw_body_str)
+        )
+        print(f"[RESEND INBOUND DEBUG] Sender='{sender_email}', Subject='{subject}', Extracted Customer ID='{cust_number}'")
 
         conn = get_db_connection()
         customer_id = None
