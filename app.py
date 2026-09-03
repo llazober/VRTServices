@@ -5628,7 +5628,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "exact-cust-id-match-v21"
+BUILD_VERSION = "id-text-and-log-status-v22"
 
 @app.get("/api/version")
 async def get_version():
@@ -6261,8 +6261,9 @@ async def resend_inbound_webhook(request: Request):
                     WHERE custumer_number ILIKE %s 
                        OR custumer_number ILIKE %s 
                        OR custumer_number ILIKE %s
-                       OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s;
-                """, (cand, clean_cust, clean_cust_no_dash, raw_digits))
+                       OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s
+                       OR id::text = %s;
+                """, (cand, clean_cust, clean_cust_no_dash, raw_digits, raw_digits))
                 found = cur.fetchone()
                 if found:
                     cust = found
@@ -6340,6 +6341,11 @@ async def resend_inbound_webhook(request: Request):
                     """, (customer_id, sender_email, recipient_email, subject, body_text, json.dumps(init_atts)))
                     row = cur.fetchone()
                     comm_id = row[0] if row else None
+                    
+                    cur.execute("""
+                        UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s
+                        WHERE id = (SELECT max(id) FROM webhook_debug_log);
+                    """, (customer_id,))
                     fresh_conn.commit()
                 fresh_conn.close()
                 print(f"[RESEND INBOUND WEBHOOK] ✅ Saved comm id={comm_id} from '{sender_email}' → customer '{legal_name}' (ID: {customer_id})")
