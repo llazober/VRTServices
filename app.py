@@ -5679,7 +5679,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v42-capture-webhook-error-global"
+BUILD_VERSION = "v43-fix-text-not-jsonb-operator"
 
 @app.get("/api/version")
 async def get_version():
@@ -6402,12 +6402,11 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 # ── Step 1: Deduplication Check ──
                 if email_id and len(str(email_id).strip()) > 3:
                     clean_eid = str(email_id).strip()
-                    dup_json = json.dumps([{"email_id": clean_eid}])
                     cur.execute("""
                         SELECT id FROM customer_communications
                         WHERE direction = 'INBOUND'
-                          AND attachments_json @> %s::jsonb;
-                    """, (dup_json,))
+                          AND attachments_json::text LIKE %s;
+                    """, (f'%{clean_eid}%',))
                     if cur.fetchone():
                         print(f"[RESEND DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
                         if debug_log_id:
@@ -6483,7 +6482,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                         customer_id, direction, sender_email, recipient_email,
                         subject, body_text, attachments_json, status, is_read, created_at
                     ) VALUES (
-                        %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                        %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
                     ) RETURNING id;
                 """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
 
