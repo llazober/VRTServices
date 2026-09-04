@@ -5677,8 +5677,9 @@ async def mark_all_communications_read(request: Request):
             conn.close()
 
 LAST_INBOUND_DEBUG = {}
+LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v41-add-diag-test-insert-endpoint"
+BUILD_VERSION = "v42-capture-webhook-error-global"
 
 @app.get("/api/version")
 async def get_version():
@@ -5843,6 +5844,8 @@ async def get_last_inbound_debug():
 
     if not debug_info:
         debug_info = {"status": "No webhooks or inbound communications recorded yet in DB."}
+    debug_info["global_LAST_INBOUND_DEBUG"] = LAST_INBOUND_DEBUG
+    debug_info["global_LAST_WEBHOOK_ERROR"] = LAST_WEBHOOK_ERROR
     return debug_info
 
 @app.get("/api/debug/test-comm-insert")
@@ -6496,9 +6499,18 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
 
         except Exception as e_main:
-            import traceback
+            import traceback as _tb
+            global LAST_WEBHOOK_ERROR
+            LAST_WEBHOOK_ERROR = {
+                "error": str(e_main),
+                "type": type(e_main).__name__,
+                "traceback": _tb.format_exc(),
+                "subject": subject,
+                "sender_email": sender_email,
+                "occurred_at": str(datetime.datetime.now())
+            }
             print(f"[RESEND MAIN INSERT ERROR] {e_main}")
-            traceback.print_exc()
+            _tb.print_exc()
             try:
                 if main_conn: main_conn.rollback()
                 if debug_log_id and main_conn:
