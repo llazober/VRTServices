@@ -5678,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v40-fix-fresh-main-conn-webhook"
+BUILD_VERSION = "v41-add-diag-test-insert-endpoint"
 
 @app.get("/api/version")
 async def get_version():
@@ -5844,6 +5844,56 @@ async def get_last_inbound_debug():
     if not debug_info:
         debug_info = {"status": "No webhooks or inbound communications recorded yet in DB."}
     return debug_info
+
+@app.get("/api/debug/test-comm-insert")
+async def test_comm_insert():
+    """Diagnostic: try a direct INSERT into customer_communications and return exact error."""
+    result = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get CUST-0000 id
+            cur.execute("SELECT id FROM customer WHERE custumer_number = 'CUST-0000';")
+            cust0 = cur.fetchone()
+            cust0_id = cust0["id"] if cust0 else None
+            result["cust_0000_id"] = cust0_id
+
+            # Try the exact same INSERT the webhook does
+            import datetime as _dt
+            test_atts = json.dumps([{"email_id": "test-diag-001"}])
+            cur.execute("""
+                INSERT INTO customer_communications (
+                    customer_id, direction, sender_email, recipient_email,
+                    subject, body_text, attachments_json, status, is_read, created_at
+                ) VALUES (
+                    %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                ) RETURNING id;
+            """, (cust0_id, "diag@test.com", "vrt@ostooechei.resend.app", "DIAG TEST INSERT", "Test body", test_atts))
+            row = cur.fetchone()
+            comm_id = row["id"] if row else None
+            conn.commit()
+            result["status"] = "SUCCESS"
+            result["inserted_comm_id"] = comm_id
+
+            # Clean up the test row
+            if comm_id:
+                cur.execute("DELETE FROM customer_communications WHERE id = %s;", (comm_id,))
+                conn.commit()
+                result["cleanup"] = "deleted test row"
+    except Exception as e:
+        import traceback
+        result["status"] = "ERROR"
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+        try:
+            if conn: conn.rollback()
+        except Exception: pass
+    finally:
+        if conn:
+            try: conn.close()
+            except Exception: pass
+    return result
 
 @app.get("/api/debug/test-resend-fetch")
 async def test_resend_fetch_debug():
