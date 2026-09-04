@@ -449,7 +449,7 @@ def get_db_connection(db_name: str = None):
         db_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, new_path, parsed.params, parsed.query, parsed.fragment))
     else:
         raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
-    return psycopg2.connect(db_url)
+    return psycopg2.connect(db_url, connect_timeout=5)
 
 def sync_customer_parent_mapping(cur, parent_name: str, legal_name: str, display_name: str = None):
     """Ensure parent-client mapping exists in ParentClientMap using legal_name under parent_name."""
@@ -5681,7 +5681,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v45-fix-webhook-301-redirect-bypass"
+BUILD_VERSION = "v46-single-connection-db-timeout-fix"
 
 @app.get("/api/version")
 async def get_version():
@@ -6244,11 +6244,6 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         except Exception:
             raw_body = {}
 
-        try:
-            print(f"[RESEND INBOUND RAW PAYLOAD]: {json.dumps(raw_body, default=str)}")
-        except Exception:
-            pass
-
         if isinstance(raw_body, dict) and "data" in raw_body and isinstance(raw_body["data"], dict):
             data = raw_body["data"]
         else:
@@ -6316,9 +6311,11 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
             (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
         )
 
-        # OPEN SINGLE DEDICATED DB CONNECTION FOR THE ENTIRE REQUEST
+        # Connect to Postgres ONCE for the entire webhook processing lifecycle
+        conn = get_db_connection()
+
+        # Step 1: Record initial debug entry
         try:
-            conn = get_db_connection()
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     INSERT INTO webhook_debug_log (payload_json, sender_email, recipient_email, subject, body_text, customer_id, status)
@@ -6336,24 +6333,31 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 if row_dbg:
                     debug_log_id = row_dbg["id"] if isinstance(row_dbg, dict) else row_dbg[0]
                 conn.commit()
-        except Exception as e_dbg_init:
-            print(f"[WEBHOOK DB LOG INIT ERROR]: {e_dbg_init}")
-            # CRITICAL: rollback so the connection is clean for the main insert below
-            try:
-                if conn: conn.rollback()
-            except Exception:
-                pass
+        except Exception as e_dbg:
+            print(f"[WEBHOOK DB LOG INIT NOTICE]: {e_dbg}")
 
-        # 1. Filter status events
+        # Filter status events (email.sent, email.opened, etc.)
         event_type = str(raw_body.get("type") or data.get("type") or "").strip().lower()
         ignored_status_events = {"email.sent", "email.bounced", "email.complained", "email.opened", "email.clicked", "sent", "bounced", "complained", "opened", "clicked"}
         if event_type in ignored_status_events:
             print(f"[RESEND WEBHOOK IGNORED] Ignoring status event type '{event_type}'")
+            if debug_log_id:
+                try:
+                    with conn.cursor() as cur_flt:
+                        cur_flt.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;", (f"IGNORED: Event '{event_type}'", debug_log_id))
+                        conn.commit()
+                except Exception: pass
             return {"status": "ignored", "reason": f"Event type '{event_type}' is status event"}
 
-        # 2. Filter self-generated CRM alerts
+        # Filter self-generated CRM alerts
         if subject.startswith("📩 New Reply Received") or "CRM Alerts" in str(subject):
             print(f"[RESEND WEBHOOK IGNORED] Ignoring self-generated CRM alert email")
+            if debug_log_id:
+                try:
+                    with conn.cursor() as cur_flt:
+                        cur_flt.execute("UPDATE webhook_debug_log SET status = 'IGNORED: Self-generated CRM alert' WHERE id = %s;", (debug_log_id,))
+                        conn.commit()
+                except Exception: pass
             return {"status": "ignored", "reason": "Self-generated CRM alert email"}
 
         def extract_all_customer_candidates(subj_str: str, body_str: str):
@@ -6394,138 +6398,101 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         cust_candidates = extract_all_customer_candidates(subject, body_text)
         print(f"[RESEND INBOUND ROUTING] Extracted candidates for '{subject}': {cust_candidates}")
 
-        # Always use a FRESH dedicated connection for the main processing block
-        # The debug-log conn may be in a broken state; don't reuse it here
-        main_conn = None
-        try:
-            main_conn = get_db_connection()
-
-            with main_conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # ── Step 1: Deduplication Check ──
-                if email_id and len(str(email_id).strip()) > 3:
-                    clean_eid = str(email_id).strip()
-                    cur.execute("""
-                        SELECT id FROM customer_communications
-                        WHERE direction = 'INBOUND'
-                          AND attachments_json::text LIKE %s;
-                    """, (f'%{clean_eid}%',))
-                    if cur.fetchone():
-                        print(f"[RESEND DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
-                        if debug_log_id:
-                            cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
-                            main_conn.commit()
-                        return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
-
-                # ── Step 2: Customer Matching ──
-                for cand in cust_candidates:
-                    raw_digits = re.sub(r'[^\d]', '', cand)
-                    if not raw_digits or raw_digits == "0000":
-                        continue
-                    clean_cust = f"CUST-{raw_digits}"
-                    clean_cust_no_dash = f"CUST{raw_digits}"
-                    cur.execute("""
-                        SELECT id, legal_name, parent_name, customer_type FROM customer 
-                        WHERE custumer_number ILIKE %s 
-                           OR custumer_number ILIKE %s 
-                           OR custumer_number ILIKE %s
-                           OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s
-                           OR id::text = %s;
-                    """, (cand, clean_cust, clean_cust_no_dash, raw_digits, raw_digits))
-                    found = cur.fetchone()
-                    if found:
-                        cust = found
-                        print(f"[RESEND ROUTING MATCH] Candidate '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
-                        break
-
-                # Fallback: Match by Sender Email if no Customer ID candidate matched
-                if not cust and sender_email and len(sender_email.strip()) > 3:
-                    clean_se = sender_email.strip().lower()
-                    cur.execute("""
-                        SELECT id, legal_name, parent_name, customer_type FROM customer
-                        WHERE LOWER(email) = %s OR LOWER(email) LIKE %s;
-                    """, (clean_se, f"%{clean_se}%"))
-                    found_by_email = cur.fetchone()
-                    if found_by_email:
-                        cust = found_by_email
-                        print(f"[RESEND ROUTING MATCH BY SENDER EMAIL] '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
-
-                if not cust:
-                    print(f"[RESEND ROUTING FALLBACK] No Customer ID match for '{subject}'. Routing to CUST-0000.")
-                    cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
-                    cust = cur.fetchone()
-                    if not cust:
-                        cur.execute("""
-                            INSERT INTO customer (
-                                custumer_number, customer_type, legal_name, display_name,
-                                status, parent_name, created_at, updated_at
-                            ) VALUES (
-                                'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
-                                'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                            ) RETURNING id, legal_name, parent_name, customer_type;
-                        """)
-                        cust = cur.fetchone()
-
-                customer_id = cust["id"] if cust else None
-                legal_name = cust["legal_name"] if cust else "Unassigned Customer"
-                parent_name = (cust.get("parent_name") if cust else None) or "VRT Services"
-
-                # ── Step 3: Insert into customer_communications ──
-                # Use email_id as message_id for clean deduplication (not via attachments_json)
-                init_atts = [{"email_id": str(email_id)}] if email_id else []
-                final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
-
-                # Truncate to match exact DB column sizes: sender_email/recipient_email VARCHAR(200), subject VARCHAR(300)
-                safe_sender = (sender_email or "")[:199]
-                safe_recipient = (recipient_email or "")[:199]
-                safe_subject = (subject or "")[:299]
-
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # ── Deduplication Check ──
+            if email_id and len(str(email_id).strip()) > 3:
+                clean_eid = str(email_id).strip()
                 cur.execute("""
-                    INSERT INTO customer_communications (
-                        customer_id, direction, sender_email, recipient_email,
-                        subject, body_text, attachments_json, status, is_read, created_at
-                    ) VALUES (
-                        %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                    ) RETURNING id;
-                """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
+                    SELECT id FROM customer_communications
+                    WHERE direction = 'INBOUND'
+                      AND attachments_json::text LIKE %s;
+                """, (f'%{clean_eid}%',))
+                if cur.fetchone():
+                    print(f"[RESEND DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
+                    if debug_log_id:
+                        cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
+                        conn.commit()
+                    return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
 
-                comm_row = cur.fetchone()
-                comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
+            # ── Customer Matching ──
+            for cand in cust_candidates:
+                raw_digits = re.sub(r'[^\d]', '', cand)
+                if not raw_digits or raw_digits == "0000":
+                    continue
+                clean_cust = f"CUST-{raw_digits}"
+                clean_cust_no_dash = f"CUST{raw_digits}"
+                cur.execute("""
+                    SELECT id, legal_name, parent_name, customer_type FROM customer 
+                    WHERE custumer_number ILIKE %s 
+                       OR custumer_number ILIKE %s 
+                       OR custumer_number ILIKE %s
+                       OR regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s
+                       OR id::text = %s;
+                """, (cand, clean_cust, clean_cust_no_dash, raw_digits, raw_digits))
+                found = cur.fetchone()
+                if found:
+                    cust = found
+                    print(f"[RESEND ROUTING MATCH] Candidate '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                    break
 
-                # ── Step 4: Update webhook_debug_log status to SUCCESS ──
-                if debug_log_id:
+            # Fallback: Match by Sender Email if no Customer ID candidate matched
+            if not cust and sender_email and len(sender_email.strip()) > 3:
+                clean_se = sender_email.strip().lower()
+                cur.execute("""
+                    SELECT id, legal_name, parent_name, customer_type FROM customer
+                    WHERE LOWER(email) = %s OR LOWER(email) LIKE %s;
+                """, (clean_se, f"%{clean_se}%"))
+                found_by_email = cur.fetchone()
+                if found_by_email:
+                    cust = found_by_email
+                    print(f"[RESEND ROUTING MATCH BY SENDER EMAIL] '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+
+            if not cust:
+                print(f"[RESEND ROUTING FALLBACK] No Customer ID match for '{subject}'. Routing to CUST-0000.")
+                cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE custumer_number = 'CUST-0000';")
+                cust = cur.fetchone()
+                if not cust:
                     cur.execute("""
-                        UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
-                    """, (customer_id, debug_log_id))
-                main_conn.commit()
-                print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
+                        INSERT INTO customer (
+                            custumer_number, customer_type, legal_name, display_name,
+                            status, parent_name, created_at, updated_at
+                        ) VALUES (
+                            'CUST-0000', 'System', 'Unassigned Inbound Emails', 'Unassigned / General Inbox',
+                            'Active', 'VRT Services', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        ) RETURNING id, legal_name, parent_name, customer_type;
+                    """)
+                    cust = cur.fetchone()
 
-        except Exception as e_main:
-            import traceback as _tb
-            global LAST_WEBHOOK_ERROR
-            LAST_WEBHOOK_ERROR = {
-                "error": str(e_main),
-                "type": type(e_main).__name__,
-                "traceback": _tb.format_exc(),
-                "subject": subject,
-                "sender_email": sender_email,
-                "occurred_at": str(datetime.datetime.now())
-            }
-            print(f"[RESEND MAIN INSERT ERROR] {e_main}")
-            _tb.print_exc()
-            try:
-                if main_conn: main_conn.rollback()
-                if debug_log_id and main_conn:
-                    with main_conn.cursor() as cur_err:
-                        cur_err.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;",
-                                        (f"ERROR: {str(e_main)[:190]}", debug_log_id))
-                        main_conn.commit()
-            except Exception:
-                pass
-            raise  # Let the outer except handle it and return error response
-        finally:
-            if main_conn:
-                try: main_conn.close()
-                except Exception: pass
+            customer_id = cust["id"] if cust else None
+            legal_name = cust["legal_name"] if cust else "Unassigned Customer"
+            parent_name = (cust.get("parent_name") if cust else None) or "VRT Services"
+
+            # ── Insert into customer_communications ──
+            init_atts = [{"email_id": str(email_id)}] if email_id else []
+            final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
+            safe_sender = (sender_email or "")[:199]
+            safe_recipient = (recipient_email or "")[:199]
+            safe_subject = (subject or "")[:299]
+
+            cur.execute("""
+                INSERT INTO customer_communications (
+                    customer_id, direction, sender_email, recipient_email,
+                    subject, body_text, attachments_json, status, is_read, created_at
+                ) VALUES (
+                    %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                ) RETURNING id;
+            """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
+
+            comm_row = cur.fetchone()
+            comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
+
+            # Update webhook_debug_log status to SUCCESS in PostgreSQL
+            if debug_log_id:
+                cur.execute("""
+                    UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
+                """, (customer_id, debug_log_id))
+            conn.commit()
+            print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
 
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.datetime.now()),
@@ -6538,7 +6505,6 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
             "attachments_count": len(attachments) if 'attachments' in locals() else 0
         }
 
-        # Dispatch async background tasks for Resend body fetch, S3 attachment uploads, and Team Email Alerts
         background_tasks.add_task(
             process_inbound_post_processing,
             email_id=str(email_id) if email_id else "",
@@ -6557,24 +6523,16 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         return {"status": "success", "customer_id": customer_id, "comm_id": comm_id}
 
     except Exception as e:
-        import traceback as _tb2
-        err_msg = f"OUTER_ERROR: {e}"
-        LAST_WEBHOOK_ERROR = {
-            "error": str(e),
-            "type": type(e).__name__,
-            "traceback": _tb2.format_exc(),
-            "subject": subject,
-            "sender_email": sender_email,
-            "occurred_at": str(datetime.datetime.now()),
-            "caught_by": "OUTER_EXCEPT"
-        }
-        print(f"Error handling Resend Inbound Webhook: {err_msg}")
-        _tb2.print_exc()
+        import traceback as _tb
+        err_msg = f"ERROR: {e}"
+        print(f"[RESEND INBOUND WEBHOOK ERROR]: {err_msg}")
+        _tb.print_exc()
         if conn and debug_log_id:
             try:
                 conn.rollback()
-                with conn.cursor() as cur:
-                    cur.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;", (err_msg[:200], customer_id, debug_log_id))
+                with conn.cursor() as cur_err:
+                    cur_err.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;",
+                                    (err_msg[:200], customer_id, debug_log_id))
                     conn.commit()
             except Exception as e_rb:
                 print(f"[WEBHOOK ROLLBACK DB UPDATE ERROR]: {e_rb}")
@@ -6582,8 +6540,10 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
 
     finally:
         if conn:
-            try: conn.close()
-            except Exception: pass
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 # ── Health / debug ─────────────────────────────────────────────────────────────
 @app.get("/health")
