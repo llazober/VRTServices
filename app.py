@@ -1,4 +1,5 @@
 import os
+import io
 # Updated server routes & templates - fixed HTML string escaping for customer names
 
 
@@ -2899,18 +2900,41 @@ async def download_file_proxy(key: str, request: Request):
             else:
                 raise e_direct
 
+        # Check if S3 object is empty or contains raw JSON placeholder text instead of real binary file
+        body_bytes = s3_obj["Body"].read()
+        if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
+            print(f"[CORRUPT S3 FILE DETECTED IN DOWNLOAD] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
+            recovered = try_recover_resend_attachment_by_key(clean_key)
+            if recovered and len(recovered) > 100:
+                body_bytes = recovered
+                try:
+                    client.put_object(Bucket=bucket, Key=actual_key or clean_key, Body=body_bytes)
+                except Exception: pass
+
         filename = os.path.basename(actual_key or clean_key)
         headers = {
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "public, max-age=3600"
         }
         return StreamingResponse(
-            s3_obj["Body"],
+            io.BytesIO(body_bytes),
             media_type=s3_obj.get("ContentType") or "application/octet-stream",
             headers=headers
         )
     except Exception as e:
-        print(f"Error downloading file key '{key}' from storage: {e}")
+        print(f"Error downloading file key '{key}' from storage: {e}. Attempting direct dynamic recovery...")
+        recovered = try_recover_resend_attachment_by_key(clean_key)
+        if recovered and len(recovered) > 100:
+            filename = os.path.basename(clean_key)
+            headers = {
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "public, max-age=3600"
+            }
+            return StreamingResponse(
+                io.BytesIO(recovered),
+                media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
+                headers=headers
+            )
         raise HTTPException(status_code=500, detail=f"Failed to download file: {e}")
 
 @app.post("/api/customers/{customer_id}/storage/upload")
