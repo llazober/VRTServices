@@ -5678,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v39-fix-webhook-db-transaction-abort"
+BUILD_VERSION = "v40-fix-fresh-main-conn-webhook"
 
 @app.get("/api/version")
 async def get_version():
@@ -6339,11 +6339,13 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         cust_candidates = extract_all_customer_candidates(subject, body_text)
         print(f"[RESEND INBOUND ROUTING] Extracted candidates for '{subject}': {cust_candidates}")
 
-        if not conn:
-            conn = get_db_connection()
-
+        # Always use a FRESH dedicated connection for the main processing block
+        # The debug-log conn may be in a broken state; don't reuse it here
+        main_conn = None
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            main_conn = get_db_connection()
+
+            with main_conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # ── Step 1: Deduplication Check ──
                 if email_id and len(str(email_id).strip()) > 3:
                     clean_eid = str(email_id).strip()
@@ -6357,7 +6359,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                         print(f"[RESEND DUP IGNORED] Duplicate email_id '{email_id}' already saved!")
                         if debug_log_id:
                             cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
-                            conn.commit()
+                            main_conn.commit()
                         return {"status": "ignored", "reason": f"Duplicate email_id '{email_id}'"}
 
                 # ── Step 2: Customer Matching ──
@@ -6418,27 +6420,19 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 init_atts = [{"email_id": str(email_id)}] if email_id else []
                 final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
 
-                # Check if message_id column exists; if not, fall back gracefully
-                try:
-                    cur.execute("""
-                        INSERT INTO customer_communications (
-                            customer_id, direction, sender_email, recipient_email,
-                            subject, body_text, attachments_json, status, is_read, created_at
-                        ) VALUES (
-                            %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                        ) RETURNING id;
-                    """, (customer_id, sender_email[:255] if sender_email else "", recipient_email[:255] if recipient_email else "", subject[:500] if subject else "", final_body, json.dumps(init_atts, default=str)))
-                except Exception as e_ins:
-                    conn.rollback()
-                    print(f"[COMM INSERT ERROR] {e_ins} — retrying without length limits")
-                    cur.execute("""
-                        INSERT INTO customer_communications (
-                            customer_id, direction, sender_email, recipient_email,
-                            subject, body_text, attachments_json, status, is_read, created_at
-                        ) VALUES (
-                            %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                        ) RETURNING id;
-                    """, (customer_id, sender_email, recipient_email, subject, final_body, json.dumps(init_atts, default=str)))
+                # Truncate to match exact DB column sizes: sender_email/recipient_email VARCHAR(200), subject VARCHAR(300)
+                safe_sender = (sender_email or "")[:199]
+                safe_recipient = (recipient_email or "")[:199]
+                safe_subject = (subject or "")[:299]
+
+                cur.execute("""
+                    INSERT INTO customer_communications (
+                        customer_id, direction, sender_email, recipient_email,
+                        subject, body_text, attachments_json, status, is_read, created_at
+                    ) VALUES (
+                        %s, 'INBOUND', %s, %s, %s, %s, %s::jsonb, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                    ) RETURNING id;
+                """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
 
                 comm_row = cur.fetchone()
                 comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
@@ -6448,7 +6442,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                     cur.execute("""
                         UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
                     """, (customer_id, debug_log_id))
-                conn.commit()
+                main_conn.commit()
                 print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
 
         except Exception as e_main:
@@ -6456,16 +6450,19 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
             print(f"[RESEND MAIN INSERT ERROR] {e_main}")
             traceback.print_exc()
             try:
-                if conn: conn.rollback()
-                # Try to update debug log with the error
-                if debug_log_id and conn:
-                    with conn.cursor() as cur_err:
+                if main_conn: main_conn.rollback()
+                if debug_log_id and main_conn:
+                    with main_conn.cursor() as cur_err:
                         cur_err.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;",
                                         (f"ERROR: {str(e_main)[:190]}", debug_log_id))
-                        conn.commit()
+                        main_conn.commit()
             except Exception:
                 pass
             raise  # Let the outer except handle it and return error response
+        finally:
+            if main_conn:
+                try: main_conn.close()
+                except Exception: pass
 
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.datetime.now()),
