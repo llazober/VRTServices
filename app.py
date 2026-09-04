@@ -5015,6 +5015,54 @@ async def support_submit(
         print(f"Error occurred while sending email: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
 
+@app.get("/api/debug/test-send-support")
+async def debug_test_send_support():
+    resend_key = (
+        os.environ.get("RESEND_API_KEY") or
+        os.environ.get("RESEND_KEY") or
+        os.environ.get("RESEND_API_TOKEN") or
+        os.environ.get("RESEND_TOKEN") or ""
+    ).strip().strip('\'"')
+
+    clean_from = get_resend_from_email()
+    clean_to = get_resend_to_email()
+
+    results = {}
+    
+    for test_from in [clean_from, "onboarding@resend.dev"]:
+        payload = {
+            "from": f"CRM Support <{test_from}>",
+            "to": [clean_to],
+            "subject": f"Test Support Email from {test_from}",
+            "html": "<p>This is a test support email sent to verify Resend delivery.</p>"
+        }
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(payload).encode('utf-8'),
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0"
+            },
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                res_b = resp.read().decode('utf-8')
+                results[test_from] = {"status": "SUCCESS", "response": json.loads(res_b)}
+        except urllib.error.HTTPError as e:
+            err_b = e.read().decode('utf-8')
+            results[test_from] = {"status": "ERROR", "code": e.code, "error": err_b}
+        except Exception as e:
+            results[test_from] = {"status": "EXCEPT", "error": str(e)}
+
+    return {
+        "resend_key_prefix": resend_key[:6] if resend_key else "NONE",
+        "configured_from": clean_from,
+        "configured_to": clean_to,
+        "results": results
+    }
+
 # ── Workload Pending Tasks Endpoint ──────────────────────────────────────────────
 @app.get("/api/dashboard/pending-tasks")
 async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
