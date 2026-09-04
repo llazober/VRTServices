@@ -523,6 +523,7 @@ def init_customer_table():
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS parent_name VARCHAR(200);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_folder_path VARCHAR(300);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
+                CREATE INDEX IF NOT EXISTS idx_customer_email_lower ON customer (LOWER(email));
                 UPDATE customer SET parent_name = 'VRT Services' WHERE parent_name IS NULL OR parent_name = '';
 
                 CREATE TABLE IF NOT EXISTS "ParentClientMap" (
@@ -5681,7 +5682,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v46-single-connection-db-timeout-fix"
+BUILD_VERSION = "v47-indexed-sender-email-lookup-speedup"
 
 @app.get("/api/version")
 async def get_version():
@@ -6438,13 +6439,22 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
             # Fallback: Match by Sender Email if no Customer ID candidate matched
             if not cust and sender_email and len(sender_email.strip()) > 3:
                 clean_se = sender_email.strip().lower()
+                # 1. Exact email match (instant indexed lookup)
                 cur.execute("""
                     SELECT id, legal_name, parent_name, customer_type FROM customer
-                    WHERE LOWER(email) = %s OR LOWER(email) LIKE %s;
-                """, (clean_se, f"%{clean_se}%"))
-                found_by_email = cur.fetchone()
-                if found_by_email:
-                    cust = found_by_email
+                    WHERE LOWER(email) = %s;
+                """, (clean_se,))
+                cust = cur.fetchone()
+
+                # 2. Substring fallback if exact match returned nothing
+                if not cust:
+                    cur.execute("""
+                        SELECT id, legal_name, parent_name, customer_type FROM customer
+                        WHERE LOWER(email) LIKE %s;
+                    """, (f"%{clean_se}%",))
+                    cust = cur.fetchone()
+
+                if cust:
                     print(f"[RESEND ROUTING MATCH BY SENDER EMAIL] '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
 
             if not cust:
