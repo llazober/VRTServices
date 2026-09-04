@@ -4982,7 +4982,6 @@ async def support_submit(
     payload = {
         "from": f"CRM Support <{clean_from}>",
         "to": [clean_to],
-        "reply_to": parse_reply_to_list(os.environ.get("RESEND_REPLY_TO")),
         "subject": subject,
         "html": html_content
     }
