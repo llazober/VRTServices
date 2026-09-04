@@ -5063,6 +5063,25 @@ async def debug_test_send_support():
         "results": results
     }
 
+@app.api_route("/api/admin/clean-emails", methods=["GET", "POST"])
+async def admin_clean_emails():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE customer_communications RESTART IDENTITY;")
+            cur.execute("TRUNCATE TABLE webhook_debug_log RESTART IDENTITY;")
+            conn.commit()
+        return {
+            "status": "success",
+            "message": "Successfully cleared all records from customer_communications and webhook_debug_log tables."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error truncating email tables: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
 # ── Workload Pending Tasks Endpoint ──────────────────────────────────────────────
 @app.get("/api/dashboard/pending-tasks")
 async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
