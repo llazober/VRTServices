@@ -5678,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v36-sub20ms-production"
+BUILD_VERSION = "v37-sender-email-fallback"
 
 @app.get("/api/version")
 async def get_version():
@@ -6373,6 +6373,18 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                     cust = found
                     print(f"[RESEND ROUTING MATCH] Candidate '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                     break
+
+            # Fallback: Match by Sender Email if no Customer ID candidate matched
+            if not cust and sender_email and len(sender_email.strip()) > 3:
+                clean_se = sender_email.strip().lower()
+                cur.execute("""
+                    SELECT id, legal_name, parent_name, customer_type FROM customer
+                    WHERE LOWER(email) = %s OR LOWER(email) LIKE %s;
+                """, (clean_se, f"%{clean_se}%"))
+                found_by_email = cur.fetchone()
+                if found_by_email:
+                    cust = found_by_email
+                    print(f"[RESEND ROUTING MATCH BY SENDER EMAIL] '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
 
             if not cust:
                 print(f"[RESEND ROUTING FALLBACK] No Customer ID match for '{subject}'. Routing to CUST-0000.")
