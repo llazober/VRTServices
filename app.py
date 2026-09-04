@@ -5627,7 +5627,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v31-single-conn-datetime-fix"
+BUILD_VERSION = "v32-rollback-fix-resend-body-fetch"
 
 @app.get("/api/version")
 async def get_version():
@@ -6155,6 +6155,33 @@ async def resend_inbound_webhook(request: Request):
                     unique.append(c_clean)
             return unique
 
+        # Automatically fetch email body from Resend API if empty in webhook payload
+        if email_id and (not body_text or len(body_text.strip()) == 0):
+            _res_key = (os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY") or os.environ.get("RESEND_TOKEN") or "").strip()
+            if _res_key:
+                for _endpoint in [
+                    f"https://api.resend.com/emails/receiving/{email_id}",
+                    f"https://api.resend.com/emails/{email_id}"
+                ]:
+                    try:
+                        _req_f = urllib.request.Request(
+                            _endpoint,
+                            headers={"Authorization": f"Bearer {_res_key}", "User-Agent": "Mozilla/5.0"},
+                            method="GET"
+                        )
+                        with urllib.request.urlopen(_req_f, timeout=4) as _resp_f:
+                            _f_json = json.loads(_resp_f.read().decode("utf-8"))
+                            if isinstance(_f_json, dict):
+                                _f_html = _f_json.get("html") or ""
+                                _f_text = _f_json.get("text") or ""
+                                _f_body = _f_text if _f_text and isinstance(_f_text, str) and len(_f_text.strip()) > 0 else clean_html_to_text(_f_html)
+                                if _f_body and isinstance(_f_body, str) and len(_f_body.strip()) > 0:
+                                    body_text = _f_body.strip()
+                                    print(f"[RESEND API BODY FETCH SUCCESS]: Retrieved {len(body_text)} chars from {_endpoint}")
+                                    break
+                    except Exception as _e_f:
+                        print(f"[RESEND API BODY FETCH NOTICE] {_endpoint}: {_e_f}")
+
         cust_candidates = extract_all_customer_candidates(subject, body_text)
         print(f"[RESEND INBOUND ROUTING] Extracted candidates for '{subject}': {cust_candidates}")
 
@@ -6361,10 +6388,12 @@ async def resend_inbound_webhook(request: Request):
         traceback.print_exc()
         if conn and debug_log_id:
             try:
+                conn.rollback()
                 with conn.cursor() as cur:
                     cur.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;", (err_msg[:200], customer_id, debug_log_id))
                     conn.commit()
-            except Exception: pass
+            except Exception as e_rb:
+                print(f"[WEBHOOK ROLLBACK DB UPDATE ERROR]: {e_rb}")
         return {"status": "error", "message": str(e)}
 
     finally:
