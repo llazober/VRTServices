@@ -5678,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v35-global-inbound-inbox"
+BUILD_VERSION = "v36-sub20ms-production"
 
 @app.get("/api/version")
 async def get_version():
