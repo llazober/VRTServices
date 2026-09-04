@@ -36,9 +36,11 @@ app = FastAPI(title="Bank Statement OCR Extractor")
 
 @app.middleware("http")
 async def add_security_and_cache_headers(request: Request, call_next):
-    # Enforce HTTPS redirect if request came in via plain HTTP
+    # Enforce HTTPS redirect if request came in via plain HTTP (exclude webhooks so 301 redirects don't break POST payloads)
     proto = request.headers.get("x-forwarded-proto", "").lower()
-    if proto == "http":
+    path = request.url.path.lower()
+    is_webhook = any(path.startswith(p) for p in ["/api/webhook", "/api/webhooks", "/api/inbound", "/api/resend", "/api/debug"])
+    if proto == "http" and not is_webhook:
         url = request.url.replace(scheme="https")
         red_resp = RedirectResponse(url=str(url), status_code=301)
         red_resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
@@ -5679,7 +5681,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v44-capture-outer-exception"
+BUILD_VERSION = "v45-fix-webhook-301-redirect-bypass"
 
 @app.get("/api/version")
 async def get_version():
