@@ -5682,7 +5682,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v47-indexed-sender-email-lookup-speedup"
+BUILD_VERSION = "v48-cancelled-error-exception-logging-fix"
 
 @app.get("/api/version")
 async def get_version():
@@ -6532,9 +6532,9 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
 
         return {"status": "success", "customer_id": customer_id, "comm_id": comm_id}
 
-    except Exception as e:
+    except (Exception, asyncio.CancelledError, BaseException) as e:
         import traceback as _tb
-        err_msg = f"ERROR: {e}"
+        err_msg = f"ERROR ({type(e).__name__}): {e}"
         print(f"[RESEND INBOUND WEBHOOK ERROR]: {err_msg}")
         _tb.print_exc()
         if conn and debug_log_id:
@@ -6546,6 +6546,8 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                     conn.commit()
             except Exception as e_rb:
                 print(f"[WEBHOOK ROLLBACK DB UPDATE ERROR]: {e_rb}")
+        if isinstance(e, asyncio.CancelledError):
+            raise
         return {"status": "error", "message": str(e)}
 
     finally:
