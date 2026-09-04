@@ -5180,20 +5180,24 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
 
                 tax_percent = int((tax_completed / tax_total) * 100)
 
-                # Determine if tax_year equals actual current year
+                # Determine if tax_year equals actual current year (e.g., Tax Year 2026 == 2026)
                 tax_year = None
-                if tax_slug and "-" in tax_slug:
-                    try: tax_year = int(tax_slug.split("-")[0])
-                    except ValueError: pass
-                elif tax_slug and str(tax_slug).isdigit():
-                    try: tax_year = int(tax_slug)
-                    except ValueError: pass
-
-                if tax_year is None and tax_label and "Tax Year" in tax_label:
+                if tax_label and "Tax Year" in str(tax_label):
                     try:
-                        tax_year = int(tax_label.split("Tax Year")[1].strip())
+                        import re
+                        m = re.search(r'Tax Year\s+(\d{4})', str(tax_label))
+                        if m:
+                            tax_year = int(m.group(1))
                     except Exception:
                         pass
+
+                if tax_year is None:
+                    if tax_slug and "-" in str(tax_slug):
+                        try: tax_year = int(str(tax_slug).split("-")[0])
+                        except ValueError: pass
+                    elif tax_slug and str(tax_slug).isdigit():
+                        try: tax_year = int(tax_slug)
+                        except ValueError: pass
 
                 is_tax_year_actual = (tax_year is not None) and (tax_year == actual_year)
 
