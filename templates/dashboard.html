@@ -2946,7 +2946,7 @@
                                 ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : ''}
                                 <button class="storage-rename-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Rename file">✏️ Rename</button>
                                 <button class="storage-move-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Move file to another folder">🚚 Move</button>
-                                <a href="${f.url}" target="_blank" download style="padding: 4px 10px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-decoration: none; margin-right: 6px; display: inline-block;">📥 Download</a>
+                                <a href="/api/storage/download?key=${encodeURIComponent(attrKey)}" target="_blank" download style="padding: 4px 10px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-decoration: none; margin-right: 6px; display: inline-block;">📥 Download</a>
                                 <button class="storage-delete-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete file">🗑️</button>
                             </td>
                         </tr>
@@ -3627,16 +3627,15 @@
             const extBtn = document.getElementById('pdfViewerExternalBtn');
             const dlBtn = document.getElementById('pdfViewerDownloadBtn');
 
-            // Use in-app view-pdf streaming endpoint for iframe rendering to prevent forced browser downloads
-            let inlineViewUrl = s3KeyOrUrl;
-            if (s3KeyOrUrl && !s3KeyOrUrl.startsWith('http://') && !s3KeyOrUrl.startsWith('https://')) {
-                inlineViewUrl = `/api/storage/view-pdf?key=${encodeURIComponent(s3KeyOrUrl)}`;
-            }
+            // Use in-app view-pdf and download streaming endpoints to stream files with correct headers
+            const keyParam = encodeURIComponent(s3KeyOrUrl || '');
+            const inlineViewUrl = `/api/storage/view-pdf?key=${keyParam}`;
+            const downloadUrl = `/api/storage/download?key=${keyParam}`;
 
             if (titleEl) titleEl.textContent = fileName || 'PDF Document Viewer';
             if (iframeEl) iframeEl.src = inlineViewUrl;
             if (extBtn) extBtn.href = inlineViewUrl;
-            if (dlBtn) dlBtn.href = rawUrl || inlineViewUrl;
+            if (dlBtn) dlBtn.href = downloadUrl;
 
             document.body.appendChild(modal);
             modal.style.zIndex = '2147483649';

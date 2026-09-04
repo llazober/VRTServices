@@ -2745,6 +2745,18 @@ async def get_customer_storage_folders(customer_id: int, request: Request):
         if conn:
             conn.close()
 
+def clean_s3_key(raw_key: str) -> str:
+    if not raw_key:
+        return ""
+    import urllib.parse
+    s = urllib.parse.unquote(str(raw_key).strip())
+    if "://" in s:
+        parts = s.split("://", 1)[1].split("/", 1)
+        s = parts[1] if len(parts) > 1 else ""
+    if "?" in s:
+        s = s.split("?", 1)[0]
+    return s.lstrip("/")
+
 @app.get("/api/storage/view-pdf")
 async def view_pdf_proxy(key: str, request: Request):
     """Streams a PDF document from DigitalOcean Spaces with inline Content-Disposition for in-app modal previewing."""
@@ -2755,6 +2767,8 @@ async def view_pdf_proxy(key: str, request: Request):
     if not key or not key.strip():
         raise HTTPException(status_code=400, detail="Key parameter is required")
 
+    clean_key = clean_s3_key(key)
+
     client, err = get_s3_client()
     if not client:
         raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
@@ -2762,15 +2776,22 @@ async def view_pdf_proxy(key: str, request: Request):
     bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
     try:
         try:
-            s3_obj = client.get_object(Bucket=bucket, Key=key)
-            actual_key = key
+            s3_obj = client.get_object(Bucket=bucket, Key=clean_key)
+            actual_key = clean_key
         except Exception as e_direct:
-            filename = os.path.basename(key)
-            parent_prefix = key.split('/')[0] if '/' in key else ""
+            filename = os.path.basename(clean_key)
+            parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
             actual_key = None
             if parent_prefix:
                 list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
                 for item in list_res.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            if not actual_key:
+                list_all = client.list_objects_v2(Bucket=bucket)
+                for item in list_all.get('Contents', []):
                     item_key = item['Key']
                     if os.path.basename(item_key).lower() == filename.lower():
                         actual_key = item_key
@@ -2781,14 +2802,21 @@ async def view_pdf_proxy(key: str, request: Request):
             else:
                 raise e_direct
 
-        filename = os.path.basename(actual_key or key)
+        filename = os.path.basename(actual_key or clean_key)
         content_type = s3_obj.get("ContentType") or "application/pdf"
-        if (actual_key or key).lower().endswith(".pdf"):
+        lower_name = (actual_key or clean_key).lower()
+        if lower_name.endswith(".pdf"):
             content_type = "application/pdf"
+        elif lower_name.endswith(".png"):
+            content_type = "image/png"
+        elif lower_name.endswith(".jpg") or lower_name.endswith(".jpeg"):
+            content_type = "image/jpeg"
 
         headers = {
             "Content-Disposition": f'inline; filename="{filename}"',
-            "Cache-Control": "public, max-age=3600"
+            "Cache-Control": "public, max-age=3600",
+            "X-Frame-Options": "SAMEORIGIN",
+            "Access-Control-Allow-Origin": "*"
         }
         return StreamingResponse(
             s3_obj["Body"],
@@ -2798,6 +2826,64 @@ async def view_pdf_proxy(key: str, request: Request):
     except Exception as e:
         print(f"Error fetching PDF key '{key}' from storage: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch PDF document: {e}")
+
+@app.get("/api/storage/download")
+async def download_file_proxy(key: str, request: Request):
+    """Streams any storage file or email attachment from DigitalOcean Spaces with attachment Content-Disposition for browser download."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if not key or not key.strip():
+        raise HTTPException(status_code=400, detail="Key parameter is required")
+
+    clean_key = clean_s3_key(key)
+
+    client, err = get_s3_client()
+    if not client:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    try:
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=clean_key)
+            actual_key = clean_key
+        except Exception as e_direct:
+            filename = os.path.basename(clean_key)
+            parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
+            actual_key = None
+            if parent_prefix:
+                list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
+                for item in list_res.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            if not actual_key:
+                list_all = client.list_objects_v2(Bucket=bucket)
+                for item in list_all.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            if actual_key:
+                s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
+            else:
+                raise e_direct
+
+        filename = os.path.basename(actual_key or clean_key)
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "public, max-age=3600"
+        }
+        return StreamingResponse(
+            s3_obj["Body"],
+            media_type=s3_obj.get("ContentType") or "application/octet-stream",
+            headers=headers
+        )
+    except Exception as e:
+        print(f"Error downloading file key '{key}' from storage: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download file: {e}")
 
 @app.post("/api/customers/{customer_id}/storage/upload")
 async def upload_customer_storage_file(
