@@ -5682,7 +5682,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v48-cancelled-error-exception-logging-fix"
+BUILD_VERSION = "v49-err-conn-guaranteed-debug-logging"
 
 @app.get("/api/version")
 async def get_version():
@@ -6537,15 +6537,16 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         err_msg = f"ERROR ({type(e).__name__}): {e}"
         print(f"[RESEND INBOUND WEBHOOK ERROR]: {err_msg}")
         _tb.print_exc()
-        if conn and debug_log_id:
+        if debug_log_id:
             try:
-                conn.rollback()
-                with conn.cursor() as cur_err:
+                err_conn = get_db_connection()
+                with err_conn.cursor() as cur_err:
                     cur_err.execute("UPDATE webhook_debug_log SET status = %s, customer_id = %s WHERE id = %s;",
                                     (err_msg[:200], customer_id, debug_log_id))
-                    conn.commit()
+                    err_conn.commit()
+                err_conn.close()
             except Exception as e_rb:
-                print(f"[WEBHOOK ROLLBACK DB UPDATE ERROR]: {e_rb}")
+                print(f"[WEBHOOK DB LOG UPDATE ERROR]: {e_rb}")
         if isinstance(e, asyncio.CancelledError):
             raise
         return {"status": "error", "message": str(e)}
