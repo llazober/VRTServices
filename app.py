@@ -2802,6 +2802,19 @@ async def view_pdf_proxy(key: str, request: Request):
             else:
                 raise e_direct
 
+        # Check if S3 object is empty or contains raw JSON placeholder text instead of real binary file
+        body_bytes = s3_obj["Body"].read()
+        if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
+            print(f"[CORRUPT S3 FILE DETECTED] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
+            recovered = try_recover_resend_attachment_by_key(clean_key)
+            if recovered and len(recovered) > 100:
+                body_bytes = recovered
+                try:
+                    client.put_object(Bucket=bucket, Key=actual_key or clean_key, Body=body_bytes)
+                    print(f"[DYNAMIC RECOVERY REPAIRED S3] Key '{actual_key or clean_key}' ({len(body_bytes)} bytes)")
+                except Exception as e_rep:
+                    print(f"[DYNAMIC RECOVERY S3 UPDATE ERROR] {e_rep}")
+
         filename = os.path.basename(actual_key or clean_key)
         content_type = s3_obj.get("ContentType") or "application/pdf"
         lower_name = (actual_key or clean_key).lower()
@@ -2819,12 +2832,27 @@ async def view_pdf_proxy(key: str, request: Request):
             "Access-Control-Allow-Origin": "*"
         }
         return StreamingResponse(
-            s3_obj["Body"],
+            io.BytesIO(body_bytes),
             media_type=content_type,
             headers=headers
         )
     except Exception as e:
-        print(f"Error fetching PDF key '{key}' from storage: {e}")
+        # Fallback: If S3 object failed or was missing, attempt dynamic recovery directly
+        print(f"Error fetching PDF key '{key}' from storage: {e}. Attempting direct dynamic recovery...")
+        recovered = try_recover_resend_attachment_by_key(clean_key)
+        if recovered and len(recovered) > 100:
+            filename = os.path.basename(clean_key)
+            headers = {
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "public, max-age=3600",
+                "X-Frame-Options": "SAMEORIGIN",
+                "Access-Control-Allow-Origin": "*"
+            }
+            return StreamingResponse(
+                io.BytesIO(recovered),
+                media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
+                headers=headers
+            )
         raise HTTPException(status_code=500, detail=f"Failed to fetch PDF document: {e}")
 
 @app.get("/api/storage/download")
@@ -6109,20 +6137,20 @@ def extract_attachments_from_mime(raw_mime_str: str) -> list:
     except Exception as e_mime_att:
         print(f"[MIME ATTACHMENT EXTRACTION ERROR]: {e_mime_att}")
 def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend_key: str) -> bytes:
-    """Attempt downloading attachment binary bytes from all Resend API endpoints."""
-    if not resend_key:
+    """Attempt downloading attachment binary bytes from Resend API endpoints, resolving JSON download_url if needed."""
+    if not resend_key or not email_id:
         return None
-    
+
     headers = {
         "Authorization": f"Bearer {resend_key.strip()}",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
 
     identifiers = [att_id, att_name]
     for ident in identifiers:
         if not ident:
             continue
-        
+
         urls_to_try = [
             f"https://api.resend.com/emails/receiving/{email_id}/attachments/{ident}",
             f"https://api.resend.com/emails/receiving/{email_id}/attachments/{ident}/download",
@@ -6136,12 +6164,106 @@ def download_resend_attachment(email_id: str, att_id: str, att_name: str, resend
         for target_url in urls_to_try:
             try:
                 req = urllib.request.Request(target_url, headers=headers, method="GET")
-                with urllib.request.urlopen(req) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:
                     raw_resp = resp.read()
-                    if raw_resp and len(raw_resp) > 0:
+                    if not raw_resp or len(raw_resp) == 0:
+                        continue
+
+                    # 1. Handle JSON payload containing download_url or base64 data
+                    if raw_resp.strip().startswith(b"{") or raw_resp.strip().startswith(b"["):
+                        try:
+                            js = json.loads(raw_resp.decode("utf-8", errors="ignore"))
+                            dl_link = None
+                            if isinstance(js, dict):
+                                d_obj = js.get("data") if isinstance(js.get("data"), dict) else js
+                                dl_link = d_obj.get("download_url") or d_obj.get("url") or d_obj.get("downloadUrl")
+                                b64 = d_obj.get("content") or d_obj.get("data")
+                                if b64 and isinstance(b64, str) and len(b64) > 20:
+                                    try:
+                                        import base64
+                                        b_data = base64.b64decode(b64)
+                                        if b_data and len(b_data) > 20:
+                                            print(f"[RESEND B64 ATTACHMENT SUCCESS] {len(b_data)} bytes from {target_url}")
+                                            return b_data
+                                    except Exception: pass
+                            if dl_link and isinstance(dl_link, str) and dl_link.startswith("http"):
+                                req_dl = urllib.request.Request(dl_link, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                                with urllib.request.urlopen(req_dl, timeout=15) as resp_dl:
+                                    binary_bytes = resp_dl.read()
+                                    if binary_bytes and len(binary_bytes) > 20:
+                                        print(f"[RESEND DOWNLOAD_URL ATTACHMENT SUCCESS] {len(binary_bytes)} bytes from {dl_link}")
+                                        return binary_bytes
+                        except Exception as e_json:
+                            print(f"[RESEND ATTACHMENT JSON PARSE NOTICE] {target_url}: {e_json}")
+
+                    # 2. Handle direct binary payload (e.g. PDF/Image bytes)
+                    if len(raw_resp) > 20 and not (raw_resp.strip().startswith(b"{") or raw_resp.strip().startswith(b"[")):
+                        print(f"[RESEND ATTACHMENT DIRECT BINARY SUCCESS] {len(raw_resp)} bytes from {target_url}")
                         return raw_resp
             except Exception as e_try:
                 print(f"[RESEND ATTACHMENT FETCH NOTICE] {target_url}: {e_try}")
+    return None
+
+def try_recover_resend_attachment_by_key(key: str) -> bytes:
+    """Attempts to recover binary bytes for an email attachment by looking up its email_id in PostgreSQL."""
+    try:
+        filename = os.path.basename(key)
+        _resend_key = (os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY") or os.environ.get("RESEND_TOKEN") or "").strip()
+        if not _resend_key:
+            return None
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            email_id = None
+            att_id = None
+
+            # 1. Search customer_communications for attachment filename match
+            cur.execute("""
+                SELECT attachments_json FROM customer_communications
+                WHERE attachments_json::text LIKE %s
+                ORDER BY id DESC LIMIT 5;
+            """, (f'%{filename}%',))
+            rows = cur.fetchall()
+
+            for r in rows:
+                atts = r.get("attachments_json")
+                if isinstance(atts, list):
+                    for a in atts:
+                        if isinstance(a, dict):
+                            if a.get("email_id"): email_id = a.get("email_id")
+                            if a.get("id"): att_id = a.get("id")
+
+            # 2. Search webhook_debug_log for payload with email_id and filename
+            if not email_id:
+                cur.execute("""
+                    SELECT payload_json FROM webhook_debug_log
+                    WHERE payload_json LIKE %s
+                    ORDER BY id DESC LIMIT 5;
+                """, (f'%{filename}%',))
+                r_dbg = cur.fetchall()
+                for rd in r_dbg:
+                    pj = rd.get("payload_json")
+                    if pj:
+                        try:
+                            p_obj = json.loads(pj)
+                            d = p_obj.get("data") if isinstance(p_obj.get("data"), dict) else p_obj
+                            eid = d.get("email_id") or d.get("id")
+                            if eid:
+                                email_id = eid
+                                atts_list = d.get("attachments") or []
+                                for att_item in atts_list:
+                                    if isinstance(att_item, dict) and att_item.get("filename") == filename:
+                                        att_id = att_item.get("id")
+                        except Exception: pass
+
+            conn.close()
+
+            if email_id:
+                print(f"[RECOVERY TARGET FOUND] email_id='{email_id}', att_id='{att_id}', filename='{filename}'")
+                recovered = download_resend_attachment(str(email_id), str(att_id or filename), filename, _resend_key)
+                return recovered
+    except Exception as e_rec:
+        print(f"[RECOVERY ERROR] {e_rec}")
     return None
 
 def process_inbound_post_processing(
