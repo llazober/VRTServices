@@ -189,12 +189,12 @@ def get_resend_from_email() -> str:
         os.environ.get("FROM_EMAIL") or
         os.environ.get("SENDER_EMAIL") or
         os.environ.get("resend_from_email") or
-        "onboarding@resend.dev"
+        "notification@vrtservices12.com"
     ).strip().strip('\'"')
     cleaned = parse_clean_email(raw)
-    if cleaned and "datalazo.net" not in cleaned.lower() and "vrtservices12.com" not in cleaned.lower():
+    if cleaned and len(cleaned) > 3:
         return cleaned
-    return "onboarding@resend.dev"
+    return "notification@vrtservices12.com"
 
 def format_resend_from_header(display_name: str = "") -> str:
     """Format full RFC email 'From' string e.g. 'VRT Services Portal <notification@vrtservices12.com>'."""
@@ -5678,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v37-sender-email-fallback"
+BUILD_VERSION = "v38-restore-notification-vrtservices12"
 
 @app.get("/api/version")
 async def get_version():
