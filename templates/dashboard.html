@@ -4172,11 +4172,16 @@
             const tbody = document.getElementById('workloadPendingTableBody');
             if (!tbody) return;
 
-            let items = rawWorkloadData;
+            let items = (rawWorkloadData || []).filter(i => {
+                const cNum = (i.custumer_number || '').toUpperCase();
+                const dName = (i.display_name || '').toUpperCase();
+                const lName = (i.legal_name || '').toUpperCase();
+                return cNum !== 'CUST-0000' && !dName.includes('CUST-0000') && !lName.includes('UNASSIGNED INBOUND');
+            });
             if (currentWorkloadFilter === 'bk') {
-                items = rawWorkloadData.filter(i => i.bk && i.bk.has_pending);
+                items = items.filter(i => i.bk && i.bk.has_pending);
             } else if (currentWorkloadFilter === 'tax') {
-                items = rawWorkloadData.filter(i => i.tax && i.tax.has_pending);
+                items = items.filter(i => i.tax && i.tax.has_pending);
             }
 
             if (items.length === 0) {

@@ -5098,8 +5098,19 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
             tax_pending_count = 0
             total_customers_with_pending = set()
 
+            import datetime
+            actual_year = datetime.datetime.now().year
+
             for cust in cust_records:
                 cust_id = cust["id"]
+                cust_num = (cust.get("custumer_number") or "").strip().upper()
+                cust_disp = (cust.get("display_name") or "").strip().upper()
+                cust_legal = (cust.get("legal_name") or "").strip().upper()
+
+                # Always exclude CUST-0000 / Unassigned Inbound Emails
+                if cust_num == "CUST-0000" or cust_id == 0 or "CUST-0000" in cust_disp or "CUST-0000" in cust_legal or "UNASSIGNED INBOUND" in cust_disp or "UNASSIGNED INBOUND" in cust_legal:
+                    continue
+
                 c_type = (cust.get("customer_type") or "Business").strip()
                 is_individual = c_type.lower() == "individual"
 
@@ -5169,11 +5180,34 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
 
                 tax_percent = int((tax_completed / tax_total) * 100)
 
+                # Determine if tax_year equals actual current year
+                tax_year = None
+                if tax_slug and "-" in tax_slug:
+                    try: tax_year = int(tax_slug.split("-")[0])
+                    except ValueError: pass
+                elif tax_slug and str(tax_slug).isdigit():
+                    try: tax_year = int(tax_slug)
+                    except ValueError: pass
+
+                if tax_year is None and tax_label and "Tax Year" in tax_label:
+                    try:
+                        tax_year = int(tax_label.split("Tax Year")[1].strip())
+                    except Exception:
+                        pass
+
+                is_tax_year_actual = (tax_year is not None) and (tax_year == actual_year)
+
                 prev_bk_slug_default, _ = get_in_process_period(None, None, "bookkeeping")
                 prev_tax_slug_default, _ = get_in_process_period(None, None, "tax")
 
                 has_bk_pending = (not is_individual) and (bk_slug <= prev_bk_slug_default) and (bk_completed < bk_total)
-                has_tax_pending = (tax_slug <= prev_tax_slug_default) and (tax_completed < tax_total)
+                
+                # Exclude Tax Steps / Tax Pending Milestones if Tax Year equals actual year
+                if is_tax_year_actual:
+                    has_tax_pending = False
+                    tax_missing = []
+                else:
+                    has_tax_pending = (tax_slug <= prev_tax_slug_default) and (tax_completed < tax_total)
 
                 if has_bk_pending: bk_pending_count += 1
                 if has_tax_pending: tax_pending_count += 1
