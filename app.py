@@ -5553,6 +5553,57 @@ async def mark_single_communication_read(comm_id: int, request: Request):
         if conn:
             conn.close()
 
+@app.get("/api/communications/recent")
+async def get_recent_inbound_communications(request: Request):
+    """Returns the last 30 inbound customer communications across all customers for the active organization."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user_parent = get_user_parent_name(username) or "VRT Services"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if user_parent.lower() == "vrt services":
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.parent_name IS NULL OR cust.parent_name = '' OR cust.custumer_number = 'CUST-0000')"
+            else:
+                parent_filter = "(LOWER(COALESCE(cust.parent_name, '')) = LOWER(%s) OR cust.custumer_number = 'CUST-0000')"
+
+            cur.execute(f"""
+                SELECT c.*, cust.legal_name, cust.custumer_number
+                FROM customer_communications c
+                JOIN customer cust ON c.customer_id = cust.id
+                WHERE c.direction = 'INBOUND' AND {parent_filter}
+                ORDER BY c.created_at DESC
+                LIMIT 30;
+            """, (user_parent,))
+            records = cur.fetchall()
+
+            history = []
+            for r in records:
+                row = dict(r)
+                if row.get("created_at"):
+                    val = row["created_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["created_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+                if row.get("read_at"):
+                    val = row["read_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["read_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+                history.append(row)
+
+            return {"communications": history}
+    except Exception as e:
+        print(f"Error fetching recent communications: {e}")
+        return {"communications": []}
+    finally:
+        if conn:
+            conn.close()
+
 @app.get("/api/communications/unread-summary")
 async def get_unread_communications_summary(request: Request):
     username = get_current_username(request)
@@ -5627,7 +5678,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v34-debug-payloads"
+BUILD_VERSION = "v35-global-inbound-inbox"
 
 @app.get("/api/version")
 async def get_version():
