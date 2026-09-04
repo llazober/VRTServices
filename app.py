@@ -5627,7 +5627,7 @@ async def mark_all_communications_read(request: Request):
 
 LAST_INBOUND_DEBUG = {}
 
-BUILD_VERSION = "v33-sub20ms-async-background-tasks"
+BUILD_VERSION = "v34-debug-payloads"
 
 @app.get("/api/version")
 async def get_version():
@@ -5659,7 +5659,7 @@ async def get_inbound_status_public():
 
             # 2. Last 10 webhook debug log entries (all statuses)
             cur.execute("""
-                SELECT id, sender_email, recipient_email, subject, customer_id, status, created_at
+                SELECT id, sender_email, recipient_email, subject, customer_id, status, payload_json, created_at
                 FROM webhook_debug_log ORDER BY id DESC LIMIT 10;
             """)
             result["last_webhook_logs"] = [dict(r) | {"created_at": str(r["created_at"])} for r in cur.fetchall()]
