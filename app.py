@@ -5679,7 +5679,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v43-fix-text-not-jsonb-operator"
+BUILD_VERSION = "v44-capture-outer-exception"
 
 @app.get("/api/version")
 async def get_version():
@@ -6555,10 +6555,19 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         return {"status": "success", "customer_id": customer_id, "comm_id": comm_id}
 
     except Exception as e:
-        import traceback
+        import traceback as _tb2
         err_msg = f"OUTER_ERROR: {e}"
+        LAST_WEBHOOK_ERROR = {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": _tb2.format_exc(),
+            "subject": subject,
+            "sender_email": sender_email,
+            "occurred_at": str(datetime.datetime.now()),
+            "caught_by": "OUTER_EXCEPT"
+        }
         print(f"Error handling Resend Inbound Webhook: {err_msg}")
-        traceback.print_exc()
+        _tb2.print_exc()
         if conn and debug_log_id:
             try:
                 conn.rollback()
