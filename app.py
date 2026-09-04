@@ -4927,18 +4927,18 @@ async def process_checks_from_do(
     return {"checks": all_checks, "count": len(all_checks)}
 
 @app.post("/support")
+@app.post("/api/support")
+@app.post("/api/support/submit")
 async def support_submit(
     request: Request,
     message: str = Form(...),
     file: UploadFile = File(None)
 ):
     username = get_current_username(request)
-    if not username:
-        raise HTTPException(status_code=401, detail="Not authenticated.")
-
-    allowed, assigned_site = is_user_allowed_on_site(username, request)
-    if not allowed:
-        raise HTTPException(status_code=403, detail=f"Access denied: Your account is assigned to '{assigned_site}'.")
+    if username:
+        allowed, assigned_site = is_user_allowed_on_site(username, request)
+        if not allowed:
+            raise HTTPException(status_code=403, detail=f"Access denied: Your account is assigned to '{assigned_site}'.")
 
     resend_key = (
         os.environ.get("RESEND_API_KEY") or
