@@ -5682,7 +5682,7 @@ async def mark_all_communications_read(request: Request):
 LAST_INBOUND_DEBUG = {}
 LAST_WEBHOOK_ERROR = {}
 
-BUILD_VERSION = "v49-err-conn-guaranteed-debug-logging"
+BUILD_VERSION = "v50-multi-worker-uvicorn-dockfile-fix"
 
 @app.get("/api/version")
 async def get_version():
