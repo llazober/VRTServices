@@ -223,18 +223,9 @@ def get_resend_reply_to_email() -> str:
     return ", ".join(res_list)
 
 def get_second_reply_to_email() -> str:
-    """Fetch the second email address from RESEND_REPLY_TO_EMAIL, falling back to first or RESEND_TO_EMAIL."""
-    val = (
-        os.environ.get("RESEND_REPLY_TO_EMAIL") or
-        os.environ.get("RESEND_REPLY_TO") or
-        os.environ.get("REPLY_TO_EMAIL") or
-        os.environ.get("REPLY_TO") or
-        os.environ.get("resend_reply_to_email") or
-        os.environ.get("resend_reply_to-email") or
-        os.environ.get("RESEND_REPLY_TO-EMAIL") or
-        ""
-    )
-    res_list = parse_reply_to_list(val) if val else []
+    """Fetch the second email address from get_resend_reply_to_email(), falling back to first or RESEND_TO_EMAIL."""
+    full_str = get_resend_reply_to_email()
+    res_list = parse_reply_to_list(full_str)
     if len(res_list) >= 2:
         return res_list[1]
     elif len(res_list) == 1 and res_list[0]:
@@ -792,6 +783,61 @@ def ensure_catchall_customer():
         if conn:
             conn.close()
 
+def init_billing_tables():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS customer_billing_schedules (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    billing_amount      NUMERIC(12, 2) NOT NULL,
+                    currency            VARCHAR(10) NOT NULL DEFAULT 'USD',
+                    billing_day         INT NOT NULL CHECK (billing_day >= 1 AND billing_day <= 31),
+                    description         TEXT NOT NULL,
+                    auto_send           BOOLEAN NOT NULL DEFAULT TRUE,
+                    payment_terms_days  INT NOT NULL DEFAULT 15,
+                    status              VARCHAR(30) NOT NULL DEFAULT 'Active',
+                    last_billed_at      TIMESTAMP,
+                    next_billing_date   DATE,
+                    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS customer_invoices (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    invoice_number      VARCHAR(50) UNIQUE NOT NULL,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    schedule_id         BIGINT REFERENCES customer_billing_schedules(id) ON DELETE SET NULL,
+                    amount              NUMERIC(12, 2) NOT NULL,
+                    tax_amount          NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    total_amount        NUMERIC(12, 2) NOT NULL,
+                    status              VARCHAR(30) NOT NULL DEFAULT 'SENT',
+                    issue_date          DATE NOT NULL DEFAULT CURRENT_DATE,
+                    due_date            DATE NOT NULL,
+                    paid_at             TIMESTAMP,
+                    payment_method      VARCHAR(50),
+                    transaction_ref     VARCHAR(100),
+                    notes               TEXT,
+                    description         TEXT,
+                    items_json          JSONB,
+                    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON customer_invoices (customer_id);
+                CREATE INDEX IF NOT EXISTS idx_invoices_status ON customer_invoices (status);
+                CREATE INDEX IF NOT EXISTS idx_schedules_billing_day ON customer_billing_schedules (billing_day);
+            """)
+            conn.commit()
+            print("Billing tables (customer_billing_schedules, customer_invoices) initialized successfully in VRT database.")
+    except Exception as e:
+        print(f"Error initializing billing tables: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 try:
     init_customer_table()
     ensure_catchall_customer()
@@ -800,6 +846,7 @@ try:
     init_webhook_debug_table()
     init_history_table()
     init_coa_table()
+    init_billing_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -5098,8 +5145,524 @@ async def admin_clean_emails():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error truncating email tables: {str(e)}")
     finally:
-        if conn:
-            conn.close()
+# ==============================================================================
+# BILLING & RECURRING INVOICING MODULE
+# ==============================================================================
+
+def generate_invoice_number(cur) -> str:
+    """Generates next unique invoice number format: INV-YYYY-XXXX (e.g. INV-2026-1001)."""
+    import datetime
+    year_str = datetime.datetime.now().strftime("%Y")
+    cur.execute("SELECT id FROM customer_invoices ORDER BY id DESC LIMIT 1;")
+    last_row = cur.fetchone()
+    last_id = (last_row["id"] if isinstance(last_row, dict) else (last_row[0] if last_row else 0)) or 0
+    next_num = 1001 + last_id
+    return f"INV-{year_str}-{next_num}"
+
+def format_invoice_email_html(invoice: dict, customer: dict) -> str:
+    """Renders executive HTML email template for sending invoices to clients."""
+    inv_num = invoice.get("invoice_number", "INV-0000")
+    issue_date = str(invoice.get("issue_date") or "")
+    due_date = str(invoice.get("due_date") or "")
+    description = invoice.get("description") or "Monthly Accounting & Tax Services"
+    total_amount = float(invoice.get("total_amount") or invoice.get("amount") or 0.0)
+    legal_name = customer.get("legal_name") or "Valued Client"
+    cust_num = customer.get("custumer_number") or ""
+    email = customer.get("email") or ""
+
+    return f"""
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background: #0f172a; padding: 24px 32px; color: #ffffff;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td>
+                        <h2 style="margin: 0; color: #38bdf8; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">VRT Services</h2>
+                        <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">Tax, Accounting & Bookkeeping Advisory</p>
+                    </td>
+                    <td style="text-align: right;">
+                        <span style="display: inline-block; font-size: 14px; font-weight: 700; background: #1e293b; color: #38bdf8; padding: 6px 14px; border-radius: 6px; border: 1px solid #334155;">INVOICE</span>
+                        <p style="margin: 6px 0 0 0; font-size: 13px; color: #cbd5e1; font-family: monospace;">#{inv_num}</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div style="padding: 32px; color: #334155;">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                    <td style="vertical-align: top;">
+                        <strong style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Billed To:</strong><br/>
+                        <span style="font-size: 16px; font-weight: 700; color: #0f172a; display: inline-block; margin-top: 4px;">{legal_name}</span><br/>
+                        {f'<span style="font-size: 13px; color: #64748b;">Customer Ref: {cust_num}</span><br/>' if cust_num else ''}
+                        {f'<span style="font-size: 13px; color: #64748b;">{email}</span>' if email else ''}
+                    </td>
+                    <td style="vertical-align: top; text-align: right;">
+                        <span style="font-size: 13px; color: #64748b;">Issue Date: <strong style="color: #0f172a;">{issue_date}</strong></span><br/>
+                        <span style="font-size: 13px; color: #dc2626;">Payment Due: <strong style="color: #dc2626;">{due_date}</strong></span>
+                    </td>
+                </tr>
+            </table>
+
+            <table style="width: 100%; border-collapse: collapse; margin: 24px 0; border: 1px solid #f1f5f9; border-radius: 8px; overflow: hidden;">
+                <thead>
+                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+                        <th style="padding: 12px 16px; font-size: 12px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px;">Description / Service</th>
+                        <th style="padding: 12px 16px; font-size: 12px; text-transform: uppercase; color: #475569; text-align: right; letter-spacing: 0.5px;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 16px; font-size: 14px; color: #1e293b;">{description}</td>
+                        <td style="padding: 16px; font-size: 15px; font-weight: 700; text-align: right; color: #0f172a;">${total_amount:,.2f}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+                <tr>
+                    <td style="text-align: right; font-size: 14px; color: #64748b; font-weight: 600;">Total Amount Due:</td>
+                    <td style="text-align: right; font-size: 22px; color: #0f172a; font-weight: 800; width: 160px;">${total_amount:,.2f} <span style="font-size: 12px; color: #64748b; font-weight: 400;">USD</span></td>
+                </tr>
+            </table>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-top: 28px; font-size: 13px; color: #475569;">
+                <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">💳 Payment Remittance & Instructions:</p>
+                <p style="margin: 0; line-height: 1.5;">Please remit payment via ACH / Bank Transfer or Check to <strong>VRT Services</strong>. For invoice queries or electronic payment details, reply directly to this email or contact support.</p>
+            </div>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8;">
+            © 2026 VRT Services — Authorised IRS E-File Provider | notification@vrtservices12.com
+        </div>
+    </div>
+    """
+
+@app.get("/api/billing/overview")
+async def get_billing_overview():
+    """Returns overall financial summary metrics for billing tab."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    COALESCE(SUM(total_amount), 0) AS total_billed,
+                    COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_paid,
+                    COALESCE(SUM(CASE WHEN status = 'SENT' THEN total_amount ELSE 0 END), 0) AS total_outstanding,
+                    COALESCE(SUM(CASE WHEN status = 'OVERDUE' OR (status = 'SENT' AND due_date < CURRENT_DATE) THEN total_amount ELSE 0 END), 0) AS total_overdue,
+                    COUNT(CASE WHEN status = 'SENT' THEN 1 END) AS count_sent,
+                    COUNT(CASE WHEN status = 'PAID' THEN 1 END) AS count_paid,
+                    COUNT(CASE WHEN status = 'OVERDUE' OR (status = 'SENT' AND due_date < CURRENT_DATE) THEN 1 END) AS count_overdue
+                FROM customer_invoices
+                WHERE status != 'CANCELLED';
+            """)
+            stats = cur.fetchone() or {}
+
+            cur.execute("SELECT COUNT(*) AS active_schedules FROM customer_billing_schedules WHERE status = 'Active';")
+            sched_row = cur.fetchone()
+            stats["active_schedules"] = sched_row["active_schedules"] if sched_row else 0
+
+            return dict(stats)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/billing/schedules")
+async def list_billing_schedules():
+    """List all recurring billing schedules with customer details."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT s.*, c.custumer_number, c.legal_name, c.email
+                FROM customer_billing_schedules s
+                JOIN customer c ON s.customer_id = c.id
+                ORDER BY s.billing_day ASC, c.legal_name ASC;
+            """)
+            rows = cur.fetchall()
+            return [dict(r) | {"created_at": str(r["created_at"]), "updated_at": str(r["updated_at"])} for r in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/billing/schedules")
+async def create_billing_schedule(request: Request):
+    """Create a recurring monthly billing schedule for a customer."""
+    payload = await request.json()
+    customer_id = payload.get("customer_id")
+    billing_amount = float(payload.get("billing_amount") or 0.0)
+    billing_day = int(payload.get("billing_day") or 1)
+    description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
+    auto_send = bool(payload.get("auto_send", True))
+    payment_terms_days = int(payload.get("payment_terms_days") or 15)
+
+    if not customer_id or billing_amount <= 0:
+        raise HTTPException(status_code=400, detail="Valid customer_id and positive billing_amount are required.")
+
+    if billing_day < 1 or billing_day > 31:
+        raise HTTPException(status_code=400, detail="billing_day must be between 1 and 31.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO customer_billing_schedules (
+                    customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status
+                ) VALUES (%s, %s, %s, %s, %s, %s, 'Active')
+                RETURNING id;
+            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days))
+            row = cur.fetchone()
+            conn.commit()
+            return {"status": "success", "schedule_id": row["id"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.delete("/api/billing/schedules/{schedule_id}")
+async def delete_billing_schedule(schedule_id: int):
+    """Deletes or deactivates a billing schedule."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM customer_billing_schedules WHERE id = %s;", (schedule_id,))
+            conn.commit()
+            return {"status": "success", "message": f"Schedule #{schedule_id} deleted."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/billing/invoices")
+async def list_invoices(status: str = "ALL", customer_id: int = None):
+    """List invoices with optional status and customer filter."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT i.*, c.custumer_number, c.legal_name, c.email
+                FROM customer_invoices i
+                JOIN customer c ON i.customer_id = c.id
+                WHERE 1=1
+            """
+            params = []
+            if status and status.upper() != "ALL":
+                if status.upper() == "OVERDUE":
+                    sql += " AND (i.status = 'OVERDUE' OR (i.status = 'SENT' AND i.due_date < CURRENT_DATE))"
+                else:
+                    sql += " AND i.status = %s"
+                    params.append(status.upper())
+            if customer_id:
+                sql += " AND i.customer_id = %s"
+                params.append(customer_id)
+
+            sql += " ORDER BY i.id DESC;"
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            
+            res = []
+            import datetime
+            today = datetime.date.today()
+            for r in rows:
+                row = dict(r)
+                if row["status"] == "SENT" and row["due_date"] and row["due_date"] < today:
+                    row["status"] = "OVERDUE"
+                row["issue_date"] = str(row["issue_date"])
+                row["due_date"] = str(row["due_date"])
+                row["created_at"] = str(row["created_at"])
+                row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
+                res.append(row)
+            return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/billing/invoices")
+async def create_manual_invoice(request: Request):
+    """Create a manual one-off invoice and optionally send immediately."""
+    payload = await request.json()
+    customer_id = payload.get("customer_id")
+    amount = float(payload.get("amount") or 0.0)
+    description = payload.get("description") or "Professional Services Rendered"
+    due_days = int(payload.get("due_days") or 15)
+    send_now = bool(payload.get("send_now", True))
+
+    if not customer_id or amount <= 0:
+        raise HTTPException(status_code=400, detail="Valid customer_id and positive amount required.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, legal_name, custumer_number, email FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            if not cust:
+                raise HTTPException(status_code=404, detail="Customer not found.")
+
+            inv_number = generate_invoice_number(cur)
+            import datetime
+            today = datetime.date.today()
+            due_date = today + datetime.timedelta(days=due_days)
+
+            cur.execute("""
+                INSERT INTO customer_invoices (
+                    invoice_number, customer_id, amount, tax_amount, total_amount,
+                    status, issue_date, due_date, description
+                ) VALUES (%s, %s, %s, 0.00, %s, 'DRAFT', %s, %s, %s)
+                RETURNING id;
+            """, (inv_number, customer_id, amount, amount, today, due_date, description))
+            inv_row = cur.fetchone()
+            inv_id = inv_row["id"]
+            conn.commit()
+
+            if send_now:
+                cur.execute("SELECT * FROM customer_invoices WHERE id = %s;", (inv_id,))
+                inv_dict = dict(cur.fetchone())
+                html_body = format_invoice_email_html(inv_dict, dict(cust))
+                
+                cust_email = cust.get("email") or get_resend_to_email()
+                resend_key = os.environ.get("RESEND_API_KEY")
+                if resend_key and cust_email:
+                    email_payload = {
+                        "from": format_resend_from_header("VRT Services Billing"),
+                        "to": [cust_email],
+                        "reply_to": get_second_reply_to_email(),
+                        "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
+                        "html": html_body
+                    }
+                    req = urllib.request.Request(
+                        "https://api.resend.com/emails",
+                        data=json.dumps(email_payload).encode("utf-8"),
+                        headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                        method="POST"
+                    )
+                    try:
+                        with urllib.request.urlopen(req) as _:
+                            cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                            conn.commit()
+                    except Exception as e_send:
+                        print(f"Error sending manual invoice email: {e_send}")
+
+            return {"status": "success", "invoice_id": inv_id, "invoice_number": inv_number}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/billing/invoices/{invoice_id}/send")
+async def send_invoice_email(invoice_id: int):
+    """Sends or resends an invoice to customer via Resend API."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT i.*, c.legal_name, c.custumer_number, c.email
+                FROM customer_invoices i
+                JOIN customer c ON i.customer_id = c.id
+                WHERE i.id = %s;
+            """, (invoice_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invoice not found.")
+
+            inv_dict = dict(row)
+            cust_dict = {"legal_name": row["legal_name"], "custumer_number": row["custumer_number"], "email": row["email"]}
+            cust_email = row["email"] or get_resend_to_email()
+
+            resend_key = os.environ.get("RESEND_API_KEY")
+            if not resend_key:
+                raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured.")
+
+            html_body = format_invoice_email_html(inv_dict, cust_dict)
+            email_payload = {
+                "from": format_resend_from_header("VRT Services Billing"),
+                "to": [cust_email],
+                "reply_to": get_second_reply_to_email(),
+                "subject": f"Invoice #{inv_dict['invoice_number']} from VRT Services (${float(inv_dict['total_amount']):,.2f} USD)",
+                "html": html_body
+            }
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps(email_payload).encode("utf-8"),
+                headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req) as _:
+                cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (invoice_id,))
+                conn.commit()
+
+            return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/billing/invoices/{invoice_id}/status")
+async def update_invoice_status(invoice_id: int, request: Request):
+    """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes."""
+    payload = await request.json()
+    new_status = (payload.get("status") or "PAID").upper()
+    payment_method = payload.get("payment_method") or "ACH / Bank Transfer"
+    transaction_ref = payload.get("transaction_ref") or ""
+    notes = payload.get("notes") or ""
+
+    if new_status not in ["PAID", "SENT", "OVERDUE", "DRAFT", "CANCELLED"]:
+        raise HTTPException(status_code=400, detail="Invalid status value.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            if new_status == "PAID":
+                cur.execute("""
+                    UPDATE customer_invoices 
+                    SET status = %s, paid_at = CURRENT_TIMESTAMP, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                """, (new_status, payment_method, transaction_ref, notes, invoice_id))
+            else:
+                cur.execute("""
+                    UPDATE customer_invoices 
+                    SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                """, (new_status, notes, invoice_id))
+            conn.commit()
+            return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.delete("/api/billing/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: int):
+    """Deletes an invoice record."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM customer_invoices WHERE id = %s;", (invoice_id,))
+            conn.commit()
+            return {"status": "success", "message": f"Invoice #{invoice_id} deleted."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/billing/invoices/{invoice_id}/view", response_class=HTMLResponse)
+async def view_invoice_html(invoice_id: int):
+    """Renders standalone HTML printable invoice page."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT i.*, c.legal_name, c.custumer_number, c.email
+                FROM customer_invoices i
+                JOIN customer c ON i.customer_id = c.id
+                WHERE i.id = %s;
+            """, (invoice_id,))
+            row = cur.fetchone()
+            if not row:
+                return HTMLResponse("<h2>Invoice not found</h2>", status_code=404)
+            inv_dict = dict(row)
+            cust_dict = {"legal_name": row["legal_name"], "custumer_number": row["custumer_number"], "email": row["email"]}
+            return HTMLResponse(format_invoice_email_html(inv_dict, cust_dict))
+    except Exception as e:
+        return HTMLResponse(f"<h2>Error loading invoice: {e}</h2>", status_code=500)
+    finally:
+        if conn: conn.close()
+
+def run_daily_billing_job():
+    """Generates monthly recurring invoices for active schedules matching today's day of month."""
+    import datetime
+    today = datetime.date.today()
+    current_day = today.day
+
+    conn = None
+    generated_count = 0
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT s.*, c.legal_name, c.custumer_number, c.email
+                FROM customer_billing_schedules s
+                JOIN customer c ON s.customer_id = c.id
+                WHERE s.status = 'Active'
+                  AND (s.billing_day = %s OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s))
+                  AND (s.last_billed_at IS NULL OR s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE));
+            """, (current_day, current_day, current_day))
+            schedules = cur.fetchall() or []
+
+            for s in schedules:
+                inv_number = generate_invoice_number(cur)
+                due_date = today + datetime.timedelta(days=s["payment_terms_days"])
+                amount = float(s["billing_amount"])
+                desc = s["description"] or "Monthly Accounting & Tax Advisory Retainer"
+
+                cur.execute("""
+                    INSERT INTO customer_invoices (
+                        invoice_number, customer_id, schedule_id, amount, tax_amount, total_amount,
+                        status, issue_date, due_date, description
+                    ) VALUES (%s, %s, %s, %s, 0.00, %s, 'DRAFT', %s, %s, %s)
+                    RETURNING id;
+                """, (inv_number, s["customer_id"], s["id"], amount, amount, today, due_date, desc))
+                inv_row = cur.fetchone()
+                inv_id = inv_row["id"]
+                conn.commit()
+
+                cur.execute("UPDATE customer_billing_schedules SET last_billed_at = CURRENT_TIMESTAMP WHERE id = %s;", (s["id"],))
+                conn.commit()
+                generated_count += 1
+
+                if s.get("auto_send"):
+                    resend_key = os.environ.get("RESEND_API_KEY")
+                    cust_email = s.get("email") or get_resend_to_email()
+                    if resend_key and cust_email:
+                        inv_dict = {
+                            "invoice_number": inv_number, "issue_date": str(today),
+                            "due_date": str(due_date), "description": desc, "total_amount": amount
+                        }
+                        cust_dict = {"legal_name": s["legal_name"], "custumer_number": s["custumer_number"], "email": cust_email}
+                        html_body = format_invoice_email_html(inv_dict, cust_dict)
+
+                        email_payload = {
+                            "from": format_resend_from_header("VRT Services Billing"),
+                            "to": [cust_email],
+                            "reply_to": get_second_reply_to_email(),
+                            "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
+                            "html": html_body
+                        }
+                        req = urllib.request.Request(
+                            "https://api.resend.com/emails",
+                            data=json.dumps(email_payload).encode("utf-8"),
+                            headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                            method="POST"
+                        )
+                        try:
+                            with urllib.request.urlopen(req) as _:
+                                cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                                conn.commit()
+                        except Exception as e_s:
+                            print(f"[RECURRING BILLING SEND ERROR] Invoice #{inv_number}: {e_s}")
+
+        print(f"[RECURRING BILLING SCHEDULER] Generated {generated_count} invoice(s) for Day {current_day}.")
+        return {"status": "success", "generated_count": generated_count, "day": current_day}
+    except Exception as e:
+        print(f"[RECURRING BILLING SCHEDULER ERROR]: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        if conn: conn.close()
+
+@app.api_route("/api/billing/run-scheduler", methods=["GET", "POST"])
+async def run_billing_scheduler_endpoint():
+    """Triggers the automated monthly recurring invoice generator for today's scheduled day of month."""
+    res = run_daily_billing_job()
+    return res
 
 # ── Workload Pending Tasks Endpoint ──────────────────────────────────────────────
 @app.get("/api/dashboard/pending-tasks")
