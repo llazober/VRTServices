@@ -222,6 +222,25 @@ def get_resend_reply_to_email() -> str:
     res_list = parse_reply_to_list(val)
     return ", ".join(res_list)
 
+def get_second_reply_to_email() -> str:
+    """Fetch the second email address from RESEND_REPLY_TO_EMAIL, falling back to first or RESEND_TO_EMAIL."""
+    val = (
+        os.environ.get("RESEND_REPLY_TO_EMAIL") or
+        os.environ.get("RESEND_REPLY_TO") or
+        os.environ.get("REPLY_TO_EMAIL") or
+        os.environ.get("REPLY_TO") or
+        os.environ.get("resend_reply_to_email") or
+        os.environ.get("resend_reply_to-email") or
+        os.environ.get("RESEND_REPLY_TO-EMAIL") or
+        ""
+    )
+    res_list = parse_reply_to_list(val) if val else []
+    if len(res_list) >= 2:
+        return res_list[1]
+    elif len(res_list) == 1 and res_list[0]:
+        return res_list[0]
+    return get_resend_to_email()
+
 # Session tracking:
 # valid_sessions: token -> {"username": str}
 # active_user_tokens: username -> token (Enforces single active instance per user)
@@ -6523,7 +6542,7 @@ def process_inbound_post_processing(
     # 3. Non-blocking Team Email Alert
     try:
         _alert_key = os.environ.get("RESEND_API_KEY")
-        team_email = get_resend_to_email()
+        team_email = get_second_reply_to_email()
         if _alert_key and team_email:
             att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
             alert_payload = {
