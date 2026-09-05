@@ -5740,9 +5740,12 @@ def run_daily_billing_job():
         if conn: conn.close()
 
 @app.api_route("/api/billing/run-scheduler", methods=["GET", "POST"])
+@app.api_route("/api/billing/run-daily-job", methods=["GET", "POST"])
 async def run_billing_scheduler_endpoint():
     """Triggers the automated monthly recurring invoice generator for today's scheduled day of month."""
     res = run_daily_billing_job()
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=500, detail=res.get("message", "Failed to run billing job."))
     return res
 
 # ── Workload Pending Tasks Endpoint ──────────────────────────────────────────────

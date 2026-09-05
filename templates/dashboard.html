@@ -1968,6 +1968,16 @@
         }
 
         function showCustomAlert(msg, type = null, title = null, onConfirm = null) {
+            // Handle caller format signature showCustomAlert(title, message, type)
+            if (typeof title === 'string' && ['success', 'error', 'warning', 'info'].includes(title.toLowerCase())) {
+                const actualTitle = msg;
+                const actualMsg = type;
+                const actualType = title.toLowerCase();
+                msg = actualMsg;
+                type = actualType;
+                title = actualTitle;
+            }
+
             let cleanMsg = String(msg || '');
             let autoType = type;
             let autoTitle = title;
@@ -2714,15 +2724,23 @@
 
         async function triggerDailyBillingJob() {
             try {
-                const res = await fetch('/api/billing/run-daily-job', {method: 'POST'});
+                const res = await fetch('/api/billing/run-scheduler', {method: 'POST'});
                 if (res.ok) {
                     const data = await res.json();
+                    if (data.status === "error") {
+                        showCustomAlert("Scheduler Error", data.message || "Failed to run billing job.", "error");
+                        return;
+                    }
                     showCustomAlert("Scheduler Triggered", `Generated ${data.generated_count || 0} invoice(s) for today (Day ${data.day}).`, "success");
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
-                    const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to run billing job.", "error");
+                    let errorMsg = "Failed to run billing job.";
+                    try {
+                        const err = await res.json();
+                        errorMsg = err.detail || err.message || errorMsg;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error running billing job.", "error");

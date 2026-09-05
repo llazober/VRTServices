@@ -1299,6 +1299,16 @@
         }
 
         function showCustomAlert(msg, type = null, title = null, onConfirm = null) {
+            // Handle caller format signature showCustomAlert(title, message, type)
+            if (typeof title === 'string' && ['success', 'error', 'warning', 'info'].includes(title.toLowerCase())) {
+                const actualTitle = msg;
+                const actualMsg = type;
+                const actualType = title.toLowerCase();
+                msg = actualMsg;
+                type = actualType;
+                title = actualTitle;
+            }
+
             let cleanMsg = String(msg || '');
             let autoType = type;
             let autoTitle = title;
