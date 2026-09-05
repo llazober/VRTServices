@@ -2621,7 +2621,7 @@ async def create_customer(request: Request):
             conn.close()
 
 @app.post("/api/customers/{customer_id}/init-storage")
-async def init_customer_storage(customer_id: int, request: Request):
+async def init_customer_storage(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -2630,7 +2630,11 @@ async def init_customer_storage(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -2639,7 +2643,7 @@ async def init_customer_storage(customer_id: int, request: Request):
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         return {
             "success": success,
-            "customer_id": customer_id,
+            "customer_id": cust["id"],
             "path": path,
             "status": "Initialized" if success else "Failed",
             "folders": folders,
@@ -2655,7 +2659,7 @@ async def init_customer_storage(customer_id: int, request: Request):
             conn.close()
 
 @app.get("/api/customers/{customer_id}/storage/files")
-async def get_customer_storage_files(customer_id: int, request: Request, prefix: str = None):
+async def get_customer_storage_files(customer_id: str, request: Request, prefix: str = None):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -2664,7 +2668,11 @@ async def get_customer_storage_files(customer_id: int, request: Request, prefix:
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -2759,7 +2767,7 @@ async def get_customer_storage_files(customer_id: int, request: Request, prefix:
             })
 
         return {
-            "customer_id": customer_id,
+            "customer_id": cust["id"],
             "customer_name": cust["legal_name"],
             "parent_name": cust.get("parent_name") or "VRT Services",
             "root_folder": root_folder_path,
@@ -2778,7 +2786,7 @@ async def get_customer_storage_files(customer_id: int, request: Request, prefix:
             conn.close()
 
 @app.get("/api/customers/{customer_id}/storage/folders")
-async def get_customer_storage_folders(customer_id: int, request: Request):
+async def get_customer_storage_folders(customer_id: str, request: Request):
     """Returns a list of all existing subfolders under the customer's root path in DigitalOcean Spaces."""
     username = get_current_username(request)
     if not username:
@@ -3040,7 +3048,7 @@ async def download_file_proxy(key: str, request: Request):
 
 @app.post("/api/customers/{customer_id}/storage/upload")
 async def upload_customer_storage_file(
-    customer_id: int,
+    customer_id: str,
     request: Request,
     file: UploadFile = File(...),
     target_prefix: str = Form(None)
@@ -3053,11 +3061,16 @@ async def upload_customer_storage_file(
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
+        real_cust_id = cust["id"]
         root_folder = get_customer_root_folder_path(cust)
         upload_prefix = target_prefix.strip() if target_prefix else root_folder
         if not upload_prefix.endswith('/'):
@@ -3079,12 +3092,12 @@ async def upload_customer_storage_file(
         # Auto-update checklist milestones based on folder/file path & detected period
         detected_period = extract_period_from_key(file_key)
         lower_key = file_key.lower()
-        print(f"[CHECKLIST AUTO-UPDATE] Customer: {customer_id}, FileKey: '{file_key}', Period: '{detected_period}'")
+        print(f"[CHECKLIST AUTO-UPDATE] Customer: {real_cust_id}, FileKey: '{file_key}', Period: '{detected_period}'")
 
         if "check" in lower_key:
-            update_customer_checklist_milestone(customer_id, detected_period, "checks_received")
+            update_customer_checklist_milestone(real_cust_id, detected_period, "checks_received")
         if "bank statement" in lower_key or "statement" in lower_key or (lower_key.endswith(".pdf") and "check" not in lower_key and "tax" not in lower_key):
-            update_customer_checklist_milestone(customer_id, detected_period, "statement_received")
+            update_customer_checklist_milestone(real_cust_id, detected_period, "statement_received")
 
         return {"message": "File uploaded successfully", "key": file_key}
     except HTTPException as he:
@@ -3097,7 +3110,7 @@ async def upload_customer_storage_file(
             conn.close()
 
 @app.delete("/api/customers/{customer_id}/storage/file")
-async def delete_customer_storage_file(customer_id: int, key: str, request: Request):
+async def delete_customer_storage_file(customer_id: str, key: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3106,7 +3119,11 @@ async def delete_customer_storage_file(customer_id: int, key: str, request: Requ
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -3177,7 +3194,7 @@ def sync_file_rename_in_communications(conn, customer_id: int, old_key: str, new
 
 
 @app.post("/api/customers/{customer_id}/storage/rename-file")
-async def rename_customer_storage_file(customer_id: int, request: Request):
+async def rename_customer_storage_file(customer_id: str, request: Request):
     """Renames a file in customer storage by copying to new_key and deleting old_key."""
     username = get_current_username(request)
     if not username:
@@ -3198,11 +3215,16 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
+        real_cust_id = cust["id"]
         root_folder = get_customer_root_folder_path(cust)
         if not old_key.startswith(root_folder.rstrip('/')):
             raise HTTPException(status_code=403, detail="Forbidden: Cannot rename files outside customer storage path")
@@ -3232,9 +3254,9 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
             client.delete_object(Bucket=bucket, Key=old_key)
 
         # Update customer_communications attachments_json, subject, and body_text
-        sync_file_rename_in_communications(conn, customer_id, old_key, new_key)
+        sync_file_rename_in_communications(conn, real_cust_id, old_key, new_key)
 
-        print(f"[DO SPACES] Renamed file '{old_key}' -> '{new_key}' for customer {customer_id}")
+        print(f"[DO SPACES] Renamed file '{old_key}' -> '{new_key}' for customer {real_cust_id}")
         return {
             "success": True,
             "old_key": old_key,
@@ -3251,7 +3273,7 @@ async def rename_customer_storage_file(customer_id: int, request: Request):
             conn.close()
 
 @app.post("/api/customers/{customer_id}/storage/move-file")
-async def move_customer_storage_file(customer_id: int, request: Request):
+async def move_customer_storage_file(customer_id: str, request: Request):
     """Moves a file in customer storage to a new target folder by copying to target_key and deleting source_key."""
     username = get_current_username(request)
     if not username:
@@ -3268,11 +3290,16 @@ async def move_customer_storage_file(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
+        real_cust_id = cust["id"]
         root_folder = get_customer_root_folder_path(cust).rstrip('/')
 
         if not source_key.startswith(root_folder):
@@ -3317,9 +3344,9 @@ async def move_customer_storage_file(customer_id: int, request: Request):
             except Exception:
                 pass
 
-        sync_file_rename_in_communications(conn, customer_id, source_key, new_key)
+        sync_file_rename_in_communications(conn, real_cust_id, source_key, new_key)
 
-        print(f"[DO SPACES] Moved file '{source_key}' -> '{new_key}' for customer {customer_id}")
+        print(f"[DO SPACES] Moved file '{source_key}' -> '{new_key}' for customer {real_cust_id}")
         return {
             "success": True,
             "source_key": source_key,
@@ -3336,7 +3363,7 @@ async def move_customer_storage_file(customer_id: int, request: Request):
             conn.close()
 
 @app.post("/api/customers/{customer_id}/storage/mkdir")
-async def create_customer_storage_folder(customer_id: int, request: Request):
+async def create_customer_storage_folder(customer_id: str, request: Request):
     """Creates a new folder (empty object with trailing slash) at the specified path inside the customer's storage root."""
     username = get_current_username(request)
     if not username:
@@ -3357,7 +3384,11 @@ async def create_customer_storage_folder(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -3401,7 +3432,7 @@ async def create_customer_storage_folder(customer_id: int, request: Request):
             conn.close()
 
 @app.delete("/api/customers/{customer_id}/storage/folder")
-async def delete_customer_storage_folder(customer_id: int, prefix: str, request: Request):
+async def delete_customer_storage_folder(customer_id: str, prefix: str, request: Request):
     """Deletes a folder and ALL its contents recursively from the customer's storage space."""
     username = get_current_username(request)
     if not username:
@@ -3537,7 +3568,7 @@ def get_in_process_period(cur=None, customer_id=None, workflow_mode="bookkeeping
     return prev_slug, prev_label
 
 @app.get("/api/customers/{customer_id}/checklist")
-async def get_customer_checklist(customer_id: int, period: str = None, workflow_tab: str = "bookkeeping", request: Request = None):
+async def get_customer_checklist(customer_id: str, period: str = None, workflow_tab: str = "bookkeeping", request: Request = None):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3546,18 +3577,23 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
-            in_process_slug, in_process_label = get_in_process_period(cur, customer_id, workflow_tab)
+            real_cust_id = cust["id"]
+            in_process_slug, in_process_label = get_in_process_period(cur, real_cust_id, workflow_tab)
             is_in_process_request = not period or period.strip() == "" or period.strip() == "in_process" or period.strip() == in_process_slug
             effective_period = in_process_slug if is_in_process_request else period.strip()
 
             cur.execute(
                 "SELECT * FROM customer_task_checklist WHERE customer_id = %s AND period = %s;",
-                (customer_id, effective_period)
+                (real_cust_id, effective_period)
             )
             row = cur.fetchone()
             if not row:
@@ -3565,11 +3601,11 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
                     INSERT INTO customer_task_checklist (customer_id, period)
                     VALUES (%s, %s)
                     ON CONFLICT (customer_id, period) DO NOTHING;
-                """, (customer_id, effective_period))
+                """, (real_cust_id, effective_period))
                 conn.commit()
                 cur.execute(
                     "SELECT * FROM customer_task_checklist WHERE customer_id = %s AND period = %s;",
-                    (customer_id, effective_period)
+                    (real_cust_id, effective_period)
                 )
                 row = cur.fetchone()
 
@@ -3578,7 +3614,7 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
                 SELECT * FROM customer_task_checklist
                 WHERE customer_id = %s AND period IS NOT NULL AND period != ''
                 ORDER BY period DESC;
-            """, (customer_id,))
+            """, (real_cust_id,))
             archived_rows = cur.fetchall() or []
             historical_periods = []
             for r in archived_rows:
@@ -3634,7 +3670,7 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
         tax_completed = sum(tax_steps.values())
 
         return {
-            "customer_id": customer_id,
+            "customer_id": real_cust_id,
             "legal_name": cust.get("legal_name"),
             "customer_type": cust.get("customer_type"),
             "period": effective_period,
@@ -3672,7 +3708,7 @@ async def get_customer_checklist(customer_id: int, period: str = None, workflow_
             conn.close()
 
 @app.post("/api/customers/{customer_id}/checklist/toggle")
-async def toggle_customer_checklist_step(customer_id: int, request: Request):
+async def toggle_customer_checklist_step(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3689,12 +3725,17 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
-            old_in_process_slug, old_in_process_label = get_in_process_period(cur, customer_id, workflow_mode)
+            real_cust_id = cust["id"]
+            old_in_process_slug, old_in_process_label = get_in_process_period(cur, real_cust_id, workflow_mode)
             period = old_in_process_slug if (not req_period or req_period == "in_process") else req_period
 
             col_map = {
@@ -3717,7 +3758,7 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
                 INSERT INTO customer_task_checklist (customer_id, period)
                 VALUES (%s, %s)
                 ON CONFLICT (customer_id, period) DO NOTHING;
-            """, (customer_id, period))
+            """, (real_cust_id, period))
 
             if step_key and step_key in col_map:
                 col_name = col_map[step_key]
@@ -3725,34 +3766,34 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
                     UPDATE customer_task_checklist
                     SET {col_name} = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE customer_id = %s AND period = %s;
-                """, (val, customer_id, period))
+                """, (val, real_cust_id, period))
 
             if notes is not None:
                 cur.execute("""
                     UPDATE customer_task_checklist
                     SET notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE customer_id = %s AND period = %s;
-                """, (notes, customer_id, period))
+                """, (notes, real_cust_id, period))
 
             if tax_notes is not None:
                 cur.execute("""
                     UPDATE customer_task_checklist
                     SET tax_notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE customer_id = %s AND period = %s;
-                """, (tax_notes, customer_id, period))
+                """, (tax_notes, real_cust_id, period))
 
             conn.commit()
 
-            new_in_process_slug, new_in_process_label = get_in_process_period(cur, customer_id, workflow_mode)
+            new_in_process_slug, new_in_process_label = get_in_process_period(cur, real_cust_id, workflow_mode)
 
         # If period just completed and shifted to next month, fetch the new In Process checklist
         if val and old_in_process_slug != new_in_process_slug:
-            res = await get_customer_checklist(customer_id, new_in_process_slug, workflow_mode, request)
+            res = await get_customer_checklist(real_cust_id, new_in_process_slug, workflow_mode, request)
             res["just_archived"] = True
             res["archived_message"] = f"🎉 {old_in_process_label} Completed & Archived! In Process reset for {new_in_process_label}"
             return res
         else:
-            return await get_customer_checklist(customer_id, period, workflow_mode, request)
+            return await get_customer_checklist(real_cust_id, period, workflow_mode, request)
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -3763,7 +3804,7 @@ async def toggle_customer_checklist_step(customer_id: int, request: Request):
             conn.close()
 
 @app.post("/api/customers/{customer_id}/checklist/reopen")
-async def reopen_customer_checklist(customer_id: int, request: Request):
+async def reopen_customer_checklist(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3778,15 +3819,23 @@ async def reopen_customer_checklist(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+            cust_row = cur.fetchone()
+            real_cust_id = cust_row["id"] if cust_row else (int(cid_str) if cid_str.isdigit() else 0)
+
             # Reopen step: uncheck last step so accountant can correct mistake
             cur.execute("""
                 UPDATE customer_task_checklist
                 SET accountant_reviewed = FALSE, tax_accepted = FALSE, updated_at = CURRENT_TIMESTAMP
                 WHERE customer_id = %s AND period = %s;
-            """, (customer_id, period))
+            """, (real_cust_id, period))
             conn.commit()
 
-        return await get_customer_checklist(customer_id=customer_id, period=period, workflow_tab=workflow_mode, request=request)
+        return await get_customer_checklist(customer_id=real_cust_id, period=period, workflow_tab=workflow_mode, request=request)
     except Exception as e:
         print(f"Error reopening customer checklist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3795,7 +3844,7 @@ async def reopen_customer_checklist(customer_id: int, request: Request):
             conn.close()
 
 @app.put("/api/customers/{customer_id}")
-async def update_customer(customer_id: int, request: Request):
+async def update_customer(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3830,6 +3879,14 @@ async def update_customer(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+            cust_row = cur.fetchone()
+            real_cust_id = cust_row["id"] if cust_row else (int(cid_str) if cid_str.isdigit() else 0)
+
             cur.execute("""
                 UPDATE customer SET
                     custumer_number = %s,
@@ -3847,7 +3904,7 @@ async def update_customer(customer_id: int, request: Request):
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 RETURNING *;
-            """, (custumer_number, customer_type, legal_name, display_name, tax_id, status, assigned_user_id, phone, email, website, notes, parent_name, customer_id))
+            """, (custumer_number, customer_type, legal_name, display_name, tax_id, status, assigned_user_id, phone, email, website, notes, parent_name, real_cust_id))
             updated_record = cur.fetchone()
             if not updated_record:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -3879,7 +3936,7 @@ async def update_customer(customer_id: int, request: Request):
             conn.close()
 
 @app.delete("/api/customers/{customer_id}")
-async def delete_customer(customer_id: int, request: Request, admin_password: str = ""):
+async def delete_customer(customer_id: str, request: Request, admin_password: str = ""):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3918,10 +3975,16 @@ async def delete_customer(customer_id: int, request: Request, admin_password: st
                 raise HTTPException(status_code=403, detail="Invalid Admin Password. Action denied.")
 
             # 1. Fetch customer details first to get legal_name, display_name, and parent_name
-            cur.execute("SELECT legal_name, display_name, parent_name FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id, legal_name, display_name, parent_name FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id, legal_name, display_name, parent_name FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             customer = cur.fetchone()
             if not customer:
                 raise HTTPException(status_code=404, detail="Customer not found")
+
+            real_cust_id = customer["id"]
 
             # 2. Clean up matching parent-client mapping, COA, and transaction rules FIRST
             delete_customer_parent_mapping(
@@ -3932,14 +3995,14 @@ async def delete_customer(customer_id: int, request: Request, admin_password: st
             )
 
             # 3. Clean up associated customer task checklists and communications
-            cur.execute("DELETE FROM customer_task_checklist WHERE customer_id = %s;", (customer_id,))
-            cur.execute("DELETE FROM customer_communications WHERE customer_id = %s;", (customer_id,))
+            cur.execute("DELETE FROM customer_task_checklist WHERE customer_id = %s;", (real_cust_id,))
+            cur.execute("DELETE FROM customer_communications WHERE customer_id = %s;", (real_cust_id,))
 
             # 4. Delete customer record from main customer table
-            cur.execute("DELETE FROM customer WHERE id = %s;", (customer_id,))
+            cur.execute("DELETE FROM customer WHERE id = %s;", (real_cust_id,))
 
             conn.commit()
-            return {"message": "Customer and associated client mappings, COA, and vendor rules deleted successfully", "id": customer_id}
+            return {"message": "Customer and associated client mappings, COA, and vendor rules deleted successfully", "id": real_cust_id}
     except HTTPException as he:
         if conn: conn.rollback()
         raise he
