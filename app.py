@@ -6699,21 +6699,27 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 except Exception: pass
             return {"status": "ignored", "reason": "Self-generated CRM alert email"}
 
-        # Filter emails intended for other portal domains/addresses (e.g. datalazo.net, crm@ostooechei.resend.app)
+        # Generic multi-portal domain protection: Only allow emails matching target portal domain or VRT handle
+        target_from = get_resend_from_email()
+        target_domain = target_from.split("@")[-1].lower() if "@" in target_from else "vrtservices12.com"
+        
         recip_clean = str(recipient_email).lower().strip() if recipient_email else ""
-        if recip_clean:
-            recip_domain = recip_clean.split("@")[-1] if "@" in recip_clean else ""
-            recip_user = recip_clean.split("@")[0] if "@" in recip_clean else ""
+        if recip_clean and "@" in recip_clean:
+            recip_domain = recip_clean.split("@")[-1]
+            recip_user = recip_clean.split("@")[0]
             
-            if recip_domain != "vrtservices12.com" and (recip_domain == "datalazo.net" or recip_user == "crm" or "datalazo" in recip_clean):
-                print(f"[RESEND WEBHOOK IGNORED] Recipient '{recip_clean}' is designated for Datalazo CRM portal")
+            is_target_domain = (recip_domain == target_domain)
+            is_valid_resend_handle = (recip_domain.endswith("resend.app") and (recip_user.startswith("vrt") or recip_user == "notification"))
+            
+            if not is_target_domain and not is_valid_resend_handle:
+                print(f"[RESEND WEBHOOK IGNORED] Recipient '{recip_clean}' does not belong to target portal domain '{target_domain}'")
                 if debug_log_id:
                     try:
                         with conn.cursor() as cur_flt:
-                            cur_flt.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;", (f"IGNORED: CRM email '{recip_clean}'", debug_log_id))
+                            cur_flt.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;", (f"IGNORED: Other portal email '{recip_clean}'", debug_log_id))
                             conn.commit()
                     except Exception: pass
-                return {"status": "ignored", "reason": f"Recipient '{recip_clean}' belongs to Datalazo CRM portal"}
+                return {"status": "ignored", "reason": f"Recipient '{recip_clean}' belongs to another portal (target: '{target_domain}')"}
 
         def extract_all_customer_candidates(subj_str: str, body_str: str):
             def scan_text(txt: str):
