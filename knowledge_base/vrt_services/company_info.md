@@ -4,7 +4,7 @@
 VRT Services is an enterprise accounting, tax preparation, and bookkeeping advisory firm. We provide client portal services, tax organizer processing, bank statement reconciliation, and QuickBooks Online integration for individuals, LLCs, and corporations.
 
 ## Contact Information & Hours
-- **Primary Support Email:** vrt@ostooechei.resend.app
+- **Primary Support Email:** notification@vrtservices12.com
 - **Notification Domain:** notification@datalazo.net
 - **Business Hours:** Monday – Friday, 8:00 AM – 6:00 PM EST
 - **Client Portal:** https://vrt.datalazo.net / https://crm.datalazo.net
@@ -17,6 +17,6 @@ VRT Services is an enterprise accounting, tax preparation, and bookkeeping advis
 
 ## How to Submit Tax Documents
 Clients can submit documents through three easy methods:
-1. **Direct Email:** Send an email with your document attached to `vrt@ostooechei.resend.app`. Include your customer reference tag (e.g. `[Ref: CUST-1001]`) in the subject line.
+1. **Direct Email:** Send an email with your document attached to `notification@vrtservices12.com`. Include your customer reference tag (e.g. `[Ref: CUST-1001]`) in the subject line.
 2. **Client Storage Portal:** Log into the VRT Services Portal and upload directly into your secure `Tax Documents/` or `Bank Statements/` folder.
 3. **In-Person / Physical Submission:** Bring documents directly to the VRT Services office during business hours.

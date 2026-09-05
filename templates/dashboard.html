@@ -1925,7 +1925,7 @@
 
         const CURRENT_PARENT_NAME = {{ (parent_name or company_name or 'VRT Services') | tojson | safe }};
         const CURRENT_USER_EMAIL = {{ (user_email or username or 'luislazo@datalazo.net') | tojson | safe }};
-        const RESEND_REPLY_TO_EMAIL = {{ (resend_reply_to_email or 'vrt@ostooechei.resend.app') | tojson | safe }};
+        const RESEND_REPLY_TO_EMAIL = {{ (resend_reply_to_email or 'notification@vrtservices12.com') | tojson | safe }};
 
         let currentCoaRecords = [];
         let currentParentMappings = [];
@@ -3745,9 +3745,9 @@
             if (titleEl) titleEl.textContent = `📧 Send Email — ${custName}`;
             if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Email: ${custEmail || 'Not configured'}`;
             if (toEl) toEl.value = custEmail;
-            let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'vrt@ostooechei.resend.app';
+            let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'notification@vrtservices12.com';
             if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
-                defaultReplyTo = 'vrt@ostooechei.resend.app';
+                defaultReplyTo = 'notification@vrtservices12.com';
             }
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
