@@ -766,16 +766,6 @@ def cleanup_duplicate_communications():
                 DELETE FROM customer_communications 
                 WHERE subject ILIKE '📩 New Reply Received%' OR sender_email ILIKE 'notification@datalazo.net';
             """)
-            cur.execute("""
-                DELETE FROM customer_communications c1
-                USING customer_communications c2
-                WHERE c1.id > c2.id 
-                  AND c1.customer_id = c2.customer_id 
-                  AND c1.direction = c2.direction
-                  AND LOWER(c1.sender_email) = LOWER(c2.sender_email)
-                  AND c1.subject = c2.subject
-                  AND ABS(EXTRACT(EPOCH FROM (c1.created_at - c2.created_at))) < 600;
-            """)
             conn.commit()
         conn.close()
         print("Cleaned up duplicate communication logs successfully.")
@@ -6553,23 +6543,6 @@ async def get_customer_communications(customer_id: str, request: Request):
             cust_row = cur.fetchone()
             real_cust_id = cust_row["id"] if cust_row else (int(cid_str) if cid_str.isdigit() else 0)
 
-            # Auto-clean duplicate records for this customer prior to returning history
-            try:
-                cur.execute("""
-                    DELETE FROM customer_communications c1
-                    USING customer_communications c2
-                    WHERE c1.id > c2.id 
-                      AND c1.customer_id = %s
-                      AND c2.customer_id = %s
-                      AND c1.direction = c2.direction
-                      AND LOWER(c1.sender_email) = LOWER(c2.sender_email)
-                      AND c1.subject = c2.subject
-                      AND ABS(EXTRACT(EPOCH FROM (c1.created_at - c2.created_at))) < 600;
-                """, (real_cust_id, real_cust_id))
-                conn.commit()
-            except Exception as e_dup:
-                print(f"[DUP CLEANUP ON FETCH NOTICE]: {e_dup}")
-
             cur.execute("""
                 SELECT * FROM customer_communications
                 WHERE customer_id = %s
@@ -7693,6 +7666,12 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 except Exception as e_lock:
                     print(f"[PG LOCK NOTICE]: {e_lock}")
 
+                init_atts = [{"email_id": str(email_id)}] if email_id else []
+                final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
+                safe_sender = (sender_email or "")[:199]
+                safe_recipient = (recipient_email or "")[:199]
+                safe_subject = (subject or "")[:299]
+
                 cur.execute("""
                     SELECT id FROM customer_communications
                     WHERE direction = 'INBOUND'
@@ -7702,7 +7681,8 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                             LENGTH(%s) > 0 
                             AND LOWER(sender_email) = LOWER(%s) 
                             AND subject = %s 
-                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+                            AND body_text = %s
+                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '15 seconds'
                         )
                       )
                     LIMIT 1;
@@ -7712,7 +7692,8 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                     f'%{clean_eid}%' if clean_eid else '%__NONE__%',
                     safe_sender,
                     safe_sender,
-                    safe_subject
+                    safe_subject,
+                    final_body
                 ))
                 if cur.fetchone():
                     print(f"[RESEND DUP IGNORED] Duplicate email already saved (email_id='{clean_eid}', sender='{safe_sender}', subject='{safe_subject}')")
@@ -7720,12 +7701,6 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                         cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
                         conn.commit()
                     return {"status": "ignored", "reason": "Duplicate email"}
-
-                init_atts = [{"email_id": str(email_id)}] if email_id else []
-                final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
-                safe_sender = (sender_email or "")[:199]
-                safe_recipient = (recipient_email or "")[:199]
-                safe_subject = (subject or "")[:299]
 
                 cur.execute("""
                     INSERT INTO customer_communications (
