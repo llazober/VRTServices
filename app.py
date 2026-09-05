@@ -7544,7 +7544,9 @@ async def health_check():
             "detail": resend_detail,
             "from_email": from_email,
             "to_email": get_resend_to_email(),
-            "reply_to_email": get_resend_reply_to_email()
+            "reply_to_email": get_resend_reply_to_email(),
+            "second_reply_to": get_second_reply_to_email(),
+            "raw_reply_to_env": os.environ.get("RESEND_REPLY_TO_EMAIL") or os.environ.get("RESEND_REPLY_TO") or "NOT_SET"
         }
     }
 
