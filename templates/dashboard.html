@@ -41,6 +41,11 @@
             font-family: 'Plus Jakarta Sans', sans-serif;
         }
 
+        select option {
+            background-color: #0f172a !important;
+            color: #ffffff !important;
+        }
+
         body {
             background-color: var(--bg-color);
             background-image:
@@ -1282,12 +1287,12 @@
 
                     <!-- Status Filter Dropdown & Search -->
                     <div id="billingInvoiceFilters" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                        <select id="billingStatusFilterSelect" onchange="loadBillingInvoices()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #fff; outline: none;">
-                            <option value="ALL">All Statuses</option>
-                            <option value="SENT">SENT (Pending Payment)</option>
-                            <option value="PAID">PAID (Settled)</option>
-                            <option value="DRAFT">DRAFT</option>
-                            <option value="CANCELLED">CANCELLED</option>
+                        <select id="billingStatusFilterSelect" onchange="loadBillingInvoices()" style="background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #ffffff; outline: none; cursor: pointer;">
+                            <option value="ALL" style="background-color: #0f172a; color: #ffffff;">All Statuses</option>
+                            <option value="SENT" style="background-color: #0f172a; color: #ffffff;">SENT (Pending Payment)</option>
+                            <option value="PAID" style="background-color: #0f172a; color: #ffffff;">PAID (Settled)</option>
+                            <option value="DRAFT" style="background-color: #0f172a; color: #ffffff;">DRAFT</option>
+                            <option value="CANCELLED" style="background-color: #0f172a; color: #ffffff;">CANCELLED</option>
                         </select>
                         <input type="text" id="billingSearchInput" onkeyup="filterBillingTable()" placeholder="Search invoice # or client..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #fff; outline: none; width: 220px;">
                     </div>
