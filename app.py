@@ -1,5 +1,6 @@
 import os
 import io
+import asyncio
 # Updated server routes & templates - fixed HTML string escaping for customer names
 
 
@@ -153,6 +154,13 @@ def parse_clean_email(email_str: str) -> str:
         return addr.strip()
     return s
 
+def is_blocked_email(email_str: str) -> bool:
+    """Check if email address is blocked (e.g. luislazober or gmail.com)."""
+    if not email_str:
+        return True
+    low = email_str.lower()
+    return "luislazober" in low or "gmail.com" in low
+
 def get_resend_to_email() -> str:
     """Fetch target recipient email for system/support alerts, automatically redirecting any gmail inputs to 2nd reply-to email or datalazo."""
     val = (
@@ -162,9 +170,11 @@ def get_resend_to_email() -> str:
         os.environ.get("SUPPORT_EMAIL") or ""
     )
     cleaned = parse_clean_email(val)
-    if not cleaned or "luislazober" in cleaned.lower() or "gmail.com" in cleaned.lower():
+    if not cleaned or is_blocked_email(cleaned):
         second = get_second_reply_to_email()
-        return second if second else "luislazo@datalazo.net"
+        if second and not is_blocked_email(second):
+            return second
+        return "luislazo@datalazo.net"
     return cleaned
 
 def parse_reply_to_list(val) -> list[str]:
@@ -179,7 +189,7 @@ def parse_reply_to_list(val) -> list[str]:
     cleaned_list = []
     for item in items:
         cleaned = parse_clean_email(item)
-        if cleaned and "receive.datalazo.net" not in cleaned.lower():
+        if cleaned and "receive.datalazo.net" not in cleaned.lower() and not is_blocked_email(cleaned):
             if cleaned not in cleaned_list:
                 cleaned_list.append(cleaned)
     return cleaned_list
@@ -194,7 +204,7 @@ def get_resend_from_email() -> str:
         "notification@vrtservices12.com"
     ).strip().strip('\'"')
     cleaned = parse_clean_email(raw)
-    if cleaned and len(cleaned) > 3:
+    if cleaned and len(cleaned) > 3 and not is_blocked_email(cleaned):
         return cleaned
     return "notification@vrtservices12.com"
 
@@ -238,7 +248,7 @@ def get_second_reply_to_email() -> str | None:
     if not raw_val:
         return None
     res_list = parse_reply_to_list(raw_val)
-    if len(res_list) >= 2 and res_list[1]:
+    if len(res_list) >= 2 and res_list[1] and not is_blocked_email(res_list[1]):
         return res_list[1]
     return None
 
@@ -7539,7 +7549,7 @@ async def health_check():
     
     return {
         "status": overall_status,
-        "app_version": "v1.2.9-gmail-blocked-2026-09-05",
+        "app_version": "v1.3.0-strict-gmail-purge-2026-09-05",
         "google_vision": {
             "status": google_status,
             "detail": google_detail,
