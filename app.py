@@ -6698,6 +6698,22 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 except Exception: pass
             return {"status": "ignored", "reason": "Self-generated CRM alert email"}
 
+        # Filter emails intended for other portal domains (e.g. datalazo.net, abc.com)
+        target_from = get_resend_from_email()
+        target_domain = target_from.split("@")[-1].lower() if "@" in target_from else ""
+        if recipient_email and target_domain and "@" in str(recipient_email):
+            recip_domain = str(recipient_email).split("@")[-1].lower().strip()
+            # If recipient is for another custom domain (e.g. datalazo.net or abc.com) and NOT for vrtservices12.com or resend.app
+            if recip_domain != target_domain and not recip_domain.endswith("resend.app"):
+                print(f"[RESEND WEBHOOK IGNORED] Recipient domain '{recip_domain}' does not match target portal domain '{target_domain}'")
+                if debug_log_id:
+                    try:
+                        with conn.cursor() as cur_flt:
+                            cur_flt.execute("UPDATE webhook_debug_log SET status = %s WHERE id = %s;", (f"IGNORED: Wrong domain '{recip_domain}'", debug_log_id))
+                            conn.commit()
+                    except Exception: pass
+                return {"status": "ignored", "reason": f"Recipient domain '{recip_domain}' belongs to another portal"}
+
         def extract_all_customer_candidates(subj_str: str, body_str: str):
             def scan_text(txt: str):
                 res = []
