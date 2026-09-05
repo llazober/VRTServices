@@ -6279,7 +6279,7 @@ async def upload_knowledge_doc(
 
 # ── Customer Email Communication & Inbound Webhooks ───────────────────────────
 @app.post("/api/customers/{customer_id}/send-email")
-async def send_customer_email(customer_id: int, request: Request):
+async def send_customer_email(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6299,18 +6299,23 @@ async def send_customer_email(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT * FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT * FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
 
+        real_cust_id = cust["id"]
         recipient_email = parse_clean_email(body.get("recipient_email") or body.get("to") or cust.get("email") or "")
         if not recipient_email:
-            raise HTTPException(status_code=400, detail=f"Customer '{cust['legal_name']}' does not have a valid email address configured.")
+            raise HTTPException(status_code=400, detail=f"Customer '{cust.get('legal_name') or cust.get('display_name')}' does not have a valid email address configured.")
 
         if recipient_email and parse_clean_email(cust.get("email") or "") != recipient_email:
             with conn.cursor() as cur:
-                cur.execute("UPDATE customer SET email = %s WHERE id = %s;", (recipient_email, customer_id))
+                cur.execute("UPDATE customer SET email = %s WHERE id = %s;", (recipient_email, real_cust_id))
                 conn.commit()
             cust["email"] = recipient_email
 
@@ -6320,7 +6325,7 @@ async def send_customer_email(customer_id: int, request: Request):
 
         parent_name = (cust.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
         sender_display_name = f"{parent_name} Portal" if "Portal" not in parent_name else parent_name
-        raw_ref = str(cust.get('custumer_number') or cust['id']).strip()
+        raw_ref = str(cust.get('custumer_number') or real_cust_id).strip()
         cust_ref = raw_ref if raw_ref.upper().startswith("CUST-") else f"CUST-{raw_ref}"
         ref_tag = f"[Ref: {cust_ref}]"
         full_subject = subject if ref_tag.lower() in subject.lower() else f"{subject} {ref_tag}"
@@ -6329,7 +6334,7 @@ async def send_customer_email(customer_id: int, request: Request):
         formatted_html = f"""
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
             <div style="border-bottom: 2px solid #7f00ff; padding-bottom: 12px; margin-bottom: 20px;">
-                <h2 style="color: #0b0c10; margin: 0; font-size: 1.25rem;">{cust['legal_name']}</h2>
+                <h2 style="color: #0b0c10; margin: 0; font-size: 1.25rem;">{cust.get('legal_name') or cust.get('display_name')}</h2>
                 <p style="color: #64748b; margin: 4px 0 0 0; font-size: 0.85rem;">Communication Message</p>
             </div>
             <div style="white-space: pre-wrap; font-size: 0.95rem; color: #1e293b;">{message_text}</div>
@@ -6377,7 +6382,7 @@ async def send_customer_email(customer_id: int, request: Request):
 
         with urllib.request.urlopen(req) as response:
             res_body = response.read().decode("utf-8")
-            print(f"[EMAIL SENT] Customer {customer_id} ({recipient_email}): {res_body}")
+            print(f"[EMAIL SENT] Customer {real_cust_id} ({recipient_email}): {res_body}")
 
         # Log outbound communication in database
         with conn.cursor() as cur:
@@ -6388,7 +6393,7 @@ async def send_customer_email(customer_id: int, request: Request):
                 ) VALUES (
                     %s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', CURRENT_TIMESTAMP
                 );
-            """, (customer_id, from_email, recipient_email, custom_reply_to, full_subject, message_text))
+            """, (real_cust_id, from_email, recipient_email, custom_reply_to, full_subject, message_text))
             conn.commit()
 
         return {
@@ -6413,7 +6418,7 @@ async def send_customer_email(customer_id: int, request: Request):
             conn.close()
 
 @app.get("/api/customers/{customer_id}/communications")
-async def get_customer_communications(customer_id: int, request: Request):
+async def get_customer_communications(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6422,6 +6427,14 @@ async def get_customer_communications(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+            cust_row = cur.fetchone()
+            real_cust_id = cust_row["id"] if cust_row else (int(cid_str) if cid_str.isdigit() else 0)
+
             # Auto-clean duplicate records for this customer prior to returning history
             try:
                 cur.execute("""
@@ -6434,7 +6447,7 @@ async def get_customer_communications(customer_id: int, request: Request):
                       AND LOWER(c1.sender_email) = LOWER(c2.sender_email)
                       AND c1.subject = c2.subject
                       AND ABS(EXTRACT(EPOCH FROM (c1.created_at - c2.created_at))) < 600;
-                """, (customer_id, customer_id))
+                """, (real_cust_id, real_cust_id))
                 conn.commit()
             except Exception as e_dup:
                 print(f"[DUP CLEANUP ON FETCH NOTICE]: {e_dup}")
@@ -6443,7 +6456,7 @@ async def get_customer_communications(customer_id: int, request: Request):
                 SELECT * FROM customer_communications
                 WHERE customer_id = %s
                 ORDER BY created_at DESC;
-            """, (customer_id,))
+            """, (real_cust_id,))
             records = cur.fetchall()
 
             history = []
@@ -6470,7 +6483,7 @@ async def get_customer_communications(customer_id: int, request: Request):
             conn.close()
 
 @app.post("/api/customers/{customer_id}/communications/mark-read")
-async def mark_customer_communications_read(customer_id: int, request: Request):
+async def mark_customer_communications_read(customer_id: str, request: Request):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6479,11 +6492,19 @@ async def mark_customer_communications_read(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+            cust_row = cur.fetchone()
+            real_cust_id = cust_row[0] if cust_row else (int(cid_str) if cid_str.isdigit() else 0)
+
             cur.execute("""
                 UPDATE customer_communications
                 SET is_read = TRUE, status = 'READ', read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
                 WHERE customer_id = %s AND direction = 'INBOUND';
-            """, (customer_id,))
+            """, (real_cust_id,))
             conn.commit()
         return {"success": True}
     except Exception as e:
@@ -6494,10 +6515,11 @@ async def mark_customer_communications_read(customer_id: int, request: Request):
             conn.close()
 
 @app.post("/api/communications/{comm_id}/mark-single-read")
-async def mark_single_communication_read(comm_id: int, request: Request):
+async def mark_single_communication_read(comm_id: str, request: Request):
     """Marks a single inbound communication record as read with timestamp."""
     username = get_current_username(request)
     if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     conn = None

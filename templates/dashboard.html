@@ -4634,7 +4634,13 @@
                     })
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to send email');
+                if (!res.ok) {
+                    let errDetail = 'Failed to send email';
+                    if (typeof data.detail === 'string') errDetail = data.detail;
+                    else if (Array.isArray(data.detail)) errDetail = data.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                    else if (data.message) errDetail = data.message;
+                    throw new Error(errDetail);
+                }
 
                 alert(`✅ ${data.message}\nReply-To configured as: ${data.reply_to}`);
                 closeSendCustomerEmailModal();
