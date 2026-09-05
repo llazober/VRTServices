@@ -6599,7 +6599,8 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         raw_sender = extract_email_str(data.get("from") or data.get("sender") or raw_body.get("from"))
         sender_email = parse_clean_email(raw_sender) or raw_sender
 
-        raw_recipient = extract_email_str(data.get("to") or data.get("recipient") or raw_body.get("to"))
+        headers_obj = (data.get("headers") if isinstance(data, dict) else {}) or (raw_body.get("headers") if isinstance(raw_body, dict) else {}) or {}
+        raw_recipient = extract_email_str(headers_obj.get("to") if isinstance(headers_obj, dict) else None) or extract_email_str(data.get("to") or data.get("recipient") or raw_body.get("to"))
         recipient_email = parse_clean_email(raw_recipient) or raw_recipient
 
         def clean_html_to_text(html_str: str) -> str:
