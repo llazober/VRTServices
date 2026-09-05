@@ -2677,41 +2677,39 @@
         }
 
         async function deleteInvoice(invoiceId) {
-            showCustomConfirm("Delete Invoice", "Are you sure you want to permanently delete this invoice record?", async (confirmed) => {
-                if (!confirmed) return;
-                try {
-                    const res = await fetch(`/api/billing/invoices/${invoiceId}`, {method: 'DELETE'});
-                    if (res.ok) {
-                        showCustomAlert("Deleted", "Invoice deleted successfully.", "success");
-                        loadBillingOverview();
-                        loadBillingInvoices();
-                    } else {
-                        const err = await res.json();
-                        showCustomAlert("Error", err.detail || "Failed to delete invoice.", "error");
-                    }
-                } catch (e) {
-                    showCustomAlert("Error", "Server error deleting invoice.", "error");
+            const confirmed = await showCustomConfirm("Are you sure you want to permanently delete this invoice record?", "Delete Invoice", "Yes, Delete", "Cancel");
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}`, {method: 'DELETE'});
+                if (res.ok) {
+                    showCustomAlert("Deleted", "Invoice deleted successfully.", "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to delete invoice.", "error");
                 }
-            });
+            } catch (e) {
+                showCustomAlert("Error", "Server error deleting invoice.", "error");
+            }
         }
 
         async function deleteSchedule(scheduleId) {
-            showCustomConfirm("Delete Schedule", "Are you sure you want to delete this recurring billing schedule?", async (confirmed) => {
-                if (!confirmed) return;
-                try {
-                    const res = await fetch(`/api/billing/schedules/${scheduleId}`, {method: 'DELETE'});
-                    if (res.ok) {
-                        showCustomAlert("Deleted", "Recurring schedule deleted successfully.", "success");
-                        loadBillingOverview();
-                        loadBillingSchedules();
-                    } else {
-                        const err = await res.json();
-                        showCustomAlert("Error", err.detail || "Failed to delete schedule.", "error");
-                    }
-                } catch (e) {
-                    showCustomAlert("Error", "Server error deleting schedule.", "error");
+            const confirmed = await showCustomConfirm("Are you sure you want to delete this recurring billing schedule?", "Delete Schedule", "Yes, Delete", "Cancel");
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`/api/billing/schedules/${scheduleId}`, {method: 'DELETE'});
+                if (res.ok) {
+                    showCustomAlert("Deleted", "Recurring schedule deleted successfully.", "success");
+                    loadBillingOverview();
+                    loadBillingSchedules();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to delete schedule.", "error");
                 }
-            });
+            } catch (e) {
+                showCustomAlert("Error", "Server error deleting schedule.", "error");
+            }
         }
 
         async function triggerDailyBillingJob() {
