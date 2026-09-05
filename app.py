@@ -154,23 +154,19 @@ def parse_clean_email(email_str: str) -> str:
     return s
 
 def get_resend_to_email() -> str:
-    """Fetch target recipient email for system/support alerts, defaulting strictly to luislazo@datalazo.net."""
+    """Fetch target recipient email for system/support alerts from environment credentials."""
     val = (
         os.environ.get("RESEND_TO_EMAIL") or
         os.environ.get("RESEND_TO") or
         os.environ.get("TO_EMAIL") or
-        os.environ.get("SUPPORT_EMAIL") or
-        "luislazo@datalazo.net"
+        os.environ.get("SUPPORT_EMAIL") or ""
     )
-    cleaned = parse_clean_email(val)
-    if not cleaned or "luislazober" in cleaned.lower() or "gmail.com" in cleaned.lower():
-        return "luislazo@datalazo.net"
-    return cleaned
+    return parse_clean_email(val)
 
 def parse_reply_to_list(val) -> list[str]:
     """Parse single or multiple comma-separated reply-to email addresses into a list of clean email strings."""
     if not val:
-        return ["notification@vrtservices12.com"]
+        return []
     if isinstance(val, list):
         items = val
     else:
@@ -182,7 +178,7 @@ def parse_reply_to_list(val) -> list[str]:
         if cleaned and "receive.datalazo.net" not in cleaned.lower():
             if cleaned not in cleaned_list:
                 cleaned_list.append(cleaned)
-    return cleaned_list if cleaned_list else ["notification@vrtservices12.com"]
+    return cleaned_list
 
 def get_resend_from_email() -> str:
     """Fetch clean from email address, checking multiple env var aliases."""
@@ -215,15 +211,14 @@ def get_resend_reply_to_email() -> str:
         os.environ.get("REPLY_TO") or
         os.environ.get("resend_reply_to_email") or
         os.environ.get("resend_reply_to-email") or
-        os.environ.get("RESEND_REPLY_TO-EMAIL") or
-        "notification@vrtservices12.com"
+        os.environ.get("RESEND_REPLY_TO-EMAIL") or ""
     )
     res_list = parse_reply_to_list(val)
-    return ", ".join(res_list)
+    return ", ".join(res_list) if res_list else "notification@vrtservices12.com"
 
 def get_second_reply_to_email() -> str | None:
     """
-    Strictly inspect RESEND_REPLY_TO_EMAIL.
+    Strictly inspect RESEND_REPLY_TO_EMAIL environment credentials.
     Returns the second email address if 2 or more addresses are found in RESEND_REPLY_TO_EMAIL.
     If no second address is found, returns None (do NOT send any email).
     """
@@ -240,10 +235,7 @@ def get_second_reply_to_email() -> str | None:
         return None
     res_list = parse_reply_to_list(raw_val)
     if len(res_list) >= 2 and res_list[1]:
-        clean_second = res_list[1]
-        if "gmail.com" in clean_second.lower() or "luislazober" in clean_second.lower():
-            return "luislazo@datalazo.net"
-        return clean_second
+        return res_list[1]
     return None
 
 # Session tracking:
