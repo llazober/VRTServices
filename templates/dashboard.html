@@ -2445,6 +2445,7 @@
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
                 modal.style.display = 'flex';
+                modal.offsetHeight;
                 modal.style.opacity = '1';
             }
         }
@@ -2505,6 +2506,7 @@
                 const dueElem = document.getElementById('invoiceDueDateInput');
                 if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
                 modal.style.display = 'flex';
+                modal.offsetHeight;
                 modal.style.opacity = '1';
             }
         }
@@ -2593,6 +2595,7 @@
         }
 
         function viewInvoiceHtml(invoiceId, invoiceNumber) {
+            closeAllAppModals();
             const modal = document.getElementById('billingInvoiceViewModal');
             const iframe = document.getElementById('invoiceViewIframe');
             const titleElem = document.getElementById('invoiceViewTitleText');
@@ -2600,7 +2603,8 @@
             if (iframe) iframe.src = `/api/billing/invoices/${invoiceId}/view`;
             if (modal) {
                 modal.style.display = 'flex';
-                setTimeout(() => modal.style.opacity = '1', 10);
+                modal.offsetHeight;
+                modal.style.opacity = '1';
             }
         }
 
