@@ -697,10 +697,10 @@ def cleanup_duplicate_communications():
                 USING customer_communications c2
                 WHERE c1.id > c2.id 
                   AND c1.customer_id = c2.customer_id 
-                  AND c1.direction = 'INBOUND' 
-                  AND c2.direction = 'INBOUND'
+                  AND c1.direction = c2.direction
+                  AND LOWER(c1.sender_email) = LOWER(c2.sender_email)
                   AND c1.subject = c2.subject
-                  AND (c1.created_at - c2.created_at) < INTERVAL '5 minutes';
+                  AND ABS(EXTRACT(EPOCH FROM (c1.created_at - c2.created_at))) < 600;
             """)
             conn.commit()
         conn.close()
@@ -6309,6 +6309,23 @@ async def get_customer_communications(customer_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Auto-clean duplicate records for this customer prior to returning history
+            try:
+                cur.execute("""
+                    DELETE FROM customer_communications c1
+                    USING customer_communications c2
+                    WHERE c1.id > c2.id 
+                      AND c1.customer_id = %s
+                      AND c2.customer_id = %s
+                      AND c1.direction = c2.direction
+                      AND LOWER(c1.sender_email) = LOWER(c2.sender_email)
+                      AND c1.subject = c2.subject
+                      AND ABS(EXTRACT(EPOCH FROM (c1.created_at - c2.created_at))) < 600;
+                """, (customer_id, customer_id))
+                conn.commit()
+            except Exception as e_dup:
+                print(f"[DUP CLEANUP ON FETCH NOTICE]: {e_dup}")
+
             cur.execute("""
                 SELECT * FROM customer_communications
                 WHERE customer_id = %s
@@ -7397,25 +7414,34 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 legal_name = cust.get("legal_name", "Unknown Customer") if cust else "Unknown Customer"
                 parent_name = cust.get("parent_name", "VRT Services") if cust else "VRT Services"
 
-                # ── Robust Deduplication Check ──
+                # ── Robust Deduplication Check with Process-Safe Lock ──
                 clean_eid = str(email_id).strip() if email_id and len(str(email_id).strip()) > 3 else None
                 safe_sender = (sender_email or "").strip()
                 safe_subject = (subject or "").strip()
+
+                # Acquire process-safe transaction lock in PostgreSQL using sender + subject hash
+                lock_str = f"{safe_sender.lower()}_{safe_subject.lower()}_{customer_id}"
+                lock_key = abs(hash(lock_str)) % (2**63 - 1)
+                try:
+                    cur.execute("SELECT pg_advisory_xact_lock(%s);", (lock_key,))
+                except Exception as e_lock:
+                    print(f"[PG LOCK NOTICE]: {e_lock}")
 
                 cur.execute("""
                     SELECT id FROM customer_communications
                     WHERE direction = 'INBOUND'
                       AND (
-                        (%s::text IS NOT NULL AND attachments_json::text LIKE %s)
+                        (%s::text IS NOT NULL AND %s::text != '' AND attachments_json::text LIKE %s)
                         OR (
                             LENGTH(%s) > 0 
-                            AND sender_email = %s 
+                            AND LOWER(sender_email) = LOWER(%s) 
                             AND subject = %s 
-                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '10 minutes'
                         )
                       )
                     LIMIT 1;
                 """, (
+                    clean_eid,
                     clean_eid,
                     f'%{clean_eid}%' if clean_eid else '%__NONE__%',
                     safe_sender,
@@ -7584,7 +7610,7 @@ async def health_check():
     
     return {
         "status": overall_status,
-        "app_version": "v1.3.2-inbound-routing-cursor-fix-2026-09-05",
+        "app_version": "v1.3.3-inbound-dedup-lock-2026-09-05",
         "google_vision": {
             "status": google_status,
             "detail": google_detail,
