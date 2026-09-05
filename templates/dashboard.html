@@ -2386,10 +2386,10 @@
                         </td>
                         <td style="padding: 14px 18px; text-align: right;">
                             <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                                <button onclick="viewInvoiceHtml(${inv.id}, '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
-                                ${inv.status !== 'PAID' ? `<button onclick="markInvoiceStatus(${inv.id}, 'PAID')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
-                                <button onclick="sendInvoiceEmail(${inv.id})" title="Send Resend Email to Client" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>
-                                <button onclick="deleteInvoice(${inv.id})" title="Delete Invoice" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️</button>
+                                <button onclick="viewInvoiceHtml('${inv.id}', '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
+                                ${inv.status !== 'PAID' ? `<button onclick="markInvoiceStatus('${inv.id}', 'PAID')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
+                                <button onclick="sendInvoiceEmail('${inv.id}')" title="Send Resend Email to Client" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>
+                                <button onclick="deleteInvoice('${inv.id}')" title="Delete Invoice" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️</button>
                             </div>
                         </td>
                     </tr>
@@ -2438,8 +2438,8 @@
                         <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
                     </td>
                     <td style="padding: 14px 18px; text-align: right; white-space: nowrap;">
-                        <button onclick="editSchedule(${s.id})" title="Edit Recurring Schedule" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; margin-right: 6px;">✏️ Edit</button>
-                        <button onclick="deleteSchedule(${s.id})" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
+                        <button onclick="editSchedule('${s.id}')" title="Edit Recurring Schedule" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; margin-right: 6px;">✏️ Edit</button>
+                        <button onclick="deleteSchedule('${s.id}')" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
                     </td>
                 </tr>
             `).join('');
@@ -2632,25 +2632,28 @@
         }
 
         async function sendInvoiceEmail(invoiceId) {
+            if (!invoiceId) {
+                showCustomAlert("Error", "Invalid invoice selection.", "error");
+                return;
+            }
             try {
-                const res = await fetch(`/api/billing/invoices/${invoiceId}/send`, {method: 'POST'});
+                const res = await fetch(`/api/billing/invoices/${encodeURIComponent(invoiceId)}/send`, {method: 'POST'});
+                let data = {};
+                try { data = await res.json(); } catch (_) {}
                 if (res.ok) {
-                    const data = await res.json();
                     showCustomAlert("Email Sent", data.message || "Invoice email sent successfully via Resend!", "success");
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
                     let errorMsg = "Failed to send invoice email.";
-                    try {
-                        const err = await res.json();
-                        if (typeof err.detail === 'string') errorMsg = err.detail;
-                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
-                        else if (err.message) errorMsg = err.message;
-                    } catch (_) {}
+                    if (typeof data.detail === 'string') errorMsg = data.detail;
+                    else if (Array.isArray(data.detail)) errorMsg = data.detail.map(d => typeof d === 'object' ? (d.msg || d.detail || JSON.stringify(d)) : String(d)).join(', ');
+                    else if (data.message) errorMsg = data.message;
+                    else if (res.statusText) errorMsg = `HTTP Error ${res.status}: ${res.statusText}`;
                     showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
-                showCustomAlert("Error", "Server error sending email.", "error");
+                showCustomAlert("Error", e.message || "Server error sending email.", "error");
             }
         }
 

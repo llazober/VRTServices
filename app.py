@@ -30,11 +30,25 @@ from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-from fastapi.exceptions import HTTPException
+from fastapi.exceptions import HTTPException, RequestValidationError
 import traceback
 from extractor import run_extraction, extract_check_images
 
 app = FastAPI(title="Bank Statement OCR Extractor")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    err_msgs = []
+    for err in exc.errors():
+        loc = " -> ".join([str(x) for x in err.get("loc", [])])
+        msg = err.get("msg", "")
+        err_msgs.append(f"{loc}: {msg}")
+    detail_str = "; ".join(err_msgs) if err_msgs else "Validation Error"
+    print(f"[422 VALIDATION ERROR] Path: {request.url.path} - Detail: {detail_str}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": f"Validation Error ({detail_str})", "errors": exc.errors()}
+    )
 
 @app.middleware("http")
 async def add_security_and_cache_headers(request: Request, call_next):
@@ -251,6 +265,66 @@ def get_second_reply_to_email() -> str | None:
     if len(res_list) >= 2 and res_list[1] and not is_blocked_email(res_list[1]):
         return res_list[1]
     return None
+
+def send_resend_email(email_payload: dict) -> dict:
+    """Helper to send emails via Resend API with detailed error extraction and automatic onboarding fallback."""
+    resend_key = (
+        os.environ.get("RESEND_API_KEY") or
+        os.environ.get("RESEND_KEY") or
+        os.environ.get("RESEND_API_TOKEN") or
+        os.environ.get("RESEND_TOKEN") or ""
+    ).strip().strip('\'"')
+
+    if not resend_key:
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY is not configured in environment variables.")
+
+    def _do_post(payload: dict):
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:
+            resp_body = resp.read().decode("utf-8")
+            return json.loads(resp_body) if resp_body else {"status": "ok"}
+
+    try:
+        return _do_post(email_payload)
+    except urllib.error.HTTPError as err:
+        err_body = ""
+        try:
+            err_body = err.read().decode("utf-8")
+            err_json = json.loads(err_body)
+            msg = err_json.get("message") or err_json.get("detail") or err_body
+        except Exception:
+            msg = err_body or str(err)
+
+        print(f"[RESEND HTTP ERROR {err.code}]: {msg}")
+
+        # If 422/400 error is due to unverified domain, attempt fallback to onboarding@resend.dev
+        if err.code in (422, 400) and ("domain" in str(msg).lower() or "not verified" in str(msg).lower() or "validation" in str(msg).lower()):
+            alt_payload = dict(email_payload)
+            sender_name = email_payload.get("from", "").split("<")[0].strip() or "VRT Services"
+            alt_payload["from"] = f"{sender_name} <onboarding@resend.dev>"
+            print(f"[RESEND RETRY] Retrying with fallback sender: {alt_payload['from']}")
+            try:
+                res = _do_post(alt_payload)
+                print(f"[RESEND RETRY SUCCESS]: {res}")
+                return res
+            except Exception as retry_err:
+                print(f"[RESEND RETRY FAILED]: {retry_err}")
+
+        raise HTTPException(status_code=err.code if err.code in [400, 422] else 500, detail=f"Resend Email Error ({err.code}): {msg}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[RESEND EXCEPTION]: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
 # Session tracking:
 # valid_sessions: token -> {"username": str}
@@ -5584,26 +5658,22 @@ async def create_manual_invoice(request: Request):
                 inv_dict = dict(cur.fetchone())
                 html_body = format_invoice_email_html(inv_dict, dict(cust))
                 
-                cust_email = cust.get("email") or get_resend_to_email()
-                resend_key = os.environ.get("RESEND_API_KEY")
-                if resend_key and cust_email:
+                cust_email = parse_clean_email(cust.get("email") or "") or get_resend_to_email()
+                if cust_email:
+                    reply_to_val = get_resend_reply_to_email()
+                    reply_to_list = parse_reply_to_list(reply_to_val)
                     email_payload = {
                         "from": format_resend_from_header("VRT Services Billing"),
                         "to": [cust_email],
-                        "reply_to": get_resend_reply_to_email(),
                         "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
                         "html": html_body
                     }
-                    req = urllib.request.Request(
-                        "https://api.resend.com/emails",
-                        data=json.dumps(email_payload).encode("utf-8"),
-                        headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                        method="POST"
-                    )
+                    if reply_to_list:
+                        email_payload["reply_to"] = reply_to_list if len(reply_to_list) > 1 else reply_to_list[0]
                     try:
-                        with urllib.request.urlopen(req) as _:
-                            cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
-                            conn.commit()
+                        send_resend_email(email_payload)
+                        cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                        conn.commit()
                     except Exception as e_send:
                         print(f"Error sending manual invoice email: {e_send}")
 
@@ -5641,31 +5711,29 @@ async def send_invoice_email(invoice_id: str):
 
             inv_dict = dict(row)
             cust_dict = {"legal_name": row["legal_name"], "custumer_number": row["custumer_number"], "email": row["email"]}
-            cust_email = row["email"] or get_resend_to_email()
-
-            resend_key = os.environ.get("RESEND_API_KEY")
-            if not resend_key:
-                raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured in environment variables.")
+            cust_email = parse_clean_email(row.get("email") or "") or get_resend_to_email()
+            if not cust_email:
+                raise HTTPException(status_code=400, detail=f"Customer '{row.get('legal_name')}' does not have a valid recipient email address configured.")
 
             html_body = format_invoice_email_html(inv_dict, cust_dict)
+            reply_to_val = get_resend_reply_to_email()
+            reply_to_list = parse_reply_to_list(reply_to_val)
+
             email_payload = {
                 "from": format_resend_from_header("VRT Services Billing"),
                 "to": [cust_email],
-                "reply_to": get_resend_reply_to_email(),
                 "subject": f"Invoice #{inv_dict['invoice_number']} from VRT Services (${float(inv_dict['total_amount']):,.2f} USD)",
                 "html": html_body
             }
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=json.dumps(email_payload).encode("utf-8"),
-                headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req) as _:
-                cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (row["id"],))
-                conn.commit()
+            if reply_to_list:
+                email_payload["reply_to"] = reply_to_list if len(reply_to_list) > 1 else reply_to_list[0]
 
-            return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}"}
+            resend_res = send_resend_email(email_payload)
+
+            cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (row["id"],))
+            conn.commit()
+
+            return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}", "resend": resend_res}
     except HTTPException:
         raise
     except Exception as e:
@@ -5817,33 +5885,29 @@ def run_daily_billing_job():
                 generated_count += 1
 
                 if s.get("auto_send"):
-                    resend_key = os.environ.get("RESEND_API_KEY")
-                    cust_email = s.get("email") or get_resend_to_email()
-                    if resend_key and cust_email:
+                    cust_email = parse_clean_email(s.get("email") or "") or get_resend_to_email()
+                    if cust_email:
                         inv_dict = {
                             "invoice_number": inv_number, "issue_date": str(today),
                             "due_date": str(due_date), "description": desc, "total_amount": amount
                         }
                         cust_dict = {"legal_name": s["legal_name"], "custumer_number": s["custumer_number"], "email": cust_email}
                         html_body = format_invoice_email_html(inv_dict, cust_dict)
+                        reply_to_val = get_resend_reply_to_email()
+                        reply_to_list = parse_reply_to_list(reply_to_val)
 
                         email_payload = {
                             "from": format_resend_from_header("VRT Services Billing"),
                             "to": [cust_email],
-                            "reply_to": get_resend_reply_to_email(),
                             "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
                             "html": html_body
                         }
-                        req = urllib.request.Request(
-                            "https://api.resend.com/emails",
-                            data=json.dumps(email_payload).encode("utf-8"),
-                            headers={"Authorization": f"Bearer {resend_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                            method="POST"
-                        )
+                        if reply_to_list:
+                            email_payload["reply_to"] = reply_to_list if len(reply_to_list) > 1 else reply_to_list[0]
                         try:
-                            with urllib.request.urlopen(req) as _:
-                                cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
-                                conn.commit()
+                            send_resend_email(email_payload)
+                            cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                            conn.commit()
                         except Exception as e_s:
                             print(f"[RECURRING BILLING SEND ERROR] Invoice #{inv_number}: {e_s}")
 
@@ -6435,20 +6499,8 @@ async def send_customer_email(customer_id: str, request: Request):
             "text": message_text
         }
 
-        req = urllib.request.Request(
-            "https://api.resend.com/emails",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {resend_key.strip()}",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            method="POST"
-        )
-
-        with urllib.request.urlopen(req) as response:
-            res_body = response.read().decode("utf-8")
-            print(f"[EMAIL SENT] Customer {real_cust_id} ({recipient_email}): {res_body}")
+        res_body = send_resend_email(payload)
+        print(f"[EMAIL SENT] Customer {real_cust_id} ({recipient_email}): {res_body}")
 
         # Log outbound communication in database
         with conn.cursor() as cur:
