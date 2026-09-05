@@ -5310,13 +5310,17 @@ async def list_billing_schedules():
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT s.*, c.custumer_number, c.legal_name, c.email
+                SELECT s.*, 
+                       COALESCE(c.custumer_number, 'CUST-' || s.customer_id::text) AS custumer_number, 
+                       COALESCE(c.legal_name, c.display_name, 'Customer #' || s.customer_id::text) AS legal_name, 
+                       c.email
                 FROM customer_billing_schedules s
-                JOIN customer c ON s.customer_id = c.id
-                ORDER BY s.billing_day ASC, c.legal_name ASC;
+                LEFT JOIN customer c ON (s.customer_id::text = c.id::text OR s.customer_id::text = c.custumer_number)
+                ORDER BY s.billing_day ASC;
             """)
             rows = cur.fetchall()
-            return [dict(r) | {"created_at": str(r["created_at"]), "updated_at": str(r["updated_at"])} for r in rows]
+            schedules = [dict(r) | {"created_at": str(r["created_at"]), "updated_at": str(r["updated_at"])} for r in rows]
+            return {"schedules": schedules, "data": schedules}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -5453,7 +5457,7 @@ async def list_invoices(status: str = "ALL", customer_id: int = None):
                 row["created_at"] = str(row["created_at"])
                 row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
                 res.append(row)
-            return res
+            return {"invoices": res, "data": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

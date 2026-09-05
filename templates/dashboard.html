@@ -2322,7 +2322,7 @@
                 const res = await fetch(`/api/billing/invoices?status=${statusFilter}`);
                 if (res.ok) {
                     const data = await res.json();
-                    billingAllInvoices = data.invoices || [];
+                    billingAllInvoices = Array.isArray(data) ? data : (data.invoices || data.data || []);
                     const cntElem = document.getElementById('billingInvoicesCount');
                     if (cntElem) cntElem.innerText = billingAllInvoices.length;
                     renderBillingInvoicesTable(billingAllInvoices);
@@ -2380,7 +2380,7 @@
                 const res = await fetch('/api/billing/schedules');
                 if (res.ok) {
                     const data = await res.json();
-                    billingAllSchedules = data.schedules || [];
+                    billingAllSchedules = Array.isArray(data) ? data : (data.schedules || data.data || []);
                     const cntElem = document.getElementById('billingSchedulesCount');
                     if (cntElem) cntElem.innerText = billingAllSchedules.length;
                     renderBillingSchedulesTable(billingAllSchedules);
