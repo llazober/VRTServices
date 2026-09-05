@@ -1309,8 +1309,20 @@
                 title = actualTitle;
             }
 
-            let cleanMsg = String(msg || '');
-            let autoType = type;
+            const formatErrorDetail = (val) => {
+                if (!val) return '';
+                if (typeof val === 'string') return val;
+                if (Array.isArray(val)) return val.map(item => typeof item === 'object' ? (item.msg || item.detail || JSON.stringify(item)) : String(item)).join(', ');
+                if (typeof val === 'object') {
+                    if (val.detail) return formatErrorDetail(val.detail);
+                    if (val.message) return String(val.message);
+                    return JSON.stringify(val);
+                }
+                return String(val);
+            };
+
+            let cleanMsg = formatErrorDetail(msg);
+            let autoType = formatErrorDetail(type) || null;
             let autoTitle = title;
 
             if (!autoType) {

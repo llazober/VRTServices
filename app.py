@@ -5426,10 +5426,14 @@ async def update_billing_schedule(schedule_id: str, request: Request):
         if conn: conn.close()
 
 @app.get("/api/billing/invoices")
-async def list_invoices(status: str = "ALL", customer_id: int = None):
+async def list_invoices(status: str = "ALL", customer_id: str = None):
     """List invoices with optional status and customer filter."""
     conn = None
     try:
+        cid = None
+        if customer_id and str(customer_id).strip().isdigit():
+            cid = int(str(customer_id).strip())
+
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             sql = """
@@ -5445,9 +5449,9 @@ async def list_invoices(status: str = "ALL", customer_id: int = None):
                 else:
                     sql += " AND i.status = %s"
                     params.append(status.upper())
-            if customer_id:
-                sql += " AND i.customer_id = %s"
-                params.append(customer_id)
+            if cid is not None:
+                sql += " AND (i.customer_id = %s OR c.custumer_number = %s)"
+                params.extend([cid, str(customer_id)])
 
             sql += " ORDER BY i.id DESC;"
             cur.execute(sql, params)
