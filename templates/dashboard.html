@@ -1023,21 +1023,27 @@
             {% if active_tab == 'customers' %}
             <!-- ── DEDICATED CUSTOMER MANAGEMENT VIEW ─────────────────── -->
             <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-                    <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+                    <div style="flex: 1; min-width: 300px;">
                         <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 6px;">
                             👥 Customer <span style="color: #e100ff;">Management</span>
                         </h2>
-                        <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 14px;">
                             View, add, edit, and delete customer accounts, tax IDs, contact information, and statuses.
                         </p>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button onclick="openCatchallInboxModal()" style="padding: 12px 20px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border-radius: 14px; cursor: pointer; transition: all 0.2s ease;" title="View all general/unassigned emails (CUST-0000)">
-                            📭 Unassigned / Catch-All Inbox
-                        </button>
-                        <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
-                            ➕ Add New Customer
-                        </button>
+                        <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; width: 100%; max-width: 450px; outline: none;" oninput="fetchCustomerRecords(true)">
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                            <button onclick="openCatchallInboxModal()" style="padding: 12px 20px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border-radius: 14px; cursor: pointer; transition: all 0.2s ease;" title="View all general/unassigned emails (CUST-0000)">
+                                📭 Unassigned / Catch-All Inbox
+                            </button>
+                            <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
+                                ➕ Add New Customer
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1099,12 +1105,6 @@
                         <button type="submit" id="customerPageFormSubmitBtn" style="padding: 10px 28px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225,0,255,0.35);">Save Customer</button>
                     </div>
                 </form>
-
-                <!-- Search & Filters -->
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; width: 100%; max-width: 450px; outline: none;" oninput="fetchCustomerRecords(true)">
-                    <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
-                </div>
 
                 <!-- Page Table -->
                 <div class="customer-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
