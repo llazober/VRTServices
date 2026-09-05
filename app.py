@@ -163,10 +163,12 @@ def get_resend_to_email() -> str:
         os.environ.get("resend_to_email") or
         os.environ.get("resend_to-email") or
         os.environ.get("RESEND_TO-EMAIL") or
-        "luislazober@gmail.com"
+        "luislazo@datalazo.net"
     )
     cleaned = parse_clean_email(val)
-    return cleaned if cleaned else "luislazober@gmail.com"
+    if not cleaned or cleaned.lower() == "luislazober@gmail.com":
+        return "luislazo@datalazo.net"
+    return cleaned
 
 def parse_reply_to_list(val) -> list[str]:
     """Parse single or multiple comma-separated reply-to email addresses into a list of clean email strings."""
@@ -223,14 +225,12 @@ def get_resend_reply_to_email() -> str:
     return ", ".join(res_list)
 
 def get_second_reply_to_email() -> str:
-    """Fetch the second email address from get_resend_reply_to_email(), falling back to first or RESEND_TO_EMAIL."""
+    """Fetch the second email address from get_resend_reply_to_email(), falling back to luislazo@datalazo.net."""
     full_str = get_resend_reply_to_email()
     res_list = parse_reply_to_list(full_str)
     if len(res_list) >= 2:
         return res_list[1]
-    elif len(res_list) == 1 and res_list[0]:
-        return res_list[0]
-    return get_resend_to_email()
+    return "luislazo@datalazo.net"
 
 # Session tracking:
 # valid_sessions: token -> {"username": str}
@@ -5145,6 +5145,7 @@ async def admin_clean_emails():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error truncating email tables: {str(e)}")
     finally:
+        if conn: conn.close()
 # ==============================================================================
 # BILLING & RECURRING INVOICING MODULE
 # ==============================================================================
