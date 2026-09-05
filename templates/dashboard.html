@@ -1780,7 +1780,7 @@
 
     <!-- ── BILLING MODALS ─────────────────────────────────────────── -->
     <!-- Create Recurring Schedule Modal -->
-    <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingScheduleModalContent">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
@@ -1835,7 +1835,7 @@
     </div>
 
     <!-- Create Manual Invoice Modal -->
-    <div id="billingInvoiceModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingInvoiceModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingInvoiceModalContent">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
@@ -1879,7 +1879,7 @@
     </div>
 
     <!-- View / Print HTML Invoice Modal -->
-    <div id="billingInvoiceViewModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingInvoiceViewModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 750px; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;">
             <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -2272,7 +2272,11 @@
                     const data = await res.json();
                     const customers = data.customers || [];
                     const optionsHtml = '<option value="">-- Select Client / Customer --</option>' +
-                        customers.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || 'CUST-' + c.id})</option>`).join('');
+                        customers.map(c => {
+                            const name = c.legal_name || c.display_name || ('Customer #' + c.id);
+                            const num = c.custumer_number || ('CUST-' + c.id);
+                            return `<option value="${c.id}">${name} (${num})</option>`;
+                        }).join('');
                     
                     const schedSelect = document.getElementById('scheduleCustomerSelect');
                     const invSelect = document.getElementById('invoiceCustomerSelect');
@@ -2387,7 +2391,7 @@
             if (!tbody) return;
 
             if (!schedules || schedules.length === 0) {
-                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No recurring billing schedules configured. Click <strong>+ New Schedule</strong> to create one.</td></tr>`;
+                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No recurring billing schedules configured. Click <strong onclick="openCreateScheduleModal()" style="cursor: pointer; color: #c084fc; text-decoration: underline;">+ New Schedule</strong> to create one.</td></tr>`;
                 return;
             }
 
@@ -2436,11 +2440,12 @@
 
         // --- Modals Control Functions ---
         function openCreateScheduleModal() {
+            closeAllAppModals();
             populateBillingCustomerDropdowns();
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
                 modal.style.display = 'flex';
-                setTimeout(() => modal.style.opacity = '1', 10);
+                modal.style.opacity = '1';
             }
         }
 
@@ -2491,6 +2496,7 @@
         }
 
         function openCreateInvoiceModal() {
+            closeAllAppModals();
             populateBillingCustomerDropdowns();
             const modal = document.getElementById('billingInvoiceModal');
             if (modal) {
@@ -2499,7 +2505,7 @@
                 const dueElem = document.getElementById('invoiceDueDateInput');
                 if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
                 modal.style.display = 'flex';
-                setTimeout(() => modal.style.opacity = '1', 10);
+                modal.style.opacity = '1';
             }
         }
 
