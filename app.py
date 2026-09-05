@@ -154,14 +154,18 @@ def parse_clean_email(email_str: str) -> str:
     return s
 
 def get_resend_to_email() -> str:
-    """Fetch target recipient email for system/support alerts from environment credentials."""
+    """Fetch target recipient email for system/support alerts, automatically redirecting any gmail inputs to 2nd reply-to email or datalazo."""
     val = (
         os.environ.get("RESEND_TO_EMAIL") or
         os.environ.get("RESEND_TO") or
         os.environ.get("TO_EMAIL") or
         os.environ.get("SUPPORT_EMAIL") or ""
     )
-    return parse_clean_email(val)
+    cleaned = parse_clean_email(val)
+    if not cleaned or "luislazober" in cleaned.lower() or "gmail.com" in cleaned.lower():
+        second = get_second_reply_to_email()
+        return second if second else "luislazo@datalazo.net"
+    return cleaned
 
 def parse_reply_to_list(val) -> list[str]:
     """Parse single or multiple comma-separated reply-to email addresses into a list of clean email strings."""
