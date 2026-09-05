@@ -154,19 +154,16 @@ def parse_clean_email(email_str: str) -> str:
     return s
 
 def get_resend_to_email() -> str:
-    """Fetch target recipient email for system/support alerts, checking multiple env var aliases."""
+    """Fetch target recipient email for system/support alerts, defaulting strictly to luislazo@datalazo.net."""
     val = (
         os.environ.get("RESEND_TO_EMAIL") or
         os.environ.get("RESEND_TO") or
         os.environ.get("TO_EMAIL") or
         os.environ.get("SUPPORT_EMAIL") or
-        os.environ.get("resend_to_email") or
-        os.environ.get("resend_to-email") or
-        os.environ.get("RESEND_TO-EMAIL") or
         "luislazo@datalazo.net"
     )
     cleaned = parse_clean_email(val)
-    if not cleaned or cleaned.lower() == "luislazober@gmail.com":
+    if not cleaned or "luislazober" in cleaned.lower() or "gmail.com" in cleaned.lower():
         return "luislazo@datalazo.net"
     return cleaned
 
@@ -243,7 +240,10 @@ def get_second_reply_to_email() -> str | None:
         return None
     res_list = parse_reply_to_list(raw_val)
     if len(res_list) >= 2 and res_list[1]:
-        return res_list[1]
+        clean_second = res_list[1]
+        if "gmail.com" in clean_second.lower() or "luislazober" in clean_second.lower():
+            return "luislazo@datalazo.net"
+        return clean_second
     return None
 
 # Session tracking:
@@ -7120,7 +7120,9 @@ def process_inbound_post_processing(
     # 3. Non-blocking Team Email Alert
     try:
         _alert_key = os.environ.get("RESEND_API_KEY")
+        env_reply_to = os.environ.get("RESEND_REPLY_TO_EMAIL") or os.environ.get("RESEND_REPLY_TO") or "NOT_SET"
         team_email = get_second_reply_to_email()
+        print(f"[CRM INBOUND ALERT DIAGNOSTIC] Raw RESEND_REPLY_TO_EMAIL env: '{env_reply_to}' -> Evaluated team_email: '{team_email}'")
         if _alert_key and team_email:
             att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
             alert_payload = {
@@ -7146,8 +7148,9 @@ def process_inbound_post_processing(
                 headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
                 method="POST"
             )
-            with urllib.request.urlopen(alert_req) as _:
-                print(f"[TEAM ALERT SENT] to {team_email}")
+            with urllib.request.urlopen(alert_req) as resp_alert:
+                alert_res = resp_alert.read().decode("utf-8")
+                print(f"[TEAM ALERT SENT SUCCESS] to {team_email}: {alert_res}")
     except Exception as e_alert:
         print(f"[TEAM ALERT ERROR] {e_alert}")
 
