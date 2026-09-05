@@ -1780,7 +1780,7 @@
 
     <!-- ── BILLING MODALS ─────────────────────────────────────────── -->
     <!-- Create Recurring Schedule Modal -->
-    <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingScheduleModalContent">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
@@ -1835,7 +1835,7 @@
     </div>
 
     <!-- Create Manual Invoice Modal -->
-    <div id="billingInvoiceModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingInvoiceModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingInvoiceModalContent">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
@@ -1879,7 +1879,7 @@
     </div>
 
     <!-- View / Print HTML Invoice Modal -->
-    <div id="billingInvoiceViewModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="billingInvoiceViewModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 750px; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;">
             <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -2445,7 +2445,6 @@
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
                 modal.style.display = 'flex';
-                modal.offsetHeight;
                 modal.style.opacity = '1';
             }
         }
@@ -2453,8 +2452,7 @@
         function closeCreateScheduleModal() {
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
-                modal.style.opacity = '0';
-                setTimeout(() => modal.style.display = 'none', 300);
+                modal.style.display = 'none';
             }
         }
 
@@ -2506,7 +2504,6 @@
                 const dueElem = document.getElementById('invoiceDueDateInput');
                 if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
                 modal.style.display = 'flex';
-                modal.offsetHeight;
                 modal.style.opacity = '1';
             }
         }
@@ -2514,8 +2511,7 @@
         function closeCreateInvoiceModal() {
             const modal = document.getElementById('billingInvoiceModal');
             if (modal) {
-                modal.style.opacity = '0';
-                setTimeout(() => modal.style.display = 'none', 300);
+                modal.style.display = 'none';
             }
         }
 
