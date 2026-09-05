@@ -4752,36 +4752,35 @@
         let activeHistoryCustomerId = null;
 
         async function openCatchallInboxModal() {
-            try {
-                const res = await fetch('/api/customers');
-                const data = await res.json();
-                const custs = data.customers || [];
-                const c0 = custs.find(c => c.custumer_number === 'CUST-0000');
-                if (c0) {
-                    await openCustomerCommsHistoryModal(c0.id);
-                } else {
-                    alert("Catch-all customer (CUST-0000) was not found in customer directory.");
-                }
-            } catch(err) {
-                console.error("Error opening catch-all inbox:", err);
-            }
+            await openCustomerCommsHistoryModal(null, true);
         }
 
-        async function openCustomerCommsHistoryModal(customerId) {
+        async function openCustomerCommsHistoryModal(customerId, showAllInbound = false) {
             const cid = customerId || currentEmailCustomerId;
-            if (!cid) return;
+            if (!cid && !showAllInbound) return;
             activeHistoryCustomerId = cid;
 
             let modal = document.getElementById('customerCommsHistoryModal');
             if (!modal) return;
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
 
-            const cust = (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+            const titleEl = document.getElementById('commsHistoryModalTitle');
+            const subtitleEl = document.getElementById('commsHistoryModalSubtitle');
+
+            const cust = (!showAllInbound && typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
                 ? currentCustomerRecords.find(c => c.id == cid)
                 : null;
-            const subtitleEl = document.getElementById('commsHistoryModalSubtitle');
+
+            if (titleEl) {
+                titleEl.innerHTML = showAllInbound 
+                    ? `📥 Global Inbound Inbox` 
+                    : `💬 Customer Communication History`;
+            }
+
             if (subtitleEl) {
-                if (cust) {
+                if (showAllInbound) {
+                    subtitleEl.textContent = 'All incoming client email replies and general unassigned emails across all accounts';
+                } else if (cust) {
                     subtitleEl.innerHTML = `Customer: <strong style="color: #38bdf8;">${cust.legal_name || cust.display_name}</strong> (${cust.custumer_number ? 'Ref: ' + cust.custumer_number + ' | ' : ''}${cust.email ? 'Email: ' + cust.email : 'No email set'})`;
                 } else {
                     subtitleEl.textContent = `Customer ID #${cid} — Email logs & received replies`;
@@ -4794,7 +4793,10 @@
             modal.style.display = 'flex';
 
             try {
-                const res = await fetch(`/api/customers/${cid}/communications`);
+                const fetchUrl = showAllInbound 
+                    ? '/api/communications/all-inbound' 
+                    : `/api/customers/${cid}/communications`;
+                const res = await fetch(fetchUrl);
                 if (!res.ok) {
                     const errText = await res.text();
                     let errMsg = `HTTP ${res.status}`;
@@ -4808,14 +4810,13 @@
                 const logs = data.communications || [];
 
                 if (logs.length === 0) {
-                    const custName = cust ? (cust.legal_name || cust.display_name) : `Customer #${cid}`;
-                    const custEmail = cust ? cust.email : '';
+                    const custName = cust ? (cust.legal_name || cust.display_name) : (showAllInbound ? 'All Customers' : `Customer #${cid}`);
                     if (listBody) {
                         listBody.innerHTML = `
                             <div style="text-align: center; color: #64748b; padding: 36px 20px;">
                                 <div style="font-size: 2.8rem; margin-bottom: 12px;">📭</div>
-                                <h4 style="color: #cbd5e1; margin: 0 0 6px 0; font-size: 1.05rem;">No Email History Recorded</h4>
-                                <p style="font-size: 0.82rem; color: #94a3b8; max-width: 440px; margin: 0 auto; line-height: 1.5;">No outbound sent emails or inbound client replies were found for <strong style="color: #38bdf8;">${custName}</strong>${custEmail ? ' (' + custEmail + ')' : ''}.</p>
+                                <h4 style="color: #cbd5e1; margin: 0 0 6px 0; font-size: 1.05rem;">No Inbound Email History Found</h4>
+                                <p style="font-size: 0.82rem; color: #94a3b8; max-width: 440px; margin: 0 auto; line-height: 1.5;">No email communications were found for <strong style="color: #38bdf8;">${custName}</strong>.</p>
                             </div>
                         `;
                     }
@@ -4826,7 +4827,7 @@
                     const unreadLogs = logs.filter(l => l.direction === 'INBOUND' && !l.is_read && l.status !== 'READ');
                     const markAllBtn = document.getElementById('commsHistoryMarkAllReadBtn');
                     if (markAllBtn) {
-                        markAllBtn.style.display = unreadLogs.length > 0 ? 'inline-block' : 'none';
+                        markAllBtn.style.display = (unreadLogs.length > 0 && !showAllInbound) ? 'inline-block' : 'none';
                     }
 
                     listBody.innerHTML = logs.map(item => {
@@ -4844,6 +4845,12 @@
                             
                             dirBadge = '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span> ' + readBadge;
                         }
+
+                        const custTag = (showAllInbound || !cust)
+                            ? (item.legal_name 
+                                ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">Account: ${item.legal_name} (${item.custumer_number || 'ID #' + item.customer_id})</span> `
+                                : `<span style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">Unassigned / Catch-All</span> `)
+                            : '';
 
                         const dateStr = item.created_at ? formatEasternDateTime(item.created_at) : '';
                         let atts = item.attachments_json || [];
@@ -4885,8 +4892,9 @@
                         return `
                             <div id="commCard-${item.id}" ${cardClickAttr} style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; ${ (!isOut && !isRead) ? 'cursor: pointer;' : '' } transition: all 0.2s;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         ${dirBadge}
+                                        ${custTag}
                                         <strong style="font-size: 0.88rem; color: #fff;">${item.subject || '(No Subject)'}</strong>
                                     </div>
                                     <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
@@ -4950,6 +4958,47 @@
         function closeCustomerCommsHistoryModal() {
             const modal = document.getElementById('customerCommsHistoryModal');
             if (modal) modal.style.display = 'none';
+            const debugBox = document.getElementById('webhookDebugLogBox');
+            if (debugBox) debugBox.remove();
+        }
+
+        async function toggleWebhookLogInspector(event) {
+            if (event) event.stopPropagation();
+            let debugBox = document.getElementById('webhookDebugLogBox');
+            if (debugBox) {
+                debugBox.style.display = (debugBox.style.display === 'none') ? 'block' : 'none';
+                return;
+            }
+            const listBody = document.getElementById('commsHistoryListBody');
+            if (!listBody) return;
+            
+            const newBox = document.createElement('div');
+            newBox.id = 'webhookDebugLogBox';
+            newBox.style.cssText = 'background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 0.78rem; font-family: monospace; color: #cbd5e1;';
+            newBox.innerHTML = 'Loading server webhook debug logs...';
+            listBody.insertBefore(newBox, listBody.firstChild);
+
+            try {
+                const res = await fetch('/api/debug/last-inbound');
+                const data = await res.json();
+                const logs = data.last_webhook_logs || [];
+                if (logs.length === 0) {
+                    newBox.innerHTML = '<strong style="color: #f87171;">⚠️ No Webhooks Received Yet:</strong><br><span style="color: #94a3b8;">The server has not received any HTTP POST webhooks from Resend yet.<br>Please verify in <a href="https://resend.com/webhooks" target="_blank" style="color: #38bdf8; text-decoration: underline;">Resend Dashboard → Webhooks</a> that a Webhook is configured pointing to:<br><code style="color: #4ade80;">https://vrtservices12.com/api/webhooks/resend-inbound</code> for event <code>email.received</code>.</span>';
+                } else {
+                    let html = '<strong style="color: #38bdf8;">📡 Server Webhook Log Audit (Last 5 Hits):</strong><br><br>';
+                    html += logs.map(l => `
+                        <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px; margin-bottom: 6px;">
+                            <span style="color: #facc15;">[${l.created_at || ''}]</span> 
+                            <strong>Status:</strong> <span style="color: ${l.status === 'SUCCESS' ? '#4ade80' : '#f87171'}; font-weight: 800;">${l.status}</span><br>
+                            <strong>From:</strong> ${l.sender_email || 'N/A'} | <strong>To:</strong> ${l.recipient_email || 'N/A'}<br>
+                            <strong>Subject:</strong> ${l.subject || '(No Subject)'}
+                        </div>
+                    `).join('');
+                    newBox.innerHTML = html;
+                }
+            } catch(err) {
+                newBox.innerHTML = `<span style="color: #f87171;">Error fetching debug logs: ${err.message}</span>`;
+            }
         }
 
         // --- Workload Summary & Pending Tasks Functions ---
@@ -5734,6 +5783,7 @@
                 <p id="commsHistoryModalSubtitle" style="font-size: 0.78rem; color: #94a3b8; margin: 4px 0 0 0;">Email logs & received replies</p>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="button" onclick="toggleWebhookLogInspector(event)" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-weight: 700; font-size: 0.72rem; cursor: pointer;" title="Inspect raw webhook logs received by server from Resend">🔍 Webhook Inspector</button>
                 <button id="commsHistoryMarkAllReadBtn" onclick="markAllCommsReadForCurrentCustomer()" style="display: none; padding: 4px 10px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ade80; border-radius: 6px; font-weight: 700; font-size: 0.72rem; cursor: pointer;" title="Mark all messages as read for this customer">✓ Mark All Read</button>
                 <button onclick="closeCustomerCommsHistoryModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
             </div>

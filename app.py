@@ -6692,6 +6692,45 @@ async def get_recent_inbound_communications(request: Request):
     except Exception as e:
         print(f"Error fetching recent communications: {e}")
         return {"communications": []}
+@app.get("/api/communications/all-inbound")
+async def get_all_inbound_communications(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT c.*, cust.legal_name, cust.custumer_number
+                FROM customer_communications c
+                LEFT JOIN customer cust ON c.customer_id = cust.id
+                WHERE c.direction = 'INBOUND'
+                ORDER BY c.created_at DESC
+                LIMIT 50;
+            """)
+            records = cur.fetchall()
+
+            history = []
+            for r in records:
+                row = dict(r)
+                if row.get("created_at"):
+                    val = row["created_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["created_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+                if row.get("read_at"):
+                    val = row["read_at"]
+                    if isinstance(val, datetime.datetime) and val.tzinfo is None:
+                        val = val.replace(tzinfo=datetime.timezone.utc)
+                    row["read_at"] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+                history.append(row)
+
+            return {"communications": history}
+    except Exception as e:
+        print(f"Error fetching all inbound communications: {e}")
+        return {"communications": []}
     finally:
         if conn:
             conn.close()
