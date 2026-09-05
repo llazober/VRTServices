@@ -1031,10 +1031,14 @@
                         <p style="color: var(--text-muted); font-size: 0.95rem;">
                             View, add, edit, and delete customer accounts, tax IDs, contact information, and statuses.
                         </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button onclick="openCatchallInboxModal()" style="padding: 12px 20px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border-radius: 14px; cursor: pointer; transition: all 0.2s ease;" title="View all general/unassigned emails (CUST-0000)">
+                            📭 Unassigned / Catch-All Inbox
+                        </button>
+                        <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
+                            ➕ Add New Customer
+                        </button>
                     </div>
-                    <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
-                        ➕ Add New Customer
-                    </button>
                 </div>
 
                 <!-- Page Add/Edit Customer Form -->

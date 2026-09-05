@@ -169,11 +169,11 @@ def parse_clean_email(email_str: str) -> str:
     return s
 
 def is_blocked_email(email_str: str) -> bool:
-    """Check if email address is blocked (e.g. luislazober or gmail.com)."""
+    """Check if email address is a system bot / daemon (do not block valid customer email domains)."""
     if not email_str:
         return True
-    low = email_str.lower()
-    return "luislazober" in low or "gmail.com" in low
+    low = str(email_str).lower().strip()
+    return "no-reply@" in low or "noreply@" in low or "mailer-daemon@" in low
 
 def get_resend_to_email() -> str:
     """Fetch target recipient email for system/support alerts, automatically redirecting any gmail inputs to 2nd reply-to email or datalazo."""
