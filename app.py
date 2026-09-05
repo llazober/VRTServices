@@ -7329,6 +7329,74 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         # Thread-safe atomic execution block to prevent race conditions from concurrent webhook requests
         async with INBOUND_WEBHOOK_LOCK:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # ── Customer Resolution (Tier 1, Tier 2, Tier 2.5, Tier 3 Catch-All) ──
+                cust = None
+
+                # Tier 1: Match by Customer ID candidate in subject or body
+                for cand in cust_candidates:
+                    raw_digits = re.sub(r'[^\d]', '', cand)
+                    clean_cust = f"CUST-{raw_digits}" if raw_digits else cand
+                    cur.execute("""
+                        SELECT id, legal_name, parent_name, customer_type FROM customer 
+                        WHERE custumer_number ILIKE %s 
+                           OR custumer_number ILIKE %s
+                           OR (LENGTH(%s) > 0 AND custumer_number ILIKE %s)
+                           OR (LENGTH(%s) > 0 AND regexp_replace(custumer_number, '[^0-9]', '', 'g') = %s)
+                           OR (LENGTH(%s) > 0 AND id::text = %s);
+                    """, (cand, clean_cust, raw_digits, f"%{raw_digits}%", raw_digits, raw_digits, raw_digits, raw_digits))
+                    found = cur.fetchone()
+                    if found:
+                        cust = found
+                        print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                        break
+
+                # Tier 2: Match by Sender Email address if Tier 1 yielded no match
+                if not cust and sender_email:
+                    cur.execute("""
+                        SELECT id, legal_name, parent_name, customer_type FROM customer 
+                        WHERE LOWER(email) = LOWER(%s) OR LOWER(billing_email) = LOWER(%s)
+                        LIMIT 1;
+                    """, (sender_email, sender_email))
+                    cust = cur.fetchone()
+                    if cust:
+                        print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by sender email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+
+                # Tier 2.5: Match ClientUser email
+                if not cust and sender_email:
+                    cur.execute("""
+                        SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
+                        FROM "ClientUser" u
+                        JOIN customer c ON u."customerId" = c.id
+                        WHERE LOWER(u.email) = LOWER(%s)
+                        LIMIT 1;
+                    """, (sender_email,))
+                    cust = cur.fetchone()
+                    if cust:
+                        print(f"[RESEND INBOUND ROUTING] Tier 2.5 SUCCESS match ClientUser email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+
+                # Tier 3: Default Catch-All Customer (CUST-0000)
+                if not cust:
+                    cur.execute("""
+                        SELECT id, legal_name, parent_name, customer_type FROM customer 
+                        WHERE custumer_number = 'CUST-0000' OR legal_name ILIKE '%Catch-All%' OR legal_name ILIKE '%Unassigned%'
+                        ORDER BY id ASC LIMIT 1;
+                    """)
+                    cust = cur.fetchone()
+                    if cust:
+                        print(f"[RESEND INBOUND ROUTING] Tier 3 Catch-All fallback -> Customer #{cust['id']} ({cust['legal_name']})")
+                    else:
+                        cur.execute("""
+                            INSERT INTO customer (custumer_number, legal_name, parent_name, customer_type, status, created_at)
+                            VALUES ('CUST-0000', 'Unassigned / General Communications', 'VRT Services', 'BUSINESS', 'ACTIVE', CURRENT_TIMESTAMP)
+                            RETURNING id, legal_name, parent_name, customer_type;
+                        """)
+                        cust = cur.fetchone()
+                        conn.commit()
+
+                customer_id = cust["id"] if cust else None
+                legal_name = cust.get("legal_name", "Unknown Customer") if cust else "Unknown Customer"
+                parent_name = cust.get("parent_name", "VRT Services") if cust else "VRT Services"
+
                 # ── Robust Deduplication Check ──
                 clean_eid = str(email_id).strip() if email_id and len(str(email_id).strip()) > 3 else None
                 safe_sender = (sender_email or "").strip()
@@ -7359,31 +7427,33 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                     if debug_log_id:
                         cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
                         conn.commit()
-            init_atts = [{"email_id": str(email_id)}] if email_id else []
-            final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
-            safe_sender = (sender_email or "")[:199]
-            safe_recipient = (recipient_email or "")[:199]
-            safe_subject = (subject or "")[:299]
+                    return {"status": "ignored", "reason": "Duplicate email"}
 
-            cur.execute("""
-                INSERT INTO customer_communications (
-                    customer_id, direction, sender_email, recipient_email,
-                    subject, body_text, attachments_json, status, is_read, created_at
-                ) VALUES (
-                    %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
-                ) RETURNING id;
-            """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
+                init_atts = [{"email_id": str(email_id)}] if email_id else []
+                final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
+                safe_sender = (sender_email or "")[:199]
+                safe_recipient = (recipient_email or "")[:199]
+                safe_subject = (subject or "")[:299]
 
-            comm_row = cur.fetchone()
-            comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
-
-            # Update webhook_debug_log status to SUCCESS in PostgreSQL
-            if debug_log_id:
                 cur.execute("""
-                    UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
-                """, (customer_id, debug_log_id))
-            conn.commit()
-            print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
+                    INSERT INTO customer_communications (
+                        customer_id, direction, sender_email, recipient_email,
+                        subject, body_text, attachments_json, status, is_read, created_at
+                    ) VALUES (
+                        %s, 'INBOUND', %s, %s, %s, %s, %s, 'UNREAD', FALSE, CURRENT_TIMESTAMP
+                    ) RETURNING id;
+                """, (customer_id, safe_sender, safe_recipient, safe_subject, final_body, json.dumps(init_atts, default=str)))
+
+                comm_row = cur.fetchone()
+                comm_id = comm_row["id"] if isinstance(comm_row, dict) else (comm_row[0] if comm_row else None)
+
+                # Update webhook_debug_log status to SUCCESS in PostgreSQL
+                if debug_log_id:
+                    cur.execute("""
+                        UPDATE webhook_debug_log SET status = 'SUCCESS', customer_id = %s WHERE id = %s;
+                    """, (customer_id, debug_log_id))
+                conn.commit()
+                print(f"[RESEND INBOUND WEBHOOK] ✅ SUCCESS saved comm_id={comm_id} to customer '{legal_name}' (ID: {customer_id})")
 
         LAST_INBOUND_DEBUG = {
             "received_at": str(datetime.datetime.now()),
@@ -7514,7 +7584,7 @@ async def health_check():
     
     return {
         "status": overall_status,
-        "app_version": "v1.3.1-inbound-email-alert-disabled-2026-09-05",
+        "app_version": "v1.3.2-inbound-routing-cursor-fix-2026-09-05",
         "google_vision": {
             "status": google_status,
             "detail": google_detail,
