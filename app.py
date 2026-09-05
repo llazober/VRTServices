@@ -5536,18 +5536,27 @@ async def create_manual_invoice(request: Request):
         if conn: conn.close()
 
 @app.post("/api/billing/invoices/{invoice_id}/send")
-async def send_invoice_email(invoice_id: int):
+async def send_invoice_email(invoice_id: str):
     """Sends or resends an invoice to customer via Resend API."""
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT i.*, c.legal_name, c.custumer_number, c.email
-                FROM customer_invoices i
-                JOIN customer c ON i.customer_id = c.id
-                WHERE i.id = %s;
-            """, (invoice_id,))
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                cur.execute("""
+                    SELECT i.*, c.legal_name, c.custumer_number, c.email
+                    FROM customer_invoices i
+                    JOIN customer c ON i.customer_id = c.id
+                    WHERE i.id = %s OR i.invoice_number = %s;
+                """, (int(inv_str), inv_str))
+            else:
+                cur.execute("""
+                    SELECT i.*, c.legal_name, c.custumer_number, c.email
+                    FROM customer_invoices i
+                    JOIN customer c ON i.customer_id = c.id
+                    WHERE i.invoice_number = %s;
+                """, (inv_str,))
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Invoice not found.")
@@ -5558,7 +5567,7 @@ async def send_invoice_email(invoice_id: int):
 
             resend_key = os.environ.get("RESEND_API_KEY")
             if not resend_key:
-                raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured.")
+                raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured in environment variables.")
 
             html_body = format_invoice_email_html(inv_dict, cust_dict)
             email_payload = {
@@ -5575,17 +5584,19 @@ async def send_invoice_email(invoice_id: int):
                 method="POST"
             )
             with urllib.request.urlopen(req) as _:
-                cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (invoice_id,))
+                cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (row["id"],))
                 conn.commit()
 
             return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.post("/api/billing/invoices/{invoice_id}/status")
-async def update_invoice_status(invoice_id: int, request: Request):
+async def update_invoice_status(invoice_id: str, request: Request):
     """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes."""
     payload = await request.json()
     new_status = (payload.get("status") or "PAID").upper()
@@ -5600,53 +5611,80 @@ async def update_invoice_status(invoice_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                where_clause = "WHERE id = %s OR invoice_number = %s"
+                params_paid = (new_status, payment_method, transaction_ref, notes, int(inv_str), inv_str)
+                params_other = (new_status, notes, int(inv_str), inv_str)
+            else:
+                where_clause = "WHERE invoice_number = %s"
+                params_paid = (new_status, payment_method, transaction_ref, notes, inv_str)
+                params_other = (new_status, notes, inv_str)
+
             if new_status == "PAID":
-                cur.execute("""
+                cur.execute(f"""
                     UPDATE customer_invoices 
                     SET status = %s, paid_at = CURRENT_TIMESTAMP, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s;
-                """, (new_status, payment_method, transaction_ref, notes, invoice_id))
+                    {where_clause};
+                """, params_paid)
             else:
-                cur.execute("""
+                cur.execute(f"""
                     UPDATE customer_invoices 
                     SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s;
-                """, (new_status, notes, invoice_id))
+                    {where_clause};
+                """, params_other)
             conn.commit()
             return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.delete("/api/billing/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: int):
+async def delete_invoice(invoice_id: str):
     """Deletes an invoice record."""
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM customer_invoices WHERE id = %s;", (invoice_id,))
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                cur.execute("DELETE FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+            else:
+                cur.execute("DELETE FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
             conn.commit()
             return {"status": "success", "message": f"Invoice #{invoice_id} deleted."}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.get("/api/billing/invoices/{invoice_id}/view", response_class=HTMLResponse)
-async def view_invoice_html(invoice_id: int):
+async def view_invoice_html(invoice_id: str):
     """Renders standalone HTML printable invoice page."""
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT i.*, c.legal_name, c.custumer_number, c.email
-                FROM customer_invoices i
-                JOIN customer c ON i.customer_id = c.id
-                WHERE i.id = %s;
-            """, (invoice_id,))
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                cur.execute("""
+                    SELECT i.*, c.legal_name, c.custumer_number, c.email
+                    FROM customer_invoices i
+                    JOIN customer c ON i.customer_id = c.id
+                    WHERE i.id = %s OR i.invoice_number = %s;
+                """, (int(inv_str), inv_str))
+            else:
+                cur.execute("""
+                    SELECT i.*, c.legal_name, c.custumer_number, c.email
+                    FROM customer_invoices i
+                    JOIN customer c ON i.customer_id = c.id
+                    WHERE i.invoice_number = %s;
+                """, (inv_str,))
             row = cur.fetchone()
             if not row:
                 return HTMLResponse("<h2>Invoice not found</h2>", status_code=404)

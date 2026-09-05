@@ -2628,8 +2628,14 @@
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
-                    const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to send invoice email.", "error");
+                    let errorMsg = "Failed to send invoice email.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error sending email.", "error");
@@ -2648,8 +2654,14 @@
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
-                    const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to update status.", "error");
+                    let errorMsg = "Failed to update status.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error updating status.", "error");
@@ -2696,8 +2708,14 @@
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
-                    const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to delete invoice.", "error");
+                    let errorMsg = "Failed to delete invoice.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error deleting invoice.", "error");
@@ -2714,8 +2732,14 @@
                     loadBillingOverview();
                     loadBillingSchedules();
                 } else {
-                    const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to delete schedule.", "error");
+                    let errorMsg = "Failed to delete schedule.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error deleting schedule.", "error");
