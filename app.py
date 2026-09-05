@@ -7539,6 +7539,7 @@ async def health_check():
     
     return {
         "status": overall_status,
+        "app_version": "v1.2.9-gmail-blocked-2026-09-05",
         "google_vision": {
             "status": google_status,
             "detail": google_detail,
