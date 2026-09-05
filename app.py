@@ -224,13 +224,27 @@ def get_resend_reply_to_email() -> str:
     res_list = parse_reply_to_list(val)
     return ", ".join(res_list)
 
-def get_second_reply_to_email() -> str:
-    """Fetch the second email address from get_resend_reply_to_email(), falling back to luislazo@datalazo.net."""
-    full_str = get_resend_reply_to_email()
-    res_list = parse_reply_to_list(full_str)
-    if len(res_list) >= 2:
+def get_second_reply_to_email() -> str | None:
+    """
+    Strictly inspect RESEND_REPLY_TO_EMAIL.
+    Returns the second email address if 2 or more addresses are found in RESEND_REPLY_TO_EMAIL.
+    If no second address is found, returns None (do NOT send any email).
+    """
+    raw_val = (
+        os.environ.get("RESEND_REPLY_TO_EMAIL") or
+        os.environ.get("RESEND_REPLY_TO") or
+        os.environ.get("REPLY_TO_EMAIL") or
+        os.environ.get("REPLY_TO") or
+        os.environ.get("resend_reply_to_email") or
+        os.environ.get("resend_reply_to-email") or
+        os.environ.get("RESEND_REPLY_TO-EMAIL") or ""
+    )
+    if not raw_val:
+        return None
+    res_list = parse_reply_to_list(raw_val)
+    if len(res_list) >= 2 and res_list[1]:
         return res_list[1]
-    return "luislazo@datalazo.net"
+    return None
 
 # Session tracking:
 # valid_sessions: token -> {"username": str}
@@ -5432,7 +5446,7 @@ async def create_manual_invoice(request: Request):
                     email_payload = {
                         "from": format_resend_from_header("VRT Services Billing"),
                         "to": [cust_email],
-                        "reply_to": get_second_reply_to_email(),
+                        "reply_to": get_resend_reply_to_email(),
                         "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
                         "html": html_body
                     }
@@ -5484,7 +5498,7 @@ async def send_invoice_email(invoice_id: int):
             email_payload = {
                 "from": format_resend_from_header("VRT Services Billing"),
                 "to": [cust_email],
-                "reply_to": get_second_reply_to_email(),
+                "reply_to": get_resend_reply_to_email(),
                 "subject": f"Invoice #{inv_dict['invoice_number']} from VRT Services (${float(inv_dict['total_amount']):,.2f} USD)",
                 "html": html_body
             }
@@ -5634,7 +5648,7 @@ def run_daily_billing_job():
                         email_payload = {
                             "from": format_resend_from_header("VRT Services Billing"),
                             "to": [cust_email],
-                            "reply_to": get_second_reply_to_email(),
+                            "reply_to": get_resend_reply_to_email(),
                             "subject": f"Invoice #{inv_number} from VRT Services (${amount:,.2f} USD)",
                             "html": html_body
                         }
