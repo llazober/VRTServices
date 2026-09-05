@@ -7109,42 +7109,10 @@ def process_inbound_post_processing(
     except Exception as e_s3:
         print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
 
-    # 3. Non-blocking Team Email Alert
-    try:
-        _alert_key = os.environ.get("RESEND_API_KEY")
-        env_reply_to = os.environ.get("RESEND_REPLY_TO_EMAIL") or os.environ.get("RESEND_REPLY_TO") or "NOT_SET"
-        team_email = get_second_reply_to_email()
-        print(f"[CRM INBOUND ALERT DIAGNOSTIC] Raw RESEND_REPLY_TO_EMAIL env: '{env_reply_to}' -> Evaluated team_email: '{team_email}'")
-        if _alert_key and team_email:
-            att_note = f"\n\n📎 {len(saved_attachments)} Attachment(s) Saved!" if saved_attachments else ""
-            alert_payload = {
-                "from": format_resend_from_header(f"{parent_name or 'VRT Services'} CRM Alerts"),
-                "to": [team_email],
-                "subject": f"📩 New Reply Received: {legal_name} - {subject}",
-                "html": f"""
-                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #7f00ff; border-radius: 12px; background: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #38bdf8; margin-top: 0;">📩 New Customer Email Reply Received</h2>
-                    <p><strong>Customer:</strong> {legal_name} (ID: {customer_id})</p>
-                    <p><strong>From:</strong> {sender_email}</p>
-                    <p><strong>Subject:</strong> {subject}</p>
-                    <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; margin: 16px 0; border-left: 4px solid #38bdf8; color: #e2e8f0;">
-                        {body_text[:800] if body_text else '(no body)'}
-                    </div>
-                    {f'<p style="color: #34d399;"><strong>{att_note}</strong></p>' if saved_attachments else ''}
-                </div>
-                """
-            }
-            alert_req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=json.dumps(alert_payload, default=str).encode("utf-8"),
-                headers={"Authorization": f"Bearer {_alert_key.strip()}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                method="POST"
-            )
-            with urllib.request.urlopen(alert_req) as resp_alert:
-                alert_res = resp_alert.read().decode("utf-8")
-                print(f"[TEAM ALERT SENT SUCCESS] to {team_email}: {alert_res}")
-    except Exception as e_alert:
-        print(f"[TEAM ALERT ERROR] {e_alert}")
+    # 3. Non-blocking Team Email Alert (DISABLED FOR ISOLATION TESTING)
+    # To test if incoming email alerts to luislazober@gmail.com are coming from Cloudflare / Resend domain routing,
+    # app.py email alert sending is completely disabled below.
+    print("[CRM INBOUND ALERT DISABLED] app.py will NOT send any email alert for this inbound message.")
 
 INBOUND_WEBHOOK_LOCK = asyncio.Lock()
 
