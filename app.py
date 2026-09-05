@@ -7620,16 +7620,49 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                         print(f"[RESEND INBOUND ROUTING] Tier 1 SUCCESS match for '{cand}' -> Customer #{cust['id']} ({cust['legal_name']})")
                         break
 
-                # Tier 2: Match by Sender Email address if Tier 1 yielded no match
-                if not cust and sender_email:
-                    cur.execute("""
-                        SELECT id, legal_name, parent_name, customer_type FROM customer 
-                        WHERE LOWER(email) = LOWER(%s) OR LOWER(billing_email) = LOWER(%s)
-                        LIMIT 1;
-                    """, (sender_email, sender_email))
-                    cust = cur.fetchone()
-                    if cust:
-                        print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by sender email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                # Tier 1.2: Match by Invoice Number in subject or body text (e.g. "INV-2026-1001", "INV-1001", "#INV-2026-1001")
+                if not cust:
+                    inv_matches = re.findall(r'\b(INV[-_\s]*[A-Z0-9-_]+)\b', subject + " " + body_text, re.IGNORECASE)
+                    inv_num_matches = re.findall(r'#?\s*(INV[-_\s]*\d{2,6}[-_\s]*\d{1,6}|\d{4,8})', subject + " " + body_text, re.IGNORECASE)
+                    all_inv_cands = list(dict.fromkeys(inv_matches + inv_num_matches))
+                    for inv_cand in all_inv_cands:
+                        clean_inv = inv_cand.strip()
+                        if len(clean_inv) < 3:
+                            continue
+                        cur.execute("""
+                            SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
+                            FROM customer_invoices i
+                            JOIN customer c ON i.customer_id = c.id
+                            WHERE i.invoice_number ILIKE %s 
+                               OR i.invoice_number ILIKE %s
+                               OR (LENGTH(%s) > 3 AND regexp_replace(i.invoice_number, '[^A-Za-z0-9]', '', 'g') ILIKE %s)
+                            LIMIT 1;
+                        """, (clean_inv, f"%{clean_inv}%", clean_inv, f"%{re.sub(r'[^A-Za-z0-9]', '', clean_inv)}%"))
+                        found_inv = cur.fetchone()
+                        if found_inv:
+                            cust = found_inv
+                            print(f"[RESEND INBOUND ROUTING] Tier 1.2 SUCCESS match by invoice number '{clean_inv}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                            break
+
+                # Tier 2: Match by Sender Email or Recipient Email address in customer table & customer_invoices
+                if not cust and (sender_email or recipient_email):
+                    search_emails = [e for e in [sender_email, recipient_email] if e and "@" in e]
+                    for s_email in search_emails:
+                        cur.execute("""
+                            SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
+                            FROM customer c
+                            LEFT JOIN customer_invoices i ON i.customer_id = c.id
+                            WHERE LOWER(c.email) = LOWER(%s) 
+                               OR LOWER(c.billing_email) = LOWER(%s)
+                               OR LOWER(i.email) = LOWER(%s)
+                            ORDER BY c.id DESC
+                            LIMIT 1;
+                        """, (s_email, s_email, s_email))
+                        found_email_cust = cur.fetchone()
+                        if found_email_cust:
+                            cust = found_email_cust
+                            print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by email '{s_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                            break
 
                 # Tier 2.5: Match ClientUser email
                 if not cust and sender_email:
