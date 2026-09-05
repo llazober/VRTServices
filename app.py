@@ -2166,6 +2166,21 @@ async def read_knowledge_page(request: Request, msg: str = "", error: str = ""):
         context=ctx
     )
 
+@app.get("/billing", response_class=HTMLResponse)
+@app.get("/invoices", response_class=HTMLResponse)
+async def read_billing_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "billing"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
 async def portal_verify_customer(request: Request, customer_id: str = "", email: str = ""):

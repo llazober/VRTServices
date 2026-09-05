@@ -895,6 +895,16 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #00f2fe, #4facfe);">AI</span>
             </a>
 
+            <a href="/billing" class="nav-item {% if active_tab == 'billing' %}active{% endif %}" title="Billing & Invoicing">
+                <div class="icon-box" style="color: #4ade80;">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
+                    </svg>
+                </div>
+                <span class="nav-text">Billing & Invoices</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #4ade80, #22c55e); color: #000;">MRR</span>
+            </a>
+
             <div class="nav-label" style="margin-top: 14px;">Management & Tools</div>
 
             <button class="nav-item" onclick="openCoaModal()" id="openCoaModalBtn" title="Chart of Accounts">
@@ -949,7 +959,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -1192,6 +1202,137 @@
                             <button onclick="sendPageKbAiQuery()" style="padding: 8px 14px; background: #38bdf8; color: #000; border: none; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">Ask</button>
                         </div>
                     </div>
+                </div>
+            </div>
+            {% elif active_tab == 'billing' %}
+            <!-- ── DEDICATED BILLING & RECURRING INVOICING VIEW ─────────────────── -->
+            <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+                <!-- Billing Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                    <div>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 6px;">
+                            💳 Billing & <span style="color: #4ade80;">Recurring Invoicing</span>
+                        </h2>
+                        <p style="color: var(--text-muted); font-size: 0.95rem;">
+                            Manage recurring billing schedules, dispatch client invoices via Resend email, and track financial performance.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <button onclick="triggerDailyBillingJob()" style="padding: 10px 16px; background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.4); color: #facc15; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; border-radius: 12px; cursor: pointer; transition: all 0.2s ease;" title="Run automated billing job manually for today's date">
+                            ⚡ Run Daily Scheduler
+                        </button>
+                        <button onclick="openCreateScheduleModal()" style="padding: 10px 18px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; border-radius: 12px; cursor: pointer; transition: all 0.2s ease;">
+                            ➕ New Schedule
+                        </button>
+                        <button onclick="openCreateInvoiceModal()" style="padding: 10px 20px; background: linear-gradient(135deg, #4ade80, #22c55e); color: #000; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 222, 128, 0.35); transition: all 0.2s ease;">
+                            ➕ Create Invoice
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Executive Financial KPI Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 18px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Monthly Recurring Revenue</span>
+                            <span style="font-size: 1.4rem;">📈</span>
+                        </div>
+                        <div id="billingKpiMrr" style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #38bdf8;">$0.00 <span style="font-size: 0.85rem; color: #94a3b8; font-weight: 400;">/ mo</span></div>
+                        <span style="font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block;">Active recurring monthly fee agreements</span>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 18px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Active Subscribers</span>
+                            <span style="font-size: 1.4rem;">👥</span>
+                        </div>
+                        <div id="billingKpiSubscribers" style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #c084fc;">0</div>
+                        <span style="font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block;">Clients with auto-recurring schedules</span>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 18px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Total Collected</span>
+                            <span style="font-size: 1.4rem;">💰</span>
+                        </div>
+                        <div id="billingKpiCollected" style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #4ade80;">$0.00</div>
+                        <span style="font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block;">Settled & paid client invoices</span>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 18px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Outstanding Balance</span>
+                            <span style="font-size: 1.4rem;">⏳</span>
+                        </div>
+                        <div id="billingKpiOutstanding" style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #facc15;">$0.00</div>
+                        <span style="font-size: 0.75rem; color: #64748b; margin-top: 4px; display: block;">Pending & sent invoices awaiting payment</span>
+                    </div>
+                </div>
+
+                <!-- Sub-Navigation Filter Tabs & Search Bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 10px;">
+                    <div style="display: flex; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 4px;">
+                        <button id="billingTabBtnInvoices" onclick="switchBillingSubTab('invoices')" style="padding: 8px 18px; border: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: var(--primary-grad); color: #fff; transition: all 0.2s ease;">
+                            🧾 Invoices (<span id="billingInvoicesCount">0</span>)
+                        </button>
+                        <button id="billingTabBtnSchedules" onclick="switchBillingSubTab('schedules')" style="padding: 8px 18px; border: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: transparent; color: #94a3b8; transition: all 0.2s ease;">
+                            🔄 Recurring Schedules (<span id="billingSchedulesCount">0</span>)
+                        </button>
+                    </div>
+
+                    <!-- Status Filter Dropdown & Search -->
+                    <div id="billingInvoiceFilters" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <select id="billingStatusFilterSelect" onchange="loadBillingInvoices()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #fff; outline: none;">
+                            <option value="ALL">All Statuses</option>
+                            <option value="SENT">SENT (Pending Payment)</option>
+                            <option value="PAID">PAID (Settled)</option>
+                            <option value="DRAFT">DRAFT</option>
+                            <option value="CANCELLED">CANCELLED</option>
+                        </select>
+                        <input type="text" id="billingSearchInput" onkeyup="filterBillingTable()" placeholder="Search invoice # or client..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #fff; outline: none; width: 220px;">
+                    </div>
+                </div>
+
+                <!-- Invoices Table View -->
+                <div id="billingInvoicesSection" style="display: block; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                        <thead>
+                            <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <th style="padding: 14px 18px;">Invoice #</th>
+                                <th style="padding: 14px 18px;">Client / Organization</th>
+                                <th style="padding: 14px 18px;">Issue Date</th>
+                                <th style="padding: 14px 18px;">Due Date</th>
+                                <th style="padding: 14px 18px;">Description</th>
+                                <th style="padding: 14px 18px;">Amount</th>
+                                <th style="padding: 14px 18px;">Status</th>
+                                <th style="padding: 14px 18px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="billingInvoicesTableBody">
+                            <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading invoices...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Recurring Schedules Table View -->
+                <div id="billingSchedulesSection" style="display: none; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                        <thead>
+                            <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <th style="padding: 14px 18px;">Client / Organization</th>
+                                <th style="padding: 14px 18px;">Monthly Amount</th>
+                                <th style="padding: 14px 18px;">Billing Day</th>
+                                <th style="padding: 14px 18px;">Terms</th>
+                                <th style="padding: 14px 18px;">Auto-Send Email</th>
+                                <th style="padding: 14px 18px;">Last Billed</th>
+                                <th style="padding: 14px 18px;">Status</th>
+                                <th style="padding: 14px 18px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="billingSchedulesTableBody">
+                            <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading schedules...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
             {% else %}
@@ -1637,6 +1778,124 @@
         </div>
     </div>
 
+    <!-- ── BILLING MODALS ─────────────────────────────────────────── -->
+    <!-- Create Recurring Schedule Modal -->
+    <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+        <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingScheduleModalContent">
+            <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
+                    🔄 New Recurring Billing Schedule
+                </h3>
+                <button onclick="closeCreateScheduleModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
+            </div>
+            <form onsubmit="submitCreateSchedule(event)" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Select Client / Customer *</label>
+                    <select id="scheduleCustomerSelect" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                        <option value="">Loading customers...</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Monthly Fee ($ USD) *</label>
+                        <input type="number" step="0.01" min="0.01" id="scheduleAmountInput" required placeholder="e.g. 350.00" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Billing Day of Month (1 - 31) *</label>
+                        <input type="number" min="1" max="31" id="scheduleDayInput" value="1" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description</label>
+                    <input type="text" id="scheduleDescInput" placeholder="e.g. Monthly Bookkeeping, Accounting & Tax Advisory Services" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Payment Terms</label>
+                        <select id="scheduleTermsSelect" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                            <option value="15">Net 15 Days</option>
+                            <option value="30" selected>Net 30 Days</option>
+                            <option value="7">Net 7 Days</option>
+                            <option value="0">Due Upon Receipt</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; padding-bottom: 8px;">
+                            <input type="checkbox" id="scheduleAutoSendCheck" checked style="width: 18px; height: 18px; accent-color: #c084fc;">
+                            Auto-Send Resend Email
+                        </label>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
+                    <button type="button" onclick="closeCreateScheduleModal()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="padding: 10px 24px; background: linear-gradient(135deg, #c084fc, #9333ea); color: #fff; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(192, 132, 252, 0.35);">Create Schedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Manual Invoice Modal -->
+    <div id="billingInvoiceModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+        <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingInvoiceModalContent">
+            <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
+                    🧾 Create Manual Client Invoice
+                </h3>
+                <button onclick="closeCreateInvoiceModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
+            </div>
+            <form onsubmit="submitCreateInvoice(event)" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Select Client / Customer *</label>
+                    <select id="invoiceCustomerSelect" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                        <option value="">Loading customers...</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Total Amount ($ USD) *</label>
+                        <input type="number" step="0.01" min="0.01" id="invoiceAmountInput" required placeholder="e.g. 500.00" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Payment Due Date *</label>
+                        <input type="date" id="invoiceDueDateInput" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description *</label>
+                    <input type="text" id="invoiceDescInput" required placeholder="e.g. Tax Return Preparation & Annual E-Filing Authorization" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                </div>
+                <div>
+                    <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; padding: 6px 0;">
+                        <input type="checkbox" id="invoiceSendNowCheck" checked style="width: 18px; height: 18px; accent-color: #4ade80;">
+                        Send Invoice Email Immediately via Resend API
+                    </label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
+                    <button type="button" onclick="closeCreateInvoiceModal()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="padding: 10px 24px; background: linear-gradient(135deg, #4ade80, #22c55e); color: #000; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 222, 128, 0.35);">Generate Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View / Print HTML Invoice Modal -->
+    <div id="billingInvoiceViewModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+        <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 750px; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;">
+            <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    📄 <span id="invoiceViewTitleText">Invoice Preview</span>
+                </h3>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="invoiceViewPrintBtn" onclick="printInvoiceFrame()" style="padding: 6px 14px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer;">🖨️ Print / PDF</button>
+                    <button onclick="closeInvoiceViewModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
+                </div>
+            </div>
+            <div style="flex: 1; padding: 12px; background: #0f172a; overflow: hidden;">
+                <iframe id="invoiceViewIframe" style="width: 100%; height: 100%; border: none; border-radius: 12px; background: #ffffff;"></iframe>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Alert Notification Modal -->
     <div id="customAlertModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px; animation: alertFadeIn 0.2s ease-out;">
         <div id="customAlertCard" style="background: #0d1322; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; max-width: 480px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(56, 189, 248, 0.12); color: #fff; overflow: hidden; animation: alertCardPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
@@ -1954,17 +2213,460 @@
 
             syncClientSelectDropdowns();
             loadWorkloadSummary();
+
+            if (window.location.pathname === '/billing' || '{{ active_tab }}' === 'billing') {
+                initBillingModule();
+            }
         });
 
         // --- Helper to close all open app modals ---
         function closeAllAppModals() {
-            ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal'].forEach(id => {
+            ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal', 'billingScheduleModal', 'billingInvoiceModal', 'billingInvoiceViewModal'].forEach(id => {
                 const modal = document.getElementById(id);
                 if (modal) {
                     modal.style.display = 'none';
                     modal.style.opacity = '0';
                 }
             });
+        }
+
+        // ── BILLING MODULE CONTROLLER ──────────────────────────────────────────
+        let billingAllInvoices = [];
+        let billingAllSchedules = [];
+        let billingActiveSubTab = 'invoices';
+
+        async function initBillingModule() {
+            console.log("[BILLING MODULE] Initializing Billing Dashboard...");
+            await Promise.all([
+                loadBillingOverview(),
+                loadBillingInvoices(),
+                loadBillingSchedules(),
+                populateBillingCustomerDropdowns()
+            ]);
+        }
+
+        async function loadBillingOverview() {
+            try {
+                const res = await fetch('/api/billing/overview');
+                if (res.ok) {
+                    const data = await res.json();
+                    const mrrElem = document.getElementById('billingKpiMrr');
+                    const subElem = document.getElementById('billingKpiSubscribers');
+                    const colElem = document.getElementById('billingKpiCollected');
+                    const outElem = document.getElementById('billingKpiOutstanding');
+
+                    if (mrrElem) mrrElem.innerHTML = `$${(data.mrr || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span style="font-size: 0.85rem; color: #94a3b8; font-weight: 400;">/ mo</span>`;
+                    if (subElem) subElem.innerText = data.active_subscribers || 0;
+                    if (colElem) colElem.innerText = `$${(data.total_collected || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    if (outElem) outElem.innerText = `$${(data.total_outstanding || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                }
+            } catch (err) {
+                console.error("[BILLING OVERVIEW ERROR]:", err);
+            }
+        }
+
+        async function populateBillingCustomerDropdowns() {
+            try {
+                const res = await fetch('/api/customers');
+                if (res.ok) {
+                    const data = await res.json();
+                    const customers = data.customers || [];
+                    const optionsHtml = '<option value="">-- Select Client / Customer --</option>' +
+                        customers.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || 'CUST-' + c.id})</option>`).join('');
+                    
+                    const schedSelect = document.getElementById('scheduleCustomerSelect');
+                    const invSelect = document.getElementById('invoiceCustomerSelect');
+                    if (schedSelect) schedSelect.innerHTML = optionsHtml;
+                    if (invSelect) invSelect.innerHTML = optionsHtml;
+                }
+            } catch (err) {
+                console.error("[BILLING CUSTOMER DROPDOWN ERROR]:", err);
+            }
+        }
+
+        function switchBillingSubTab(tabName) {
+            billingActiveSubTab = tabName;
+            const invBtn = document.getElementById('billingTabBtnInvoices');
+            const schedBtn = document.getElementById('billingTabBtnSchedules');
+            const invSec = document.getElementById('billingInvoicesSection');
+            const schedSec = document.getElementById('billingSchedulesSection');
+            const filters = document.getElementById('billingInvoiceFilters');
+
+            if (tabName === 'invoices') {
+                if (invBtn) { invBtn.style.background = 'var(--primary-grad)'; invBtn.style.color = '#fff'; }
+                if (schedBtn) { schedBtn.style.background = 'transparent'; schedBtn.style.color = '#94a3b8'; }
+                if (invSec) invSec.style.display = 'block';
+                if (schedSec) schedSec.style.display = 'none';
+                if (filters) filters.style.display = 'flex';
+            } else {
+                if (schedBtn) { schedBtn.style.background = 'linear-gradient(135deg, #c084fc, #9333ea)'; schedBtn.style.color = '#fff'; }
+                if (invBtn) { invBtn.style.background = 'transparent'; invBtn.style.color = '#94a3b8'; }
+                if (schedSec) schedSec.style.display = 'block';
+                if (invSec) invSec.style.display = 'none';
+                if (filters) filters.style.display = 'none';
+            }
+        }
+
+        async function loadBillingInvoices() {
+            const filterElem = document.getElementById('billingStatusFilterSelect');
+            const statusFilter = filterElem ? filterElem.value : 'ALL';
+            try {
+                const res = await fetch(`/api/billing/invoices?status=${statusFilter}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    billingAllInvoices = data.invoices || [];
+                    const cntElem = document.getElementById('billingInvoicesCount');
+                    if (cntElem) cntElem.innerText = billingAllInvoices.length;
+                    renderBillingInvoicesTable(billingAllInvoices);
+                }
+            } catch (err) {
+                console.error("[LOAD INVOICES ERROR]:", err);
+            }
+        }
+
+        function renderBillingInvoicesTable(invoices) {
+            const tbody = document.getElementById('billingInvoicesTableBody');
+            if (!tbody) return;
+
+            if (!invoices || invoices.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No invoices found. Click <strong>+ Create Invoice</strong> to generate one.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = invoices.map(inv => {
+                let badgeStyle = "background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);";
+                if (inv.status === 'PAID') badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
+                else if (inv.status === 'SENT') badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
+                else if (inv.status === 'OVERDUE') badgeStyle = "background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);";
+                else if (inv.status === 'CANCELLED') badgeStyle = "background: rgba(100, 116, 139, 0.2); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3);";
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 14px 18px; font-weight: 700; color: #38bdf8; font-family: monospace;">${inv.invoice_number}</td>
+                        <td style="padding: 14px 18px;">
+                            <strong style="color: #fff; display: block;">${inv.legal_name || 'Client #' + inv.customer_id}</strong>
+                            <span style="font-size: 0.78rem; color: #94a3b8;">${inv.email || ''}</span>
+                        </td>
+                        <td style="padding: 14px 18px; color: #cbd5e1;">${inv.issue_date || 'N/A'}</td>
+                        <td style="padding: 14px 18px; color: #f87171; font-weight: 600;">${inv.due_date || 'N/A'}</td>
+                        <td style="padding: 14px 18px; color: #94a3b8; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${inv.description || ''}</td>
+                        <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem;">$${parseFloat(inv.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td style="padding: 14px 18px;">
+                            <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${inv.status}</span>
+                        </td>
+                        <td style="padding: 14px 18px; text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <button onclick="viewInvoiceHtml(${inv.id}, '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
+                                ${inv.status !== 'PAID' ? `<button onclick="markInvoiceStatus(${inv.id}, 'PAID')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
+                                <button onclick="sendInvoiceEmail(${inv.id})" title="Send Resend Email to Client" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>
+                                <button onclick="deleteInvoice(${inv.id})" title="Delete Invoice" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadBillingSchedules() {
+            try {
+                const res = await fetch('/api/billing/schedules');
+                if (res.ok) {
+                    const data = await res.json();
+                    billingAllSchedules = data.schedules || [];
+                    const cntElem = document.getElementById('billingSchedulesCount');
+                    if (cntElem) cntElem.innerText = billingAllSchedules.length;
+                    renderBillingSchedulesTable(billingAllSchedules);
+                }
+            } catch (err) {
+                console.error("[LOAD SCHEDULES ERROR]:", err);
+            }
+        }
+
+        function renderBillingSchedulesTable(schedules) {
+            const tbody = document.getElementById('billingSchedulesTableBody');
+            if (!tbody) return;
+
+            if (!schedules || schedules.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No recurring billing schedules configured. Click <strong>+ New Schedule</strong> to create one.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = schedules.map(s => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 14px 18px;">
+                        <strong style="color: #fff; display: block;">${s.legal_name || 'Client #' + s.customer_id}</strong>
+                        <span style="font-size: 0.78rem; color: #94a3b8;">${s.custumer_number || ''}</span>
+                    </td>
+                    <td style="padding: 14px 18px; font-weight: 800; color: #c084fc; font-size: 0.95rem;">$${parseFloat(s.billing_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / mo</td>
+                    <td style="padding: 14px 18px; color: #38bdf8; font-weight: 700;">Day ${s.billing_day} of month</td>
+                    <td style="padding: 14px 18px; color: #cbd5e1;">Net ${s.payment_terms_days || 30} Days</td>
+                    <td style="padding: 14px 18px;">
+                        ${s.auto_send ? `<span style="color: #4ade80; font-weight: 700;">✓ Enabled</span>` : `<span style="color: #64748b;">Disabled</span>`}
+                    </td>
+                    <td style="padding: 14px 18px; color: #94a3b8;">${s.last_billed_at ? new Date(s.last_billed_at).toLocaleDateString() : 'Never'}</td>
+                    <td style="padding: 14px 18px;">
+                        <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
+                    </td>
+                    <td style="padding: 14px 18px; text-align: right;">
+                        <button onclick="deleteSchedule(${s.id})" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterBillingTable() {
+            const input = document.getElementById('billingSearchInput');
+            const query = (input ? input.value : '').toLowerCase().trim();
+            if (billingActiveSubTab === 'invoices') {
+                const filtered = billingAllInvoices.filter(inv => 
+                    (inv.invoice_number || '').toLowerCase().includes(query) ||
+                    (inv.legal_name || '').toLowerCase().includes(query) ||
+                    (inv.description || '').toLowerCase().includes(query)
+                );
+                renderBillingInvoicesTable(filtered);
+            } else {
+                const filtered = billingAllSchedules.filter(s => 
+                    (s.legal_name || '').toLowerCase().includes(query) ||
+                    (s.custumer_number || '').toLowerCase().includes(query) ||
+                    (s.description || '').toLowerCase().includes(query)
+                );
+                renderBillingSchedulesTable(filtered);
+            }
+        }
+
+        // --- Modals Control Functions ---
+        function openCreateScheduleModal() {
+            populateBillingCustomerDropdowns();
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                setTimeout(() => modal.style.opacity = '1', 10);
+            }
+        }
+
+        function closeCreateScheduleModal() {
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(() => modal.style.display = 'none', 300);
+            }
+        }
+
+        async function submitCreateSchedule(event) {
+            event.preventDefault();
+            const custVal = document.getElementById('scheduleCustomerSelect').value;
+            const amtVal = document.getElementById('scheduleAmountInput').value;
+            if (!custVal || !amtVal) {
+                showCustomAlert("Input Error", "Please select a client and enter a valid monthly fee.", "error");
+                return;
+            }
+
+            const payload = {
+                customer_id: parseInt(custVal),
+                billing_amount: parseFloat(amtVal),
+                billing_day: parseInt(document.getElementById('scheduleDayInput').value || '1'),
+                description: document.getElementById('scheduleDescInput').value || '',
+                payment_terms_days: parseInt(document.getElementById('scheduleTermsSelect').value || '30'),
+                auto_send: document.getElementById('scheduleAutoSendCheck').checked
+            };
+
+            try {
+                const res = await fetch('/api/billing/schedules', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    closeCreateScheduleModal();
+                    showCustomAlert("Success", "Recurring billing schedule created successfully!", "success");
+                    loadBillingOverview();
+                    loadBillingSchedules();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to create schedule.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error creating schedule.", "error");
+            }
+        }
+
+        function openCreateInvoiceModal() {
+            populateBillingCustomerDropdowns();
+            const modal = document.getElementById('billingInvoiceModal');
+            if (modal) {
+                const defaultDue = new Date();
+                defaultDue.setDate(defaultDue.getDate() + 15);
+                const dueElem = document.getElementById('invoiceDueDateInput');
+                if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
+                modal.style.display = 'flex';
+                setTimeout(() => modal.style.opacity = '1', 10);
+            }
+        }
+
+        function closeCreateInvoiceModal() {
+            const modal = document.getElementById('billingInvoiceModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(() => modal.style.display = 'none', 300);
+            }
+        }
+
+        async function submitCreateInvoice(event) {
+            event.preventDefault();
+            const custVal = document.getElementById('invoiceCustomerSelect').value;
+            const amtVal = document.getElementById('invoiceAmountInput').value;
+            if (!custVal || !amtVal) {
+                showCustomAlert("Input Error", "Please select a client and enter a valid total amount.", "error");
+                return;
+            }
+
+            const payload = {
+                customer_id: parseInt(custVal),
+                amount: parseFloat(amtVal),
+                due_date: document.getElementById('invoiceDueDateInput').value,
+                description: document.getElementById('invoiceDescInput').value || '',
+                send_now: document.getElementById('invoiceSendNowCheck').checked
+            };
+
+            try {
+                const res = await fetch('/api/billing/invoices', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    closeCreateInvoiceModal();
+                    showCustomAlert("Success", `Invoice #${data.invoice_number} created successfully!`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to create invoice.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error creating invoice.", "error");
+            }
+        }
+
+        async function sendInvoiceEmail(invoiceId) {
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/send`, {method: 'POST'});
+                if (res.ok) {
+                    const data = await res.json();
+                    showCustomAlert("Email Sent", data.message || "Invoice email sent successfully via Resend!", "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to send invoice email.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error sending email.", "error");
+            }
+        }
+
+        async function markInvoiceStatus(invoiceId, newStatus) {
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status: newStatus})
+                });
+                if (res.ok) {
+                    showCustomAlert("Updated", `Invoice status set to ${newStatus}!`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to update status.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error updating status.", "error");
+            }
+        }
+
+        function viewInvoiceHtml(invoiceId, invoiceNumber) {
+            const modal = document.getElementById('billingInvoiceViewModal');
+            const iframe = document.getElementById('invoiceViewIframe');
+            const titleElem = document.getElementById('invoiceViewTitleText');
+            if (titleElem) titleElem.innerText = `Invoice Preview (${invoiceNumber})`;
+            if (iframe) iframe.src = `/api/billing/invoices/${invoiceId}/view`;
+            if (modal) {
+                modal.style.display = 'flex';
+                setTimeout(() => modal.style.opacity = '1', 10);
+            }
+        }
+
+        function closeInvoiceViewModal() {
+            const modal = document.getElementById('billingInvoiceViewModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(() => modal.style.display = 'none', 300);
+            }
+        }
+
+        function printInvoiceFrame() {
+            const iframe = document.getElementById('invoiceViewIframe');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            }
+        }
+
+        async function deleteInvoice(invoiceId) {
+            showCustomConfirm("Delete Invoice", "Are you sure you want to permanently delete this invoice record?", async (confirmed) => {
+                if (!confirmed) return;
+                try {
+                    const res = await fetch(`/api/billing/invoices/${invoiceId}`, {method: 'DELETE'});
+                    if (res.ok) {
+                        showCustomAlert("Deleted", "Invoice deleted successfully.", "success");
+                        loadBillingOverview();
+                        loadBillingInvoices();
+                    } else {
+                        const err = await res.json();
+                        showCustomAlert("Error", err.detail || "Failed to delete invoice.", "error");
+                    }
+                } catch (e) {
+                    showCustomAlert("Error", "Server error deleting invoice.", "error");
+                }
+            });
+        }
+
+        async function deleteSchedule(scheduleId) {
+            showCustomConfirm("Delete Schedule", "Are you sure you want to delete this recurring billing schedule?", async (confirmed) => {
+                if (!confirmed) return;
+                try {
+                    const res = await fetch(`/api/billing/schedules/${scheduleId}`, {method: 'DELETE'});
+                    if (res.ok) {
+                        showCustomAlert("Deleted", "Recurring schedule deleted successfully.", "success");
+                        loadBillingOverview();
+                        loadBillingSchedules();
+                    } else {
+                        const err = await res.json();
+                        showCustomAlert("Error", err.detail || "Failed to delete schedule.", "error");
+                    }
+                } catch (e) {
+                    showCustomAlert("Error", "Server error deleting schedule.", "error");
+                }
+            });
+        }
+
+        async function triggerDailyBillingJob() {
+            try {
+                const res = await fetch('/api/billing/run-daily-job', {method: 'POST'});
+                if (res.ok) {
+                    const data = await res.json();
+                    showCustomAlert("Scheduler Triggered", `Generated ${data.generated_count || 0} invoice(s) for today (Day ${data.day}).`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to run billing job.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error running billing job.", "error");
+            }
         }
 
         // --- Support Modal Logic ---
