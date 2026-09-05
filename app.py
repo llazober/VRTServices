@@ -4758,13 +4758,14 @@ async def process_pdf(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    use_history: bool = Form(True),
+    use_history: str = Form("true"),
     parent_name: str = Form(None),
 ):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
+    use_history_bool = str(use_history).strip().lower() in ['true', '1', 'yes', 'on']
     allowed, assigned_site = is_user_allowed_on_site(username, request)
     if not allowed:
         raise HTTPException(status_code=403, detail=f"Access denied: Your account is assigned to '{assigned_site}'.")
@@ -4788,7 +4789,7 @@ async def process_pdf(
             pdf_path, 
             temp_dir, 
             create_csv=False, 
-            use_history=use_history, 
+            use_history=use_history_bool, 
             client_history_fetcher=get_client_history_rules,
             parent_name=user_parent
         )
@@ -4819,13 +4820,15 @@ async def process_check_pdf(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    use_history: bool = Form(True),
+    use_history: str = Form("true"),
     parent_name: str = Form(None),
     client_name: str = Form(None),
 ):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Not authenticated.")
+
+    use_history_bool = str(use_history).strip().lower() in ['true', '1', 'yes', 'on']
 
     allowed, assigned_site = is_user_allowed_on_site(username, request)
     if not allowed:
@@ -4850,7 +4853,7 @@ async def process_check_pdf(
         check_data = extract_check_images(
             check_file_path, 
             temp_dir, 
-            use_history=use_history, 
+            use_history=use_history_bool, 
             client_history_fetcher=get_client_history_rules, 
             parent_name=user_parent,
             client_name=client_name,
