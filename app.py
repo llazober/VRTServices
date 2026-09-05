@@ -5362,23 +5362,31 @@ async def create_billing_schedule(request: Request):
         if conn: conn.close()
 
 @app.delete("/api/billing/schedules/{schedule_id}")
-async def delete_billing_schedule(schedule_id: int):
+async def delete_billing_schedule(schedule_id: str):
     """Deletes or deactivates a billing schedule."""
     conn = None
     try:
+        sid = int(str(schedule_id).strip())
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM customer_billing_schedules WHERE id = %s;", (schedule_id,))
+            cur.execute("DELETE FROM customer_billing_schedules WHERE id = %s;", (sid,))
             conn.commit()
-            return {"status": "success", "message": f"Schedule #{schedule_id} deleted."}
+            return {"status": "success", "message": f"Schedule #{sid} deleted."}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid schedule ID.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.put("/api/billing/schedules/{schedule_id}")
-async def update_billing_schedule(schedule_id: int, request: Request):
+async def update_billing_schedule(schedule_id: str, request: Request):
     """Update an existing recurring monthly billing schedule."""
+    try:
+        sid = int(str(schedule_id).strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid schedule ID.")
+
     payload = await request.json()
     customer_id = payload.get("customer_id")
     billing_amount = float(payload.get("billing_amount") or 0.0)
@@ -5409,9 +5417,9 @@ async def update_billing_schedule(schedule_id: int, request: Request):
                     status = %s,
                     updated_at = NOW()
                 WHERE id = %s;
-            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status, schedule_id))
+            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status, sid))
             conn.commit()
-            return {"status": "success", "message": f"Schedule #{schedule_id} updated successfully."}
+            return {"status": "success", "message": f"Schedule #{sid} updated successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
