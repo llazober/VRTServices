@@ -5372,6 +5372,47 @@ async def delete_billing_schedule(schedule_id: int):
     finally:
         if conn: conn.close()
 
+@app.put("/api/billing/schedules/{schedule_id}")
+async def update_billing_schedule(schedule_id: int, request: Request):
+    """Update an existing recurring monthly billing schedule."""
+    payload = await request.json()
+    customer_id = payload.get("customer_id")
+    billing_amount = float(payload.get("billing_amount") or 0.0)
+    billing_day = int(payload.get("billing_day") or 1)
+    description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
+    auto_send = bool(payload.get("auto_send", True))
+    payment_terms_days = int(payload.get("payment_terms_days") or 15)
+    status = payload.get("status") or "Active"
+
+    if not customer_id or billing_amount <= 0:
+        raise HTTPException(status_code=400, detail="Valid customer_id and positive billing_amount are required.")
+
+    if billing_day < 1 or billing_day > 31:
+        raise HTTPException(status_code=400, detail="billing_day must be between 1 and 31.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE customer_billing_schedules
+                SET customer_id = %s,
+                    billing_amount = %s,
+                    billing_day = %s,
+                    description = %s,
+                    auto_send = %s,
+                    payment_terms_days = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s;
+            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status, schedule_id))
+            conn.commit()
+            return {"status": "success", "message": f"Schedule #{schedule_id} updated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
 @app.get("/api/billing/invoices")
 async def list_invoices(status: str = "ALL", customer_id: int = None):
     """List invoices with optional status and customer filter."""

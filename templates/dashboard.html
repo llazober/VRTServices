@@ -1786,12 +1786,13 @@
     <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
         <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;" id="billingScheduleModalContent">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
+                <h3 id="scheduleModalTitleText" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">
                     🔄 New Recurring Billing Schedule
                 </h3>
                 <button onclick="closeCreateScheduleModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
             </div>
             <form onsubmit="submitCreateSchedule(event)" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <input type="hidden" id="scheduleFormId">
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Select Client / Customer *</label>
                     <select id="scheduleCustomerSelect" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
@@ -1831,7 +1832,7 @@
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
                     <button type="button" onclick="closeCreateScheduleModal()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Cancel</button>
-                    <button type="submit" style="padding: 10px 24px; background: linear-gradient(135deg, #c084fc, #9333ea); color: #fff; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(192, 132, 252, 0.35);">Create Schedule</button>
+                    <button type="submit" id="scheduleSubmitBtn" style="padding: 10px 24px; background: linear-gradient(135deg, #c084fc, #9333ea); color: #fff; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(192, 132, 252, 0.35);">Create Schedule</button>
                 </div>
             </form>
         </div>
@@ -2414,7 +2415,8 @@
                     <td style="padding: 14px 18px;">
                         <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
                     </td>
-                    <td style="padding: 14px 18px; text-align: right;">
+                    <td style="padding: 14px 18px; text-align: right; white-space: nowrap;">
+                        <button onclick="editSchedule(${s.id})" title="Edit Recurring Schedule" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; margin-right: 6px;">✏️ Edit</button>
                         <button onclick="deleteSchedule(${s.id})" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
                     </td>
                 </tr>
@@ -2445,6 +2447,52 @@
         function openCreateScheduleModal() {
             closeAllAppModals();
             populateBillingCustomerDropdowns();
+            const idElem = document.getElementById('scheduleFormId');
+            if (idElem) idElem.value = '';
+            const titleElem = document.getElementById('scheduleModalTitleText');
+            if (titleElem) titleElem.innerText = '🔄 New Recurring Billing Schedule';
+            const submitBtn = document.getElementById('scheduleSubmitBtn');
+            if (submitBtn) submitBtn.innerText = 'Create Schedule';
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
+            }
+        }
+
+        async function editSchedule(scheduleId) {
+            closeAllAppModals();
+            await populateBillingCustomerDropdowns();
+            const sched = billingAllSchedules.find(s => s.id === scheduleId);
+            if (!sched) return;
+
+            const idElem = document.getElementById('scheduleFormId');
+            if (idElem) idElem.value = scheduleId;
+
+            const custSelect = document.getElementById('scheduleCustomerSelect');
+            if (custSelect) custSelect.value = sched.customer_id;
+
+            const amtInput = document.getElementById('scheduleAmountInput');
+            if (amtInput) amtInput.value = sched.billing_amount;
+
+            const dayInput = document.getElementById('scheduleDayInput');
+            if (dayInput) dayInput.value = sched.billing_day || 1;
+
+            const descInput = document.getElementById('scheduleDescInput');
+            if (descInput) descInput.value = sched.description || '';
+
+            const termsSelect = document.getElementById('scheduleTermsSelect');
+            if (termsSelect) termsSelect.value = sched.payment_terms_days || 30;
+
+            const autoCheck = document.getElementById('scheduleAutoSendCheck');
+            if (autoCheck) autoCheck.checked = !!sched.auto_send;
+
+            const titleElem = document.getElementById('scheduleModalTitleText');
+            if (titleElem) titleElem.innerText = '✏️ Edit Recurring Billing Schedule';
+
+            const submitBtn = document.getElementById('scheduleSubmitBtn');
+            if (submitBtn) submitBtn.innerText = 'Save Schedule';
+
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
                 modal.style.display = 'flex';
@@ -2461,6 +2509,7 @@
 
         async function submitCreateSchedule(event) {
             event.preventDefault();
+            const scheduleId = document.getElementById('scheduleFormId').value;
             const custVal = document.getElementById('scheduleCustomerSelect').value;
             const amtVal = document.getElementById('scheduleAmountInput').value;
             if (!custVal || !amtVal) {
@@ -2477,23 +2526,27 @@
                 auto_send: document.getElementById('scheduleAutoSendCheck').checked
             };
 
+            const isEdit = !!scheduleId;
+            const url = isEdit ? `/api/billing/schedules/${scheduleId}` : '/api/billing/schedules';
+            const method = isEdit ? 'PUT' : 'POST';
+
             try {
-                const res = await fetch('/api/billing/schedules', {
-                    method: 'POST',
+                const res = await fetch(url, {
+                    method: method,
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
                     closeCreateScheduleModal();
-                    showCustomAlert("Success", "Recurring billing schedule created successfully!", "success");
+                    showCustomAlert("Success", isEdit ? "Recurring billing schedule updated!" : "Recurring billing schedule created successfully!", "success");
                     loadBillingOverview();
                     loadBillingSchedules();
                 } else {
                     const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to create schedule.", "error");
+                    showCustomAlert("Error", err.detail || "Failed to save schedule.", "error");
                 }
             } catch (e) {
-                showCustomAlert("Error", "Server error creating schedule.", "error");
+                showCustomAlert("Error", "Server error saving schedule.", "error");
             }
         }
 
