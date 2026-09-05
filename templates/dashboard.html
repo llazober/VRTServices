@@ -2494,7 +2494,7 @@
         async function editSchedule(scheduleId) {
             closeAllAppModals();
             await populateBillingCustomerDropdowns();
-            const sched = billingAllSchedules.find(s => s.id === scheduleId);
+            const sched = billingAllSchedules.find(s => String(s.id) === String(scheduleId));
             if (!sched) return;
 
             const idElem = document.getElementById('scheduleFormId');
