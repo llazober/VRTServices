@@ -5595,13 +5595,14 @@
         }
 
         async function toggleChecklistStep(stepKey, isChecked) {
-            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            if (!currentChecklistCustomerId) return;
+            const periodToUse = currentChecklistPeriod || document.getElementById('checklistPeriodSelect')?.value || 'in_process';
             try {
                 const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/toggle`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        period: currentChecklistPeriod,
+                        period: periodToUse,
                         step_key: stepKey,
                         value: isChecked,
                         workflow_mode: activeWorkflowTab

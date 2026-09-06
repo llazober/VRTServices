@@ -2986,24 +2986,25 @@ async def update_compliance_event_status(event_id: int, request: Request):
                     except Exception:
                         pass
 
-                cur.execute("SELECT period FROM customer_task_checklist WHERE customer_id = %s ORDER BY updated_at DESC LIMIT 1;", (cid,))
-                chk_row = cur.fetchone()
-                target_period = ym_slug if ym_slug else (chk_row["period"] if chk_row else "in_process")
+                in_proc_slug, _ = get_in_process_period(cur, cid, "bookkeeping")
+                periods_to_update = list(set([p for p in [ym_slug, in_proc_slug] if p]))
 
                 if cat == "Bookkeeping Close":
-                    cur.execute("""
-                        INSERT INTO customer_task_checklist (customer_id, period, accountant_reviewed)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (customer_id, period)
-                        DO UPDATE SET accountant_reviewed = EXCLUDED.accountant_reviewed, updated_at = CURRENT_TIMESTAMP;
-                    """, (cid, target_period, is_done))
+                    for p_slug in periods_to_update:
+                        cur.execute("""
+                            INSERT INTO customer_task_checklist (customer_id, period, accountant_reviewed)
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT (customer_id, period)
+                            DO UPDATE SET accountant_reviewed = EXCLUDED.accountant_reviewed, updated_at = CURRENT_TIMESTAMP;
+                        """, (cid, p_slug, is_done))
                 elif cat in ("Corporate Tax", "Estimated Tax", "1099/W2"):
-                    cur.execute("""
-                        INSERT INTO customer_task_checklist (customer_id, period, tax_efile, tax_accepted)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (customer_id, period)
-                        DO UPDATE SET tax_efile = EXCLUDED.tax_efile, tax_accepted = EXCLUDED.tax_accepted, updated_at = CURRENT_TIMESTAMP;
-                    """, (cid, target_period, is_done, is_done))
+                    for p_slug in periods_to_update:
+                        cur.execute("""
+                            INSERT INTO customer_task_checklist (customer_id, period, tax_efile, tax_accepted)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (customer_id, period)
+                            DO UPDATE SET tax_efile = EXCLUDED.tax_efile, tax_accepted = EXCLUDED.tax_accepted, updated_at = CURRENT_TIMESTAMP;
+                        """, (cid, p_slug, is_done, is_done))
             except Exception as sync_err:
                 print(f"Warning: Failed to sync compliance event status to checklist: {sync_err}")
             
