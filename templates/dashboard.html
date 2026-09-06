@@ -5474,6 +5474,9 @@
 
                 if (!res.ok) throw new Error(data.detail || 'Failed to fetch checklist');
 
+                if (data.customer_id) {
+                    currentChecklistCustomerId = data.customer_id;
+                }
                 currentChecklistPeriod = data.period;
 
                 const titleEl = document.getElementById('checklistModalTitle');
@@ -5634,7 +5637,15 @@
                 event.preventDefault();
                 event.stopPropagation();
             }
-            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            const cid = (currentChecklistCustomerId && currentChecklistCustomerId !== 'null') 
+                ? currentChecklistCustomerId 
+                : (window.lastChecklistData?.customer_id || null);
+            const period = currentChecklistPeriod || document.getElementById('checklistPeriodSelect')?.value;
+
+            if (!cid || cid === 'null' || cid === 'undefined' || !period) {
+                alert('❌ Cannot reopen: Customer ID or Period is missing.');
+                return;
+            }
 
             let confirmed = false;
             if (typeof showCustomConfirm === 'function') {
@@ -5645,18 +5656,22 @@
             if (!confirmed) return;
 
             try {
-                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/reopen`, {
+                const res = await fetch(`/api/customers/${cid}/checklist/reopen`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ period: currentChecklistPeriod, workflow_mode: activeWorkflowTab })
+                    body: JSON.stringify({ period: period, workflow_mode: activeWorkflowTab })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to reopen period');
 
+                if (data.customer_id) {
+                    currentChecklistCustomerId = data.customer_id;
+                }
+
                 if (typeof showAlert === 'function') showAlert('↩️ Period re-opened as In Process!', 'success', 'Period Re-opened');
                 else alert('↩️ Period re-opened as In Process!');
 
-                await loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
+                await loadCustomerChecklist(cid, period);
                 if (typeof loadComplianceData === 'function') await loadComplianceData();
             } catch (err) {
                 alert(`❌ Reopen Error: ${err.message}`);
