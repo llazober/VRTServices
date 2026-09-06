@@ -3596,7 +3596,7 @@
                         <button onclick="openCustomerStorageModal(event, ${c.id})" style="padding: 4px 8px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Open customer storage file manager">📂 FOLDER</button>
                         <button onclick="initCustomerStorage(event, ${c.id})" style="padding: 4px 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Initialize Storage Folders">${c.do_storage_status === 'Initialized' ? '⚡ RE-INIT' : '☁️ INIT'}</button>
                         <button onclick="editCustomerRecord(${c.id})" style="padding: 4px 8px; background: rgba(225, 0, 255, 0.15); border: 1px solid rgba(225, 0, 255, 0.35); color: #e100ff; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Edit Customer Account Details">✏️ EDIT</button>
-                        <button onclick="deleteCustomerRecord(${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}', '${(c.legal_name || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer;" title="Delete Customer Record">🗑️ DEL</button>
+                        <button type="button" onclick="deleteCustomerRecord(event, ${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}', '${(c.legal_name || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer;" title="Delete Customer Record">🗑️ DEL</button>
                     </td>
                 </tr>
             `).join('');
@@ -4480,7 +4480,16 @@
             });
         }
 
-        async function deleteCustomerRecord(id, num, legalName = '') {
+        async function deleteCustomerRecord(arg1, arg2, arg3, arg4) {
+            let event = null, id = arg1, num = arg2, legalName = arg3 || '';
+            if (arg1 && arg1.preventDefault) {
+                event = arg1;
+                event.preventDefault();
+                event.stopPropagation();
+                id = arg2;
+                num = arg3;
+                legalName = arg4 || '';
+            }
             if (!id) return;
             const adminPassword = await showDeleteCustomerConfirmModal(num, legalName);
             if (!adminPassword) return;
@@ -6762,8 +6771,8 @@
                     <td style="padding: 10px 18px; font-family: monospace; color: #facc15; font-weight: 700;">#${m.id}</td>
                     <td style="padding: 10px 18px; font-weight: 700; color: #fff;">👤 ${m.name}</td>
                     <td style="padding: 10px 18px; text-align: right;">
-                        <button onclick="editTaxTeamMember(${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 6px;">✏️ EDIT</button>
-                        <button onclick="deleteTaxTeamMember(${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">🗑️ DEL</button>
+                        <button type="button" onclick="editTaxTeamMember(event, ${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 6px;">✏️ EDIT</button>
+                        <button type="button" onclick="deleteTaxTeamMember(event, ${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">🗑️ DEL</button>
                     </td>
                 </tr>
             `).join('');
@@ -6848,8 +6857,17 @@
             }
         }
 
-        async function deleteTaxTeamMember(id, name) {
-            if (!confirm(`Are you sure you want to delete Tax Prep member "${name}"?`)) return;
+        async function deleteTaxTeamMember(arg1, arg2, arg3) {
+            let event = null, id = arg1, name = arg2;
+            if (arg1 && arg1.preventDefault) {
+                event = arg1;
+                event.preventDefault();
+                event.stopPropagation();
+                id = arg2;
+                name = arg3;
+            }
+            if (!id) return;
+            if (!await showCustomConfirm(`Are you sure you want to delete Tax Prep member "${name}"?`, 'Delete Tax Prep Member', 'Yes, Delete', 'Cancel')) return;
             try {
                 const res = await fetch(`/api/tax-team/${id}`, { method: 'DELETE' });
                 if (res.ok) {
@@ -6858,10 +6876,13 @@
                     if (typeof loadWorkloadSummary === 'function') loadWorkloadSummary();
                 } else {
                     const err = await res.json();
-                    alert('Error deleting member: ' + (err.detail || 'Failed'));
+                    const errMsg = err.detail || err.error || 'Failed to delete member';
+                    if (typeof showAlert === 'function') showAlert('Error deleting member: ' + errMsg, 'error', 'Delete Failed');
+                    else alert('Error deleting member: ' + errMsg);
                 }
             } catch (err) {
-                alert('Error deleting member: ' + err.message);
+                if (typeof showAlert === 'function') showAlert('Error deleting member: ' + err.message, 'error', 'Delete Error');
+                else alert('Error deleting member: ' + err.message);
             }
         }
     </script>
