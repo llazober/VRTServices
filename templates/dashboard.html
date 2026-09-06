@@ -1031,7 +1031,16 @@
                         <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 14px;">
                             View, add, edit, and delete customer accounts, assigned user IDs, contact information, and statuses.
                         </p>
-                        <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; width: 100%; max-width: 450px; outline: none;" oninput="fetchCustomerRecords(true)">
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; max-width: 720px;">
+                            <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; flex: 1; outline: none;" oninput="fetchCustomerRecords(true)">
+                            <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 6px 12px;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 User:</span>
+                                <select id="customerPageAssignedUserSelect" onchange="renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
+                                    <option value="all" style="background: #0f172a; color: #fff;">All Users</option>
+                                    <option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
@@ -1417,6 +1426,13 @@
                         </p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 10px; padding: 4px 10px;">
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #c084fc;">👤 Filter User:</span>
+                            <select id="workloadAssignedUserSelect" onchange="filterWorkloadAssignedUserChanged()" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; font-weight: 700; outline: none; cursor: pointer; padding: 2px 4px;">
+                                <option value="all" style="background: #0f172a; color: #fff;">All Assigned Users</option>
+                                <option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned Only</option>
+                            </select>
+                        </div>
                         <button onclick="filterWorkloadTable('all')" id="btnFilterWorkloadAll" style="padding: 6px 14px; background: rgba(250, 204, 21, 0.2); border: 1px solid rgba(250, 204, 21, 0.5); color: #facc15; font-size: 0.8rem; font-weight: 700; border-radius: 10px; cursor: pointer;">All Incomplete</button>
                         <button onclick="filterWorkloadTable('bk')" id="btnFilterWorkloadBk" style="padding: 6px 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #94a3b8; font-size: 0.8rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Bookkeeping Pending</button>
                         <button onclick="filterWorkloadTable('tax')" id="btnFilterWorkloadTax" style="padding: 6px 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #94a3b8; font-size: 0.8rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Tax Return Pending</button>
@@ -3477,11 +3493,37 @@
                 const res = await fetch(`/api/customers?query=${encodeURIComponent(query)}&parentName=${encodeURIComponent(parentName)}`);
                 const data = await res.json();
                 currentCustomerRecords = data.customers || [];
+                updateCustomerPageUserDropdown();
                 renderCustomerTable();
             } catch (err) {
                 console.error('Error fetching customers:', err);
                 if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load customers.</td></tr>';
                 if (pageTbody) pageTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load customers.</td></tr>';
+            }
+        }
+
+        function updateCustomerPageUserDropdown() {
+            const select = document.getElementById('customerPageAssignedUserSelect');
+            if (!select) return;
+            const currentVal = select.value || 'all';
+            const usersSet = new Set();
+            (currentCustomerRecords || []).forEach(c => {
+                if (c.assigned_user_id && c.assigned_user_id.trim()) {
+                    usersSet.add(c.assigned_user_id.trim());
+                }
+            });
+            const sortedUsers = Array.from(usersSet).sort((a, b) => a.localeCompare(b));
+            let html = `<option value="all" style="background: #0f172a; color: #fff;">All Users</option>`;
+            html += `<option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned</option>`;
+            sortedUsers.forEach(u => {
+                const escaped = u.replace(/"/g, '&quot;');
+                html += `<option value="${escaped}" style="background: #0f172a; color: #fff;">${u}</option>`;
+            });
+            select.innerHTML = html;
+            if (Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
+            } else {
+                select.value = 'all';
             }
         }
 
@@ -3491,18 +3533,28 @@
             const modalCount = document.getElementById('customerTotalCount');
             const pageCount = document.getElementById('customerPageTotalCount');
 
-            if (modalCount) modalCount.textContent = currentCustomerRecords.length;
-            if (pageCount) pageCount.textContent = currentCustomerRecords.length;
+            let recordsToDisplay = currentCustomerRecords || [];
+            const userFilterSelect = document.getElementById('customerPageAssignedUserSelect');
+            const selectedUserFilter = userFilterSelect ? userFilterSelect.value : 'all';
+
+            if (selectedUserFilter === 'unassigned') {
+                recordsToDisplay = recordsToDisplay.filter(c => !c.assigned_user_id || !c.assigned_user_id.trim());
+            } else if (selectedUserFilter && selectedUserFilter !== 'all') {
+                recordsToDisplay = recordsToDisplay.filter(c => (c.assigned_user_id || '').trim().toLowerCase() === selectedUserFilter.trim().toLowerCase());
+            }
+
+            if (modalCount) modalCount.textContent = recordsToDisplay.length;
+            if (pageCount) pageCount.textContent = recordsToDisplay.length;
 
             const emptyRows = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #64748b;">No customer records found. Click ➕ Add New Customer.</td></tr>';
 
-            if (currentCustomerRecords.length === 0) {
+            if (recordsToDisplay.length === 0) {
                 if (modalTbody) modalTbody.innerHTML = emptyRows;
                 if (pageTbody) pageTbody.innerHTML = emptyRows;
                 return;
             }
 
-            const rowsHtml = currentCustomerRecords.map(c => `
+            const rowsHtml = recordsToDisplay.map(c => `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 12px 16px; font-family: monospace; font-weight: 700; color: #e100ff;">
                         ${c.custumer_number}
@@ -5013,6 +5065,7 @@
         // --- Workload Summary & Pending Tasks Functions ---
         let rawWorkloadData = [];
         let currentWorkloadFilter = 'all';
+        let currentWorkloadUserFilter = 'all';
 
         async function loadWorkloadSummary() {
             const tbody = document.getElementById('workloadPendingTableBody');
@@ -5032,11 +5085,48 @@
                 if (kpiTax) kpiTax.textContent = summary.pending_tax_count || 0;
                 if (kpiTotal) kpiTotal.textContent = summary.total_incomplete_customers || 0;
 
+                updateWorkloadUserDropdown();
                 renderWorkloadTable();
             } catch (err) {
                 console.error('Error loading workload summary:', err);
                 if (tbody) tbody.innerHTML = '<tr><td colSpan="6" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load workload tasks.</td></tr>';
             }
+        }
+
+        function updateWorkloadUserDropdown() {
+            const select = document.getElementById('workloadAssignedUserSelect');
+            if (!select) return;
+            const currentVal = select.value || 'all';
+
+            const usersSet = new Set();
+            (rawWorkloadData || []).forEach(i => {
+                if (i.assigned_user_id && i.assigned_user_id.trim()) {
+                    usersSet.add(i.assigned_user_id.trim());
+                }
+            });
+
+            const sortedUsers = Array.from(usersSet).sort((a, b) => a.localeCompare(b));
+            let html = `<option value="all" style="background: #0f172a; color: #fff;">All Assigned Users</option>`;
+            html += `<option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned Only</option>`;
+            sortedUsers.forEach(u => {
+                const escaped = u.replace(/"/g, '&quot;');
+                html += `<option value="${escaped}" style="background: #0f172a; color: #fff;">${u}</option>`;
+            });
+            select.innerHTML = html;
+            if (Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
+            } else {
+                select.value = 'all';
+                currentWorkloadUserFilter = 'all';
+            }
+        }
+
+        function filterWorkloadAssignedUserChanged() {
+            const select = document.getElementById('workloadAssignedUserSelect');
+            if (select) {
+                currentWorkloadUserFilter = select.value;
+            }
+            renderWorkloadTable();
         }
 
         function filterWorkloadTable(mode) {
@@ -5074,6 +5164,12 @@
                 items = items.filter(i => i.bk && i.bk.has_pending);
             } else if (currentWorkloadFilter === 'tax') {
                 items = items.filter(i => i.tax && i.tax.has_pending);
+            }
+
+            if (currentWorkloadUserFilter === 'unassigned') {
+                items = items.filter(i => !i.assigned_user_id || !i.assigned_user_id.trim());
+            } else if (currentWorkloadUserFilter && currentWorkloadUserFilter !== 'all') {
+                items = items.filter(i => (i.assigned_user_id || '').trim().toLowerCase() === currentWorkloadUserFilter.trim().toLowerCase());
             }
 
             if (items.length === 0) {
