@@ -955,6 +955,44 @@ def init_tax_team_table():
         if conn:
             conn.close()
 
+def init_compliance_tables():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS compliance_calendar_events (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    category            VARCHAR(50) NOT NULL,
+                    title               VARCHAR(250) NOT NULL,
+                    description         TEXT,
+                    jurisdiction        VARCHAR(100) DEFAULT 'Federal',
+                    due_date            DATE NOT NULL,
+                    frequency           VARCHAR(30) NOT NULL DEFAULT 'One-Off',
+                    assigned_tax_prep   VARCHAR(100),
+                    status              VARCHAR(30) NOT NULL DEFAULT 'Pending',
+                    reminder_days_prior INT NOT NULL DEFAULT 7,
+                    completed_at        TIMESTAMP,
+                    completed_by        VARCHAR(100),
+                    auto_generated      BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_compliance_events_customer_id ON compliance_calendar_events (customer_id);
+                CREATE INDEX IF NOT EXISTS idx_compliance_events_due_date ON compliance_calendar_events (due_date);
+                CREATE INDEX IF NOT EXISTS idx_compliance_events_status ON compliance_calendar_events (status);
+                CREATE INDEX IF NOT EXISTS idx_compliance_events_tax_prep ON compliance_calendar_events (assigned_tax_prep);
+            """)
+            conn.commit()
+            print("Compliance calendar table initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing compliance calendar table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 try:
     init_customer_table()
     ensure_catchall_customer()
@@ -965,6 +1003,7 @@ try:
     init_coa_table()
     init_billing_tables()
     init_tax_team_table()
+    init_compliance_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -2279,6 +2318,21 @@ async def read_billing_page(request: Request, msg: str = "", error: str = ""):
         context=ctx
     )
 
+@app.get("/compliance", response_class=HTMLResponse)
+@app.get("/calendar", response_class=HTMLResponse)
+async def read_compliance_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "compliance"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
 async def portal_verify_customer(request: Request, customer_id: str = "", email: str = ""):
@@ -2670,6 +2724,359 @@ async def delete_tax_team_member(team_id: int, request: Request):
             return {"success": True, "id": team_id}
     except Exception as e:
         print(f"Error deleting TaxTeam member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── COMPLIANCE CALENDAR API ENDPOINTS ────────────────────────────────
+@app.get("/api/compliance/events")
+async def get_compliance_events(
+    request: Request,
+    customer_id: str = "",
+    category: str = "",
+    status: str = "",
+    assigned_tax_prep: str = "",
+    year: int = None,
+    month: int = None
+):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT 
+                    e.*,
+                    c.custumer_number,
+                    c.legal_name as customer_legal_name,
+                    c.customer_type
+                FROM compliance_calendar_events e
+                LEFT JOIN customer c ON e.customer_id = c.id
+                WHERE 1=1
+            """
+            params = []
+            if customer_id and customer_id.strip() and customer_id != "all":
+                try:
+                    cid = int(customer_id)
+                    sql += " AND e.customer_id = %s"
+                    params.append(cid)
+                except ValueError:
+                    pass
+            if category and category.strip() and category != "all":
+                sql += " AND e.category = %s"
+                params.append(category.strip())
+            if status and status.strip() and status != "all":
+                sql += " AND e.status = %s"
+                params.append(status.strip())
+            if assigned_tax_prep and assigned_tax_prep.strip() and assigned_tax_prep != "all":
+                if assigned_tax_prep.lower() == "unassigned":
+                    sql += " AND (e.assigned_tax_prep IS NULL OR e.assigned_tax_prep = '')"
+                else:
+                    sql += " AND e.assigned_tax_prep = %s"
+                    params.append(assigned_tax_prep.strip())
+            if year:
+                sql += " AND EXTRACT(YEAR FROM e.due_date) = %s"
+                params.append(year)
+            if month:
+                sql += " AND EXTRACT(MONTH FROM e.due_date) = %s"
+                params.append(month)
+
+            sql += " ORDER BY e.due_date ASC, e.id DESC;"
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall() or []
+            events = [dict(r) for r in rows]
+            for ev in events:
+                if ev.get("due_date"):
+                    ev["due_date"] = ev["due_date"].isoformat()
+                if ev.get("completed_at"):
+                    ev["completed_at"] = ev["completed_at"].isoformat()
+                if ev.get("created_at"):
+                    ev["created_at"] = ev["created_at"].isoformat()
+                if ev.get("updated_at"):
+                    ev["updated_at"] = ev["updated_at"].isoformat()
+            return {"events": events}
+    except Exception as e:
+        print(f"Error fetching compliance events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/compliance/events")
+async def create_compliance_event(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    customer_id = data.get("customer_id")
+    category = (data.get("category") or "Custom").strip()
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    jurisdiction = (data.get("jurisdiction") or "Federal").strip()
+    due_date_str = (data.get("due_date") or "").strip()
+    frequency = (data.get("frequency") or "One-Off").strip()
+    assigned_tax_prep = (data.get("assigned_tax_prep") or "").strip()
+    reminder_days_prior = data.get("reminder_days_prior", 7)
+
+    if not customer_id or not title or not due_date_str:
+        raise HTTPException(status_code=400, detail="Customer, Title, and Due Date are required.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO compliance_calendar_events (
+                    customer_id, category, title, description, jurisdiction,
+                    due_date, frequency, assigned_tax_prep, reminder_days_prior
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, customer_id, category, title, due_date, status;
+            """, (
+                int(customer_id), category, title, description, jurisdiction,
+                due_date_str, frequency, assigned_tax_prep or None, int(reminder_days_prior)
+            ))
+            new_row = dict(cur.fetchone())
+            conn.commit()
+            if new_row.get("due_date"):
+                new_row["due_date"] = new_row["due_date"].isoformat()
+            return new_row
+    except Exception as e:
+        print(f"Error creating compliance event: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.put("/api/compliance/events/{event_id}")
+async def update_compliance_event(event_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE compliance_calendar_events
+                SET category = COALESCE(%s, category),
+                    title = COALESCE(%s, title),
+                    description = COALESCE(%s, description),
+                    jurisdiction = COALESCE(%s, jurisdiction),
+                    due_date = COALESCE(%s, due_date),
+                    frequency = COALESCE(%s, frequency),
+                    assigned_tax_prep = %s,
+                    status = COALESCE(%s, status),
+                    reminder_days_prior = COALESCE(%s, reminder_days_prior),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING *;
+            """, (
+                data.get("category"), data.get("title"), data.get("description"),
+                data.get("jurisdiction"), data.get("due_date"), data.get("frequency"),
+                data.get("assigned_tax_prep") or None, data.get("status"),
+                data.get("reminder_days_prior"), event_id
+            ))
+            updated = cur.fetchone()
+            if not updated:
+                raise HTTPException(status_code=404, detail="Compliance event not found.")
+            conn.commit()
+            res = dict(updated)
+            if res.get("due_date"):
+                res["due_date"] = res["due_date"].isoformat()
+            return res
+    except Exception as e:
+        print(f"Error updating compliance event: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.delete("/api/compliance/events/{event_id}")
+async def delete_compliance_event(event_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM compliance_calendar_events WHERE id = %s RETURNING id;", (event_id,))
+            deleted = cur.fetchone()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Compliance event not found.")
+            conn.commit()
+            return {"success": True, "id": event_id}
+    except Exception as e:
+        print(f"Error deleting compliance event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/compliance/events/{event_id}/status")
+async def update_compliance_event_status(event_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    new_status = (data.get("status") or "Completed").strip()
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if new_status == "Completed":
+                cur.execute("""
+                    UPDATE compliance_calendar_events
+                    SET status = %s,
+                        completed_at = CURRENT_TIMESTAMP,
+                        completed_by = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING *;
+                """, (new_status, username, event_id))
+            else:
+                cur.execute("""
+                    UPDATE compliance_calendar_events
+                    SET status = %s,
+                        completed_at = NULL,
+                        completed_by = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING *;
+                """, (new_status, event_id))
+            
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Compliance event not found.")
+            
+            conn.commit()
+            res = dict(row)
+            if res.get("due_date"):
+                res["due_date"] = res["due_date"].isoformat()
+            return res
+    except Exception as e:
+        print(f"Error updating compliance status: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/compliance/generate-preset/{customer_id}")
+async def generate_compliance_preset(customer_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            if not cust:
+                raise HTTPException(status_code=404, detail="Customer not found")
+            
+            c_type = (cust.get("customer_type") or "Business").strip()
+            assigned_tax_prep = cust.get("assigned_user_id") or None
+            import datetime
+            current_year = datetime.datetime.now().year
+            
+            generated_events = []
+            
+            if c_type == "Business":
+                # 1. Monthly Sales Tax Filing (20th of each month)
+                for month in range(1, 13):
+                    due_d = datetime.date(current_year, month, 20)
+                    generated_events.append((
+                        customer_id, 'Sales Tax', f'Sales Tax Return - {due_d.strftime("%B %Y")}',
+                        'State Sales & Use Tax Monthly Filing', 'State', due_d.isoformat(),
+                        'Monthly', assigned_tax_prep, 7, True
+                    ))
+                
+                # 2. Monthly Bookkeeping Close (15th of each month)
+                for month in range(1, 13):
+                    due_d = datetime.date(current_year, month, 15)
+                    generated_events.append((
+                        customer_id, 'Bookkeeping Close', f'Monthly Bookkeeping Close - {due_d.strftime("%B %Y")}',
+                        'Bank Reconciliations & Monthly Close', 'Internal', due_d.isoformat(),
+                        'Monthly', assigned_tax_prep, 5, True
+                    ))
+
+                # 3. Quarterly Payroll Form 941
+                q_dates = [
+                    (datetime.date(current_year, 4, 30), 'Q1 Payroll Tax Form 941'),
+                    (datetime.date(current_year, 7, 31), 'Q2 Payroll Tax Form 941'),
+                    (datetime.date(current_year, 10, 31), 'Q3 Payroll Tax Form 941'),
+                    (datetime.date(current_year + 1, 1, 31), 'Q4 Payroll Tax Form 941'),
+                ]
+                for q_due, q_title in q_dates:
+                    generated_events.append((
+                        customer_id, 'Payroll Tax', q_title,
+                        'Employer\'s Quarterly Federal Tax Return', 'Federal', q_due.isoformat(),
+                        'Quarterly', assigned_tax_prep, 10, True
+                    ))
+
+                # 4. Corporate Tax Return (March 15)
+                generated_events.append((
+                    customer_id, 'Corporate Tax', f'Corporate Tax Return (Form 1120/1120-S) - Tax Year {current_year - 1}',
+                    'Annual Federal & State Corporate Income Tax Filing', 'Federal/State', datetime.date(current_year, 3, 15).isoformat(),
+                    'Annual', assigned_tax_prep, 30, True
+                ))
+
+                # 5. Annual 1099-NEC & 1099-MISC Filing (Jan 31)
+                generated_events.append((
+                    customer_id, '1099/W2', f'Annual 1099-NEC / 1099-MISC Filings - Tax Year {current_year - 1}',
+                    'Nonemployee Compensation Information Returns', 'Federal', datetime.date(current_year, 1, 31).isoformat(),
+                    'Annual', assigned_tax_prep, 15, True
+                ))
+
+                # 6. Annual State Corporate Report / Franchise Tax (May 1)
+                generated_events.append((
+                    customer_id, 'Franchise Tax', f'Annual Corporate Report / Franchise Tax - {current_year}',
+                    'State Annual Corporate Registration & Franchise Fee', 'State', datetime.date(current_year, 5, 1).isoformat(),
+                    'Annual', assigned_tax_prep, 14, True
+                ))
+
+            else: # Individual
+                # 1. Quarterly Estimated Tax Payments
+                est_dates = [
+                    (datetime.date(current_year, 4, 15), 'Q1 Estimated Tax Payment (Form 1040-ES)'),
+                    (datetime.date(current_year, 6, 15), 'Q2 Estimated Tax Payment (Form 1040-ES)'),
+                    (datetime.date(current_year, 9, 15), 'Q3 Estimated Tax Payment (Form 1040-ES)'),
+                    (datetime.date(current_year + 1, 1, 15), 'Q4 Estimated Tax Payment (Form 1040-ES)'),
+                ]
+                for est_due, est_title in est_dates:
+                    generated_events.append((
+                        customer_id, 'Estimated Tax', est_title,
+                        'Federal & State Quarterly Estimated Tax Deposit', 'Federal', est_due.isoformat(),
+                        'Quarterly', assigned_tax_prep, 7, True
+                    ))
+
+                # 2. Annual Individual Tax Return (April 15)
+                generated_events.append((
+                    customer_id, 'Corporate Tax', f'Individual Income Tax Return (Form 1040) - Tax Year {current_year - 1}',
+                    'Annual U.S. Individual Income Tax Return', 'Federal/State', datetime.date(current_year, 4, 15).isoformat(),
+                    'Annual', assigned_tax_prep, 30, True
+                ))
+
+            insert_sql = """
+                INSERT INTO compliance_calendar_events (
+                    customer_id, category, title, description, jurisdiction, due_date, frequency, assigned_tax_prep, reminder_days_prior, auto_generated
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+            for item in generated_events:
+                cur.execute(insert_sql, item)
+            
+            conn.commit()
+            return {"success": True, "count": len(generated_events), "customer_id": customer_id}
+
+    except Exception as e:
+        print(f"Error generating compliance preset: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
