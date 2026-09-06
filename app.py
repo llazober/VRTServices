@@ -4530,6 +4530,25 @@ async def reopen_customer_checklist(customer_id: str, request: Request):
                 SET accountant_reviewed = FALSE, tax_accepted = FALSE, updated_at = CURRENT_TIMESTAMP
                 WHERE customer_id = %s AND period = %s;
             """, (real_cust_id, period))
+
+            # Sync compliance event back to Pending
+            try:
+                ym_str = period[:7] if (period and len(period) >= 7 and "-" in period[:7]) else None
+                if ym_str:
+                    cur.execute("""
+                        UPDATE compliance_calendar_events
+                        SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
+                        WHERE customer_id = %s AND category = 'Bookkeeping Close' AND due_date LIKE %s;
+                    """, (real_cust_id, f"{ym_str}%"))
+                else:
+                    cur.execute("""
+                        UPDATE compliance_calendar_events
+                        SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
+                        WHERE customer_id = %s AND category = 'Bookkeeping Close';
+                    """, (real_cust_id,))
+            except Exception as comp_sync_err:
+                print(f"Warning: Failed to sync compliance on period reopen: {comp_sync_err}")
+
             conn.commit()
 
         return await get_customer_checklist(customer_id=real_cust_id, period=period, workflow_tab=workflow_mode, request=request)

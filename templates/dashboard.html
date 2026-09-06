@@ -5629,9 +5629,21 @@
             }
         }
 
-        async function reopenChecklistPeriod() {
+        async function reopenChecklistPeriod(event) {
+            if (event && event.preventDefault) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
             if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
-            if (!await showCustomConfirm('Re-open this period as In Process to make corrections?')) return;
+
+            let confirmed = false;
+            if (typeof showCustomConfirm === 'function') {
+                confirmed = await showCustomConfirm('Re-open this period as In Process to make corrections?', 'Re-open Period', 'Yes, Re-open', 'Cancel');
+            } else {
+                confirmed = confirm('Re-open this period as In Process to make corrections?');
+            }
+            if (!confirmed) return;
+
             try {
                 const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/reopen`, {
                     method: 'POST',
@@ -5641,8 +5653,11 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to reopen period');
 
-                alert('↩️ Period re-opened as In Process!');
+                if (typeof showAlert === 'function') showAlert('↩️ Period re-opened as In Process!', 'success', 'Period Re-opened');
+                else alert('↩️ Period re-opened as In Process!');
+
                 await loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
+                if (typeof loadComplianceData === 'function') await loadComplianceData();
             } catch (err) {
                 alert(`❌ Reopen Error: ${err.message}`);
             }
@@ -5783,7 +5798,7 @@
                 <select id="checklistPeriodSelect" onchange="loadCustomerChecklist(null, this.value)" style="padding: 6px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #38bdf8; font-weight: 700; font-size: 0.82rem; outline: none; cursor: pointer;">
                     <option value="in_process">🔄 In Process</option>
                 </select>
-                <button id="btnReopenChecklist" onclick="reopenChecklistPeriod()" style="display: none; padding: 5px 12px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; border-radius: 8px; font-size: 0.76rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Re-open this period as In Process to make corrections">↩️ Re-open Period</button>
+                <button type="button" id="btnReopenChecklist" onclick="reopenChecklistPeriod(event)" style="display: none; padding: 5px 12px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; border-radius: 8px; font-size: 0.76rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Re-open this period as In Process to make corrections">↩️ Re-open Period</button>
             </div>
             <div style="flex: 1; max-width: 320px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-family: monospace;">
