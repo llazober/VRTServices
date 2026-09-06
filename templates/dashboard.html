@@ -3608,6 +3608,7 @@
 
         // --- Customer Management Functions ---
         let currentCustomerRecords = [];
+        let currentCustomerList = [];
 
         async function openCustomerModal() {
             closeAllAppModals();
@@ -3643,6 +3644,7 @@
                 const res = await fetch(`/api/customers?query=${encodeURIComponent(query)}&parentName=${encodeURIComponent(parentName)}`);
                 const data = await res.json();
                 currentCustomerRecords = data.customers || [];
+                currentCustomerList = currentCustomerRecords;
                 updateCustomerPageUserDropdown();
                 renderCustomerTable();
             } catch (err) {
@@ -7048,9 +7050,10 @@
         let complianceViewMode = 'calendar';
 
         async function loadComplianceData() {
-            if (currentCustomerList.length === 0 && typeof fetchCustomerRecords === 'function') {
+            if ((!currentCustomerRecords || currentCustomerRecords.length === 0) && typeof fetchCustomerRecords === 'function') {
                 await fetchCustomerRecords();
             }
+            currentCustomerList = currentCustomerRecords;
             populateComplianceModalDropdowns();
 
             const customer = document.getElementById('complianceFilterCustomer')?.value || 'all';
@@ -7307,18 +7310,24 @@
                 event.preventDefault();
                 event.stopPropagation();
             }
-            if ((!currentCustomerList || currentCustomerList.length === 0) && typeof fetchCustomerRecords === 'function') {
-                await fetchCustomerRecords();
+            try {
+                if ((!currentCustomerRecords || currentCustomerRecords.length === 0) && typeof fetchCustomerRecords === 'function') {
+                    await fetchCustomerRecords();
+                }
+                currentCustomerList = currentCustomerRecords || [];
+                const modal = document.getElementById('presetComplianceModal');
+                const select = document.getElementById('presetComplianceCustomerSelect');
+                if (!modal || !select) return;
+
+                select.innerHTML = '<option value="">Select Customer *</option>' + currentCustomerList.map(c => 
+                    `<option value="${c.id}" ${preselectedCid && String(preselectedCid) === String(c.id) ? 'selected' : ''}>${c.legal_name} (${c.custumer_number || 'No ID'}) [${c.customer_type || 'Business'}]</option>`
+                ).join('');
+
+                modal.style.display = 'flex';
+            } catch (err) {
+                console.error('Error opening preset compliance modal:', err);
+                alert('Error opening Preset Schedule modal: ' + err.message);
             }
-            const modal = document.getElementById('presetComplianceModal');
-            const select = document.getElementById('presetComplianceCustomerSelect');
-            if (!modal || !select) return;
-
-            select.innerHTML = '<option value="">Select Customer *</option>' + (currentCustomerList || []).map(c => 
-                `<option value="${c.id}" ${preselectedCid && String(preselectedCid) === String(c.id) ? 'selected' : ''}>${c.legal_name} (${c.custumer_number || 'No ID'}) [${c.customer_type || 'Business'}]</option>`
-            ).join('');
-
-            modal.style.display = 'flex';
         }
 
         function closePresetComplianceModal() {
@@ -7366,17 +7375,22 @@
             const filterCust = document.getElementById('complianceFilterCustomer');
             const filterTaxPrep = document.getElementById('complianceFilterTaxPrep');
 
+            const custs = (typeof currentCustomerRecords !== 'undefined' && currentCustomerRecords.length > 0) 
+                ? currentCustomerRecords 
+                : (currentCustomerList || []);
+            const taxTeam = currentTaxTeamList || [];
+
             if (custSelect) {
-                custSelect.innerHTML = `<option value="">Select Customer *</option>` + currentCustomerList.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || ''})</option>`).join('');
+                custSelect.innerHTML = `<option value="">Select Customer *</option>` + custs.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || ''})</option>`).join('');
             }
             if (filterCust) {
-                filterCust.innerHTML = `<option value="all">All Customers</option>` + currentCustomerList.map(c => `<option value="${c.id}">${c.legal_name}</option>`).join('');
+                filterCust.innerHTML = `<option value="all">All Customers</option>` + custs.map(c => `<option value="${c.id}">${c.legal_name}</option>`).join('');
             }
             if (taxPrepSelect) {
-                taxPrepSelect.innerHTML = `<option value="">-- Unassigned --</option>` + currentTaxTeamList.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                taxPrepSelect.innerHTML = `<option value="">-- Unassigned --</option>` + taxTeam.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
             }
             if (filterTaxPrep) {
-                filterTaxPrep.innerHTML = `<option value="all">All Tax Preps</option>` + currentTaxTeamList.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                filterTaxPrep.innerHTML = `<option value="all">All Tax Preps</option>` + taxTeam.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
             }
         }
 
@@ -7385,21 +7399,27 @@
                 event.preventDefault();
                 event.stopPropagation();
             }
-            if ((!currentCustomerList || currentCustomerList.length === 0) && typeof fetchCustomerRecords === 'function') {
-                await fetchCustomerRecords();
+            try {
+                if ((!currentCustomerRecords || currentCustomerRecords.length === 0) && typeof fetchCustomerRecords === 'function') {
+                    await fetchCustomerRecords();
+                }
+                currentCustomerList = currentCustomerRecords || [];
+                const modal = document.getElementById('complianceModal');
+                if (!modal) return;
+                populateComplianceModalDropdowns();
+                document.getElementById('complianceFormId').value = '';
+                document.getElementById('complianceModalTitle').textContent = '➕ Create Compliance Deadline';
+                document.getElementById('complianceModalTitleInput').value = '';
+                document.getElementById('complianceModalCategory').value = 'Sales Tax';
+                document.getElementById('complianceModalDueDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('complianceModalJurisdiction').value = 'Federal';
+                document.getElementById('complianceModalFrequency').value = 'One-Off';
+                document.getElementById('complianceModalDesc').value = '';
+                modal.style.display = 'flex';
+            } catch (err) {
+                console.error('Error opening create compliance modal:', err);
+                alert('Error opening New Deadline modal: ' + err.message);
             }
-            const modal = document.getElementById('complianceModal');
-            if (!modal) return;
-            populateComplianceModalDropdowns();
-            document.getElementById('complianceFormId').value = '';
-            document.getElementById('complianceModalTitle').textContent = '➕ Create Compliance Deadline';
-            document.getElementById('complianceModalTitleInput').value = '';
-            document.getElementById('complianceModalCategory').value = 'Sales Tax';
-            document.getElementById('complianceModalDueDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('complianceModalJurisdiction').value = 'Federal';
-            document.getElementById('complianceModalFrequency').value = 'One-Off';
-            document.getElementById('complianceModalDesc').value = '';
-            modal.style.display = 'flex';
         }
 
         function closeComplianceModal() {
