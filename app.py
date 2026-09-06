@@ -2333,6 +2333,23 @@ async def read_compliance_page(request: Request, msg: str = "", error: str = "")
         context=ctx
     )
 
+@app.get("/management-tools", response_class=HTMLResponse)
+@app.get("/management", response_class=HTMLResponse)
+@app.get("/tools", response_class=HTMLResponse)
+async def read_management_tools_page(request: Request, msg: str = "", error: str = "", tab: str = "coa"):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "management"
+    ctx["sub_tab"] = tab
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
 async def portal_verify_customer(request: Request, customer_id: str = "", email: str = ""):
