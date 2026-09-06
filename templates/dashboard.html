@@ -6804,7 +6804,15 @@
             if (subBtn) subBtn.textContent = 'Add Member';
         }
 
-        function editTaxTeamMember(id, name) {
+        function editTaxTeamMember(arg1, arg2, arg3) {
+            let event = null, id = arg1, name = arg2;
+            if (arg1 && arg1.preventDefault) {
+                event = arg1;
+                event.preventDefault();
+                event.stopPropagation();
+                id = arg2;
+                name = arg3;
+            }
             const idEl = document.getElementById('taxTeamFormId');
             const nameEl = document.getElementById('taxTeamFormName');
             const cancelBtn = document.getElementById('taxTeamCancelEditBtn');
@@ -6813,7 +6821,10 @@
             if (nameEl) nameEl.value = name;
             if (cancelBtn) cancelBtn.style.display = 'inline-block';
             if (subBtn) subBtn.textContent = 'Update Member';
-            nameEl.focus();
+            if (nameEl) {
+                nameEl.focus();
+                nameEl.select();
+            }
         }
 
         async function saveTaxTeamMember(e) {
