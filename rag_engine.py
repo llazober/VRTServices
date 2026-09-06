@@ -64,7 +64,9 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> 
         return chunks[:top_k]
 
     scores = []
+    query_lower = query.lower()
     for chunk in chunks:
+        content_lower = chunk["content"].lower()
         chunk_tokens = tokenize(chunk["content"])
         if not chunk_tokens:
             scores.append((0, chunk))
@@ -74,15 +76,30 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> 
         matches = sum(1 for t in query_tokens if t in chunk_tokens)
         overlap_score = matches / (math.sqrt(len(query_tokens)) * math.sqrt(len(chunk_tokens)) + 1e-5)
         
-        # Boost exact keyword matches (e.g. 8879, mileage, deduction, hours, email)
+        # Boost exact keyword matches
         for t in query_tokens:
-            if t in chunk["content"].lower():
+            if t in content_lower:
                 overlap_score += 0.25
+                
+        # Boost exact title / filename match (e.g. "preset schedule" -> "Generate_Preset_Schedule.md")
+        source_name = chunk.get("source", "").lower().replace(".md", "").replace("_", " ")
+        if query_lower in source_name or any(t in source_name for t in query_tokens if len(t) > 3):
+            overlap_score += 1.0
                 
         scores.append((overlap_score, chunk))
 
     scores.sort(key=lambda x: x[0], reverse=True)
-    return [item[1] for item in scores[:top_k] if item[0] > 0.05]
+    if not scores or scores[0][0] <= 0.1:
+        return []
+
+    top_score = scores[0][0]
+    filtered_passages = []
+    for score, chunk in scores[:top_k]:
+        # Only keep secondary passages if they are close in relevance score (at least 65% of top score)
+        if score > 0.2 and (score >= top_score * 0.65):
+            filtered_passages.append(chunk)
+
+    return filtered_passages
 
 def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Optional[Dict[str, Any]]:
     """Retrieve customer profile and task checklist progress from database with separate Bookkeeping & Tax In Process periods."""
@@ -327,9 +344,8 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         res_lines.append("Please verify your reference number (e.g. `CUST-1001`) and try again, or contact our support team if you need further assistance.")
     elif passages:
         res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
-        for p in passages:
-            res_lines.append(p["content"])
-            res_lines.append("---")
+        passage_texts = [p["content"].strip() for p in passages]
+        res_lines.append("\n\n---\n\n".join(passage_texts))
     else:
         res_lines.append(f"Welcome to **{company_name}** Assistant!\n")
         res_lines.append("How can I assist you today?")
