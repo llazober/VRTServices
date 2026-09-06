@@ -614,7 +614,7 @@ def init_customer_table():
                     display_name    VARCHAR(200),
                     tax_id          VARCHAR(50),
                     status          VARCHAR(30) NOT NULL DEFAULT 'Active',
-                    assigned_user_id BIGINT,
+                    assigned_user_id VARCHAR(100),
                     phone           VARCHAR(50),
                     email           VARCHAR(200),
                     website         VARCHAR(300),
@@ -628,6 +628,8 @@ def init_customer_table():
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS parent_name VARCHAR(200);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_folder_path VARCHAR(300);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS assigned_user_id VARCHAR(100);
+                ALTER TABLE customer ALTER COLUMN assigned_user_id TYPE VARCHAR(100) USING assigned_user_id::text;
                 CREATE INDEX IF NOT EXISTS idx_customer_email_lower ON customer (LOWER(email));
                 UPDATE customer SET parent_name = 'VRT Services' WHERE parent_name IS NULL OR parent_name = '';
 
@@ -2581,8 +2583,8 @@ async def get_customers(request: Request, query: str = "", parentName: str = "")
 
             if query.strip():
                 q = f"%{query.strip()}%"
-                where_clauses.append("(custumer_number ILIKE %s OR legal_name ILIKE %s OR display_name ILIKE %s OR email ILIKE %s OR phone ILIKE %s)")
-                params.extend([q, q, q, q, q])
+                where_clauses.append("(custumer_number ILIKE %s OR legal_name ILIKE %s OR display_name ILIKE %s OR email ILIKE %s OR phone ILIKE %s OR assigned_user_id ILIKE %s)")
+                params.extend([q, q, q, q, q, q])
             
             if where_clauses:
                 sql += " WHERE " + " AND ".join(where_clauses)
@@ -2620,14 +2622,7 @@ async def create_customer(request: Request):
     display_name = (data.get("display_name") or "").strip() or None
     tax_id = (data.get("tax_id") or "").strip() or None
     status = (data.get("status") or "Active").strip()
-    assigned_user_id = data.get("assigned_user_id")
-    if assigned_user_id == "" or assigned_user_id is None:
-        assigned_user_id = None
-    else:
-        try:
-            assigned_user_id = int(assigned_user_id)
-        except ValueError:
-            assigned_user_id = None
+    assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
     email = (data.get("email") or "").strip() or None
     website = (data.get("website") or "").strip() or None
@@ -3920,14 +3915,7 @@ async def update_customer(customer_id: str, request: Request):
     display_name = (data.get("display_name") or "").strip() or None
     tax_id = (data.get("tax_id") or "").strip() or None
     status = (data.get("status") or "Active").strip()
-    assigned_user_id = data.get("assigned_user_id")
-    if assigned_user_id == "" or assigned_user_id is None:
-        assigned_user_id = None
-    else:
-        try:
-            assigned_user_id = int(assigned_user_id)
-        except ValueError:
-            assigned_user_id = None
+    assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
     email = (data.get("email") or "").strip() or None
     website = (data.get("website") or "").strip() or None

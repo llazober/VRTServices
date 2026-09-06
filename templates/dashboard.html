@@ -1029,7 +1029,7 @@
                             👥 Customer <span style="color: #e100ff;">Management</span>
                         </h2>
                         <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 14px;">
-                            View, add, edit, and delete customer accounts, tax IDs, contact information, and statuses.
+                            View, add, edit, and delete customer accounts, assigned user IDs, contact information, and statuses.
                         </p>
                         <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; width: 100%; max-width: 450px; outline: none;" oninput="fetchCustomerRecords(true)">
                     </div>
@@ -1037,9 +1037,6 @@
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
-                            <button onclick="openCatchallInboxModal()" style="padding: 12px 20px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border-radius: 14px; cursor: pointer; transition: all 0.2s ease;" title="View all general/unassigned emails (CUST-0000)">
-                                📭 Unassigned / Catch-All Inbox
-                            </button>
                             <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
                                 ➕ Add New Customer
                             </button>
@@ -1074,6 +1071,10 @@
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax ID / EIN / SSN</label>
                         <input type="text" id="customerPageFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Assigned User ID</label>
+                        <input type="text" id="customerPageFormAssignedUserId" placeholder="e.g. USR-101 or username" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Status *</label>
@@ -1115,7 +1116,7 @@
                                 <th style="padding: 14px 18px;">Type</th>
                                 <th style="padding: 14px 18px;">Legal Name</th>
                                 <th style="padding: 14px 18px;">Display Name</th>
-                                <th style="padding: 14px 18px;">Tax ID</th>
+                                <th style="padding: 14px 18px;">Assigned User ID</th>
                                 <th style="padding: 14px 18px;">Contact</th>
                                 <th style="padding: 14px 18px;">Status</th>
                                 <th style="padding: 14px 18px; text-align: right;">Actions</th>
@@ -1732,6 +1733,10 @@
                     <input type="text" id="customerFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
                 </div>
                 <div>
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned User ID</label>
+                    <input type="text" id="customerFormAssignedUserId" placeholder="e.g. USR-101 or username" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                </div>
+                <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Status *</label>
                     <select id="customerFormStatus" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
                         <option value="Active">Active</option>
@@ -1771,7 +1776,7 @@
                             <th style="padding: 12px 16px;">Type</th>
                             <th style="padding: 12px 16px;">Legal Name</th>
                             <th style="padding: 12px 16px;">Display Name</th>
-                            <th style="padding: 12px 16px;">Tax ID</th>
+                            <th style="padding: 12px 16px;">Assigned User ID</th>
                             <th style="padding: 12px 16px;">Contact</th>
                             <th style="padding: 12px 16px;">Status</th>
                             <th style="padding: 12px 16px; text-align: right;">Actions</th>
@@ -3512,7 +3517,7 @@
                         <br><a href="#" onclick="openCustomerStorageModal(event, ${c.id}); return false;" style="font-size: 0.68rem; color: #38bdf8; text-decoration: underline; font-family: monospace; font-weight: 700;" title="Open customer files in CRM storage modal">📂 ${c.do_folder_path || 'Storage Folder'}</a>
                     </td>
                     <td style="padding: 12px 16px; color: #94a3b8;">${c.display_name || '—'}</td>
-                    <td style="padding: 12px 16px; font-family: monospace; color: #67e8f9;">${c.tax_id || '—'}</td>
+                    <td style="padding: 12px 16px; font-family: monospace; color: #c084fc; font-weight: 700;">${c.assigned_user_id || '—'}</td>
                     <td style="padding: 12px 16px; color: #cbd5e1; font-size: 0.8rem;">
                         ${c.phone ? `<a href="tel:${c.phone.replace(/[^0-9+]/g, '')}" style="color: #38bdf8; text-decoration: underline; font-weight: 600;" title="Click to call ${c.phone}">📞 ${c.phone}</a><br>` : ''}
                         ${c.email ? `✉️ ${c.email}` : ''}
@@ -4193,6 +4198,7 @@
                 setVal('customerFormLegalName', '');
                 setVal('customerFormDisplayName', '');
                 setVal('customerFormTaxId', '');
+                setVal('customerFormAssignedUserId', '');
                 setVal('customerFormStatus', 'Active');
                 setVal('customerFormPhone', '');
                 setVal('customerFormEmail', '');
@@ -4220,6 +4226,7 @@
                 setVal('customerPageFormLegalName', '');
                 setVal('customerPageFormDisplayName', '');
                 setVal('customerPageFormTaxId', '');
+                setVal('customerPageFormAssignedUserId', '');
                 setVal('customerPageFormStatus', 'Active');
                 setVal('customerPageFormPhone', '');
                 setVal('customerPageFormEmail', '');
@@ -4249,6 +4256,7 @@
                 setVal('LegalName', rec.legal_name || '');
                 setVal('DisplayName', rec.display_name || '');
                 setVal('TaxId', rec.tax_id || '');
+                setVal('AssignedUserId', rec.assigned_user_id || '');
                 setVal('Status', rec.status || 'Active');
                 setVal('Phone', rec.phone || '');
                 setVal('Email', rec.email || '');
@@ -4275,6 +4283,7 @@
                 legal_name: getVal('LegalName'),
                 display_name: getVal('DisplayName'),
                 tax_id: getVal('TaxId'),
+                assigned_user_id: getVal('AssignedUserId'),
                 status: getVal('Status') || 'Active',
                 phone: getVal('Phone'),
                 email: getVal('Email'),
