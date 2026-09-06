@@ -2694,10 +2694,19 @@ async def update_tax_team_member(team_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT name FROM "TaxTeam" WHERE id = %s;', (team_id,))
+            old_row = cur.fetchone()
+            old_name = old_row["name"] if old_row else None
+
             cur.execute('UPDATE "TaxTeam" SET "name" = %s, "updatedAt" = CURRENT_TIMESTAMP WHERE id = %s RETURNING id, name;', (name, team_id))
             updated_row = cur.fetchone()
             if not updated_row:
                 raise HTTPException(status_code=404, detail="Tax Team member not found")
+
+            if old_name and old_name != name:
+                cur.execute('UPDATE customer SET assigned_user_id = %s WHERE assigned_user_id = %s;', (name, old_name))
+                cur.execute('UPDATE compliance_calendar_events SET assigned_tax_prep = %s WHERE assigned_tax_prep = %s;', (name, old_name))
+
             conn.commit()
             return dict(updated_row)
     except Exception as e:
@@ -2884,6 +2893,13 @@ async def update_compliance_event(event_id: int, request: Request):
             updated = cur.fetchone()
             if not updated:
                 raise HTTPException(status_code=404, detail="Compliance event not found.")
+
+            if data.get("sync_customer_tax_prep") and data.get("assigned_tax_prep"):
+                new_tp = data.get("assigned_tax_prep")
+                cid = updated["customer_id"]
+                cur.execute("UPDATE customer SET assigned_user_id = %s WHERE id = %s;", (new_tp, cid))
+                cur.execute("UPDATE compliance_calendar_events SET assigned_tax_prep = %s WHERE customer_id = %s;", (new_tp, cid))
+
             conn.commit()
             res = dict(updated)
             if res.get("due_date"):
@@ -4492,6 +4508,17 @@ async def update_customer(customer_id: str, request: Request):
             updated_record = cur.fetchone()
             if not updated_record:
                 raise HTTPException(status_code=404, detail="Customer not found")
+
+            # Cascade Tax Prep assignment to all compliance calendar events for this customer
+            try:
+                cur.execute("""
+                    UPDATE compliance_calendar_events
+                    SET assigned_tax_prep = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = %s;
+                """, (assigned_user_id, real_cust_id))
+            except Exception as sync_err:
+                print(f"Warning: Failed to sync compliance events on customer update: {sync_err}")
 
             # Auto-create parent mapping for updated customer
             try:
