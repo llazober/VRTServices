@@ -6825,7 +6825,7 @@
                 const res = await fetch('/api/knowledge/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: filename, content: content, parent_name: parentName })
+                    body: JSON.stringify({ filename: filename, title: filename, content: content, parent_name: parentName })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to create article');
@@ -6833,6 +6833,7 @@
                 togglePageKbCreateForm();
                 document.getElementById('pageKbCreateFilename').value = "";
                 document.getElementById('pageKbCreateContent').value = "";
+                if (typeof loadPageKbDocs === 'function') await loadPageKbDocs();
                 selectPageKbDoc(data.path, filename);
             } catch (err) {
                 alert('❌ Error creating article: ' + err.message);

@@ -6874,13 +6874,20 @@ async def create_knowledge_doc(request: Request):
     tenant_slug = rag_engine.get_tenant_slug(parent_name)
     category_slug = tenant_slug
     
-    title = (body.get("title") or "").strip()
-    content = body.get("content") or f"# {title}\n\nWrite article content here..."
+    raw_title = (body.get("title") or body.get("filename") or body.get("name") or "").strip()
+    title = raw_title[:-3] if raw_title.lower().endswith(".md") else raw_title
     
     if not title:
-        raise HTTPException(status_code=400, detail="Title is required.")
+        raise HTTPException(status_code=400, detail="Title or Filename is required.")
     
-    filename = re.sub(r'[^a-zA-Z0-9_-]', '_', title.lower()).strip('_') + ".md"
+    content = body.get("content") or f"# {title}\n\nWrite article content here..."
+    
+    raw_filename = (body.get("filename") or "").strip()
+    if raw_filename:
+        filename = raw_filename if raw_filename.lower().endswith(".md") else f"{raw_filename}.md"
+    else:
+        filename = re.sub(r'[^a-zA-Z0-9_-]', '_', title.lower()).strip('_') + ".md"
+        
     rel_path = f"{category_slug}/{filename}"
     full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
     
