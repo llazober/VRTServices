@@ -21,7 +21,8 @@ Every client account in VRTServices (`customer` table) has recurring and one-off
 ## 2. Design & Architecture Decisions
 
 1. **Preset Generation Mode**:
-   - Preset compliance schedule generation will be **manual via button click** (`⚡ Generate Preset Compliance Schedule`) inside the Compliance Calendar screen or Customer details.
+   - Preset compliance schedule generation occurs **automatically upon customer creation** (`POST /api/customers`) and can also be triggered **manually via button click** (`⚡ Generate Preset Compliance Schedule`) inside the Compliance Calendar screen or Customer details.
+   - When a customer is deleted (`DELETE /api/customers/{customer_id}`), all compliance calendar events, billing schedules, and invoices tied to that customer are **automatically purged**.
 2. **Notification & Alert Channel**:
    - Automated Resend email notifications (`RESEND_API_KEY`) will be sent **strictly to internal Assigned Tax Preps** (`TaxTeam`) 7 days, 3 days, and day-of upcoming or overdue deadlines.
 

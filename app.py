@@ -2984,6 +2984,99 @@ async def update_compliance_event_status(event_id: int, request: Request):
         if conn:
             conn.close()
 
+def generate_preset_compliance_events_for_customer(cur, customer_id: int, customer_type: str = "Business", assigned_tax_prep: str = None) -> int:
+    """Generates default statutory compliance calendar preset schedule events for a customer."""
+    c_type = (customer_type or "Business").strip()
+    import datetime
+    current_year = datetime.datetime.now().year
+    
+    generated_events = []
+    
+    if c_type == "Business":
+        # 1. Monthly Sales Tax Filing (20th of each month)
+        for month in range(1, 13):
+            due_d = datetime.date(current_year, month, 20)
+            generated_events.append((
+                customer_id, 'Sales Tax', f'Sales Tax Return - {due_d.strftime("%B %Y")}',
+                'State Sales & Use Tax Monthly Filing', 'State', due_d.isoformat(),
+                'Monthly', assigned_tax_prep, 7, True
+            ))
+        
+        # 2. Monthly Bookkeeping Close (15th of each month)
+        for month in range(1, 13):
+            due_d = datetime.date(current_year, month, 15)
+            generated_events.append((
+                customer_id, 'Bookkeeping Close', f'Monthly Bookkeeping Close - {due_d.strftime("%B %Y")}',
+                'Bank Reconciliations & Monthly Close', 'Internal', due_d.isoformat(),
+                'Monthly', assigned_tax_prep, 5, True
+            ))
+
+        # 3. Quarterly Payroll Form 941
+        q_dates = [
+            (datetime.date(current_year, 4, 30), 'Q1 Payroll Tax Form 941'),
+            (datetime.date(current_year, 7, 31), 'Q2 Payroll Tax Form 941'),
+            (datetime.date(current_year, 10, 31), 'Q3 Payroll Tax Form 941'),
+            (datetime.date(current_year + 1, 1, 31), 'Q4 Payroll Tax Form 941'),
+        ]
+        for q_due, q_title in q_dates:
+            generated_events.append((
+                customer_id, 'Payroll Tax', q_title,
+                'Employer\'s Quarterly Federal Tax Return', 'Federal', q_due.isoformat(),
+                'Quarterly', assigned_tax_prep, 10, True
+            ))
+
+        # 4. Corporate Tax Return (March 15)
+        generated_events.append((
+            customer_id, 'Corporate Tax', f'Corporate Tax Return (Form 1120/1120-S) - Tax Year {current_year - 1}',
+            'Annual Federal & State Corporate Income Tax Filing', 'Federal/State', datetime.date(current_year, 3, 15).isoformat(),
+            'Annual', assigned_tax_prep, 30, True
+        ))
+
+        # 5. Annual 1099-NEC & 1099-MISC Filing (Jan 31)
+        generated_events.append((
+            customer_id, '1099/W2', f'Annual 1099-NEC / 1099-MISC Filings - Tax Year {current_year - 1}',
+            'Nonemployee Compensation Information Returns', 'Federal', datetime.date(current_year, 1, 31).isoformat(),
+            'Annual', assigned_tax_prep, 15, True
+        ))
+
+        # 6. Annual State Corporate Report / Franchise Tax (May 1)
+        generated_events.append((
+            customer_id, 'Franchise Tax', f'Annual Corporate Report / Franchise Tax - {current_year}',
+            'State Annual Corporate Registration & Franchise Fee', 'State', datetime.date(current_year, 5, 1).isoformat(),
+            'Annual', assigned_tax_prep, 14, True
+        ))
+
+    else: # Individual
+        # 1. Quarterly Estimated Tax Payments
+        est_dates = [
+            (datetime.date(current_year, 4, 15), 'Q1 Estimated Tax Payment (Form 1040-ES)'),
+            (datetime.date(current_year, 6, 15), 'Q2 Estimated Tax Payment (Form 1040-ES)'),
+            (datetime.date(current_year, 9, 15), 'Q3 Estimated Tax Payment (Form 1040-ES)'),
+            (datetime.date(current_year + 1, 1, 15), 'Q4 Estimated Tax Payment (Form 1040-ES)'),
+        ]
+        for est_due, est_title in est_dates:
+            generated_events.append((
+                customer_id, 'Estimated Tax', est_title,
+                'Federal & State Quarterly Estimated Tax Deposit', 'Federal', est_due.isoformat(),
+                'Quarterly', assigned_tax_prep, 7, True
+            ))
+
+        # 2. Annual Individual Tax Return (April 15)
+        generated_events.append((
+            customer_id, 'Corporate Tax', f'Individual Income Tax Return (Form 1040) - Tax Year {current_year - 1}',
+            'Annual U.S. Individual Income Tax Return', 'Federal/State', datetime.date(current_year, 4, 15).isoformat(),
+            'Annual', assigned_tax_prep, 30, True
+        ))
+
+    insert_sql = """
+        INSERT INTO compliance_calendar_events (
+            customer_id, category, title, description, jurisdiction, due_date, frequency, assigned_tax_prep, reminder_days_prior, auto_generated
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+    """
+    for item in generated_events:
+        cur.execute(insert_sql, item)
+    return len(generated_events)
+
 @app.post("/api/compliance/generate-preset/{customer_id}")
 async def generate_compliance_preset(customer_id: int, request: Request):
     username = get_current_username(request)
@@ -3001,97 +3094,10 @@ async def generate_compliance_preset(customer_id: int, request: Request):
             
             c_type = (cust.get("customer_type") or "Business").strip()
             assigned_tax_prep = cust.get("assigned_user_id") or None
-            import datetime
-            current_year = datetime.datetime.now().year
             
-            generated_events = []
-            
-            if c_type == "Business":
-                # 1. Monthly Sales Tax Filing (20th of each month)
-                for month in range(1, 13):
-                    due_d = datetime.date(current_year, month, 20)
-                    generated_events.append((
-                        customer_id, 'Sales Tax', f'Sales Tax Return - {due_d.strftime("%B %Y")}',
-                        'State Sales & Use Tax Monthly Filing', 'State', due_d.isoformat(),
-                        'Monthly', assigned_tax_prep, 7, True
-                    ))
-                
-                # 2. Monthly Bookkeeping Close (15th of each month)
-                for month in range(1, 13):
-                    due_d = datetime.date(current_year, month, 15)
-                    generated_events.append((
-                        customer_id, 'Bookkeeping Close', f'Monthly Bookkeeping Close - {due_d.strftime("%B %Y")}',
-                        'Bank Reconciliations & Monthly Close', 'Internal', due_d.isoformat(),
-                        'Monthly', assigned_tax_prep, 5, True
-                    ))
-
-                # 3. Quarterly Payroll Form 941
-                q_dates = [
-                    (datetime.date(current_year, 4, 30), 'Q1 Payroll Tax Form 941'),
-                    (datetime.date(current_year, 7, 31), 'Q2 Payroll Tax Form 941'),
-                    (datetime.date(current_year, 10, 31), 'Q3 Payroll Tax Form 941'),
-                    (datetime.date(current_year + 1, 1, 31), 'Q4 Payroll Tax Form 941'),
-                ]
-                for q_due, q_title in q_dates:
-                    generated_events.append((
-                        customer_id, 'Payroll Tax', q_title,
-                        'Employer\'s Quarterly Federal Tax Return', 'Federal', q_due.isoformat(),
-                        'Quarterly', assigned_tax_prep, 10, True
-                    ))
-
-                # 4. Corporate Tax Return (March 15)
-                generated_events.append((
-                    customer_id, 'Corporate Tax', f'Corporate Tax Return (Form 1120/1120-S) - Tax Year {current_year - 1}',
-                    'Annual Federal & State Corporate Income Tax Filing', 'Federal/State', datetime.date(current_year, 3, 15).isoformat(),
-                    'Annual', assigned_tax_prep, 30, True
-                ))
-
-                # 5. Annual 1099-NEC & 1099-MISC Filing (Jan 31)
-                generated_events.append((
-                    customer_id, '1099/W2', f'Annual 1099-NEC / 1099-MISC Filings - Tax Year {current_year - 1}',
-                    'Nonemployee Compensation Information Returns', 'Federal', datetime.date(current_year, 1, 31).isoformat(),
-                    'Annual', assigned_tax_prep, 15, True
-                ))
-
-                # 6. Annual State Corporate Report / Franchise Tax (May 1)
-                generated_events.append((
-                    customer_id, 'Franchise Tax', f'Annual Corporate Report / Franchise Tax - {current_year}',
-                    'State Annual Corporate Registration & Franchise Fee', 'State', datetime.date(current_year, 5, 1).isoformat(),
-                    'Annual', assigned_tax_prep, 14, True
-                ))
-
-            else: # Individual
-                # 1. Quarterly Estimated Tax Payments
-                est_dates = [
-                    (datetime.date(current_year, 4, 15), 'Q1 Estimated Tax Payment (Form 1040-ES)'),
-                    (datetime.date(current_year, 6, 15), 'Q2 Estimated Tax Payment (Form 1040-ES)'),
-                    (datetime.date(current_year, 9, 15), 'Q3 Estimated Tax Payment (Form 1040-ES)'),
-                    (datetime.date(current_year + 1, 1, 15), 'Q4 Estimated Tax Payment (Form 1040-ES)'),
-                ]
-                for est_due, est_title in est_dates:
-                    generated_events.append((
-                        customer_id, 'Estimated Tax', est_title,
-                        'Federal & State Quarterly Estimated Tax Deposit', 'Federal', est_due.isoformat(),
-                        'Quarterly', assigned_tax_prep, 7, True
-                    ))
-
-                # 2. Annual Individual Tax Return (April 15)
-                generated_events.append((
-                    customer_id, 'Corporate Tax', f'Individual Income Tax Return (Form 1040) - Tax Year {current_year - 1}',
-                    'Annual U.S. Individual Income Tax Return', 'Federal/State', datetime.date(current_year, 4, 15).isoformat(),
-                    'Annual', assigned_tax_prep, 30, True
-                ))
-
-            insert_sql = """
-                INSERT INTO compliance_calendar_events (
-                    customer_id, category, title, description, jurisdiction, due_date, frequency, assigned_tax_prep, reminder_days_prior, auto_generated
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-            """
-            for item in generated_events:
-                cur.execute(insert_sql, item)
-            
+            count = generate_preset_compliance_events_for_customer(cur, customer_id, c_type, assigned_tax_prep)
             conn.commit()
-            return {"success": True, "count": len(generated_events), "customer_id": customer_id}
+            return {"success": True, "count": count, "customer_id": customer_id}
 
     except Exception as e:
         print(f"Error generating compliance preset: {e}")
@@ -3204,6 +3210,13 @@ async def create_customer(request: Request):
                 sync_customer_parent_mapping(cur, parent_name, legal_name, display_name)
             except Exception as map_err:
                 print(f"Warning: Auto parent-client mapping failed for customer '{legal_name}': {map_err}")
+
+            # Auto-generate preset schedule for new customer
+            try:
+                preset_count = generate_preset_compliance_events_for_customer(cur, new_record["id"], customer_type, assigned_user_id)
+                print(f"Auto-generated {preset_count} preset compliance schedule events for new customer #{new_record['id']} ({legal_name})")
+            except Exception as sched_err:
+                print(f"Warning: Auto preset schedule generation failed for customer '{legal_name}': {sched_err}")
 
             conn.commit()
 
@@ -4622,9 +4635,12 @@ async def delete_customer(customer_id: str, request: Request, admin_password: st
                 customer.get("display_name")
             )
 
-            # 3. Clean up associated customer task checklists and communications
+            # 3. Clean up associated customer task checklists, communications, schedules & invoices
             cur.execute("DELETE FROM customer_task_checklist WHERE customer_id = %s;", (real_cust_id,))
             cur.execute("DELETE FROM customer_communications WHERE customer_id = %s;", (real_cust_id,))
+            cur.execute("DELETE FROM compliance_calendar_events WHERE customer_id = %s;", (real_cust_id,))
+            cur.execute("DELETE FROM customer_billing_schedules WHERE customer_id = %s;", (real_cust_id,))
+            cur.execute("DELETE FROM customer_invoices WHERE customer_id = %s;", (real_cust_id,))
 
             # 4. Delete customer record from main customer table
             cur.execute("DELETE FROM customer WHERE id = %s;", (real_cust_id,))
