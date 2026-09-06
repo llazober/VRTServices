@@ -5615,6 +5615,9 @@
                 if (typeof fetchPendingWorkload === 'function') {
                     fetchPendingWorkload();
                 }
+                if (typeof loadComplianceData === 'function') {
+                    loadComplianceData();
+                }
 
                 if (data.just_archived) {
                     alert(data.archived_message || '🎉 Workflow Completed & Archived!');
