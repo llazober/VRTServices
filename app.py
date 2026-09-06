@@ -4410,8 +4410,8 @@ async def toggle_customer_checklist_step(customer_id: str, request: Request):
                 cur.execute(f"""
                     UPDATE customer_task_checklist
                     SET {col_name} = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE customer_id = %s AND period = %s;
-                """, (val, real_cust_id, period))
+                    WHERE customer_id = %s AND (period = %s OR period = %s OR period = 'in_process');
+                """, (val, real_cust_id, period, old_in_process_slug))
 
                 # ── AUTOMATIC SYNC WITH COMPLIANCE CALENDAR MODULE ─────────────────
                 try:
@@ -4531,12 +4531,12 @@ async def reopen_customer_checklist(customer_id: str, request: Request):
             in_process_slug, in_process_label = get_in_process_period(cur, real_cust_id, workflow_mode)
             target_period = in_process_slug if (not period or period == "in_process") else period
 
-            # Reopen step: uncheck last step so accountant can correct mistake
+            # Reopen step: uncheck last step so accountant can correct mistake across all period aliases
             cur.execute("""
                 UPDATE customer_task_checklist
-                SET accountant_reviewed = FALSE, tax_accepted = FALSE, updated_at = CURRENT_TIMESTAMP
-                WHERE customer_id = %s AND (period = %s OR period = %s);
-            """, (real_cust_id, target_period, period))
+                SET accountant_reviewed = FALSE, tax_accepted = FALSE, tax_efile = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE customer_id = %s AND (period = %s OR period = %s OR period = %s OR period = 'in_process');
+            """, (real_cust_id, target_period, period, in_process_slug))
 
             # Sync compliance event back to Pending
             try:

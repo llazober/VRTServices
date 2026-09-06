@@ -5669,7 +5669,11 @@
                 if (typeof showAlert === 'function') showAlert('↩️ Period re-opened as In Process!', 'success', 'Period Re-opened');
                 else alert('↩️ Period re-opened as In Process!');
 
-                await loadCustomerChecklist(cid, period);
+                renderChecklistUI(data);
+                populateChecklistPeriodDropdown(data);
+                const reopenBtn = document.getElementById('btnReopenChecklist');
+                if (reopenBtn) reopenBtn.style.display = 'none';
+
                 if (typeof loadComplianceData === 'function') await loadComplianceData();
             } catch (err) {
                 alert(`❌ Reopen Error: ${err.message}`);
