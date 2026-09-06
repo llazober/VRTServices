@@ -939,6 +939,15 @@
                 <span class="nav-text">Vendor Rules</span>
             </button>
 
+            <button class="nav-item" onclick="openTaxTeamModal()" id="openTaxTeamModalBtn" title="Tax Prep Team Management">
+                <div class="icon-box" style="color: #facc15;">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                </div>
+                <span class="nav-text">Tax Prep Team</span>
+            </button>
+
             <button class="nav-item" onclick="openSupportModal()" title="Support Request">
                 <div class="icon-box" style="color: #00f2fe;">
                     <svg viewBox="0 0 24 24">
@@ -1029,14 +1038,14 @@
                             👥 Customer <span style="color: #e100ff;">Management</span>
                         </h2>
                         <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 14px;">
-                            View, add, edit, and delete customer accounts, assigned user IDs, contact information, and statuses.
+                            View, add, edit, and delete customer accounts, assigned tax preps, contact information, and statuses.
                         </p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; max-width: 720px;">
                             <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; flex: 1; outline: none;" oninput="fetchCustomerRecords(true)">
                             <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 6px 12px;">
-                                <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 User:</span>
+                                <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 Tax Prep:</span>
                                 <select id="customerPageAssignedUserSelect" onchange="renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
-                                    <option value="all" style="background: #0f172a; color: #fff;">All Users</option>
+                                    <option value="all" style="background: #0f172a; color: #fff;">All Tax Preps</option>
                                     <option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned</option>
                                 </select>
                             </div>
@@ -1082,8 +1091,10 @@
                         <input type="text" id="customerPageFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Assigned User ID</label>
-                        <input type="text" id="customerPageFormAssignedUserId" placeholder="e.g. USR-101 or username" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Assigned Tax Prep</label>
+                        <select id="customerPageFormAssignedUserId" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                            <option value="">-- Unassigned --</option>
+                        </select>
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Status *</label>
@@ -1125,7 +1136,7 @@
                                 <th style="padding: 14px 18px;">Type</th>
                                 <th style="padding: 14px 18px;">Legal Name</th>
                                 <th style="padding: 14px 18px;">Display Name</th>
-                                <th style="padding: 14px 18px;">Assigned User ID</th>
+                                <th style="padding: 14px 18px;">Assigned Tax Prep</th>
                                 <th style="padding: 14px 18px;">Contact</th>
                                 <th style="padding: 14px 18px;">Status</th>
                                 <th style="padding: 14px 18px; text-align: right;">Actions</th>
@@ -1427,9 +1438,9 @@
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 10px; padding: 4px 10px;">
-                            <span style="font-size: 0.78rem; font-weight: 700; color: #c084fc;">👤 Filter User:</span>
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #c084fc;">👤 Filter Tax Prep:</span>
                             <select id="workloadAssignedUserSelect" onchange="filterWorkloadAssignedUserChanged()" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; font-weight: 700; outline: none; cursor: pointer; padding: 2px 4px;">
-                                <option value="all" style="background: #0f172a; color: #fff;">All Assigned Users</option>
+                                <option value="all" style="background: #0f172a; color: #fff;">All Tax Preps</option>
                                 <option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned Only</option>
                             </select>
                         </div>
@@ -1749,8 +1760,10 @@
                     <input type="text" id="customerFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
                 </div>
                 <div>
-                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned User ID</label>
-                    <input type="text" id="customerFormAssignedUserId" placeholder="e.g. USR-101 or username" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned Tax Prep</label>
+                    <select id="customerFormAssignedUserId" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                        <option value="">-- Unassigned --</option>
+                    </select>
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Status *</label>
@@ -1792,7 +1805,7 @@
                             <th style="padding: 12px 16px;">Type</th>
                             <th style="padding: 12px 16px;">Legal Name</th>
                             <th style="padding: 12px 16px;">Display Name</th>
-                            <th style="padding: 12px 16px;">Assigned User ID</th>
+                            <th style="padding: 12px 16px;">Assigned Tax Prep</th>
                             <th style="padding: 12px 16px;">Contact</th>
                             <th style="padding: 12px 16px;">Status</th>
                             <th style="padding: 12px 16px; text-align: right;">Actions</th>
@@ -6723,11 +6736,197 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => {
+            fetchTaxTeamMembers();
             if (document.getElementById('pageKbFileList')) {
                 loadPageKbDocs();
             }
         });
+
+        // ── TAX PREP TEAM MANAGEMENT MODAL LOGIC ───────────────────────
+        let currentTaxTeamList = [];
+
+        async function fetchTaxTeamMembers() {
+            try {
+                const res = await fetch('/api/tax-team');
+                if (res.ok) {
+                    const data = await res.json();
+                    currentTaxTeamList = data.team || [];
+                    renderTaxTeamTable();
+                    populateCustomerTaxPrepDropdowns();
+                }
+            } catch (err) {
+                console.error('Error fetching TaxTeam:', err);
+            }
+        }
+
+        function renderTaxTeamTable() {
+            const tbody = document.getElementById('taxTeamTableBody');
+            if (!tbody) return;
+            if (currentTaxTeamList.length === 0) {
+                tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #64748b;">No Tax Prep Team members added yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = currentTaxTeamList.map(m => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 18px; font-family: monospace; color: #facc15; font-weight: 700;">#${m.id}</td>
+                    <td style="padding: 10px 18px; font-weight: 700; color: #fff;">👤 ${m.name}</td>
+                    <td style="padding: 10px 18px; text-align: right;">
+                        <button onclick="editTaxTeamMember(${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 6px;">✏️ EDIT</button>
+                        <button onclick="deleteTaxTeamMember(${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">🗑️ DEL</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function populateCustomerTaxPrepDropdowns() {
+            const ids = ['customerPageFormAssignedUserId', 'customerFormAssignedUserId'];
+            ids.forEach(id => {
+                const select = document.getElementById(id);
+                if (!select) return;
+                const currentVal = select.value || '';
+                let html = `<option value="">-- Unassigned --</option>`;
+                currentTaxTeamList.forEach(m => {
+                    const valEscaped = m.name.replace(/"/g, '&quot;');
+                    html += `<option value="${valEscaped}">${m.name}</option>`;
+                });
+                select.innerHTML = html;
+                if (currentVal) select.value = currentVal;
+            });
+        }
+
+        function openTaxTeamModal() {
+            const modal = document.getElementById('taxTeamModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            resetTaxTeamForm();
+            fetchTaxTeamMembers();
+        }
+
+        function closeTaxTeamModal() {
+            const modal = document.getElementById('taxTeamModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function resetTaxTeamForm() {
+            const idEl = document.getElementById('taxTeamFormId');
+            const nameEl = document.getElementById('taxTeamFormName');
+            const cancelBtn = document.getElementById('taxTeamCancelEditBtn');
+            const subBtn = document.getElementById('taxTeamSubmitBtn');
+            if (idEl) idEl.value = '';
+            if (nameEl) nameEl.value = '';
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            if (subBtn) subBtn.textContent = 'Add Member';
+        }
+
+        function editTaxTeamMember(id, name) {
+            const idEl = document.getElementById('taxTeamFormId');
+            const nameEl = document.getElementById('taxTeamFormName');
+            const cancelBtn = document.getElementById('taxTeamCancelEditBtn');
+            const subBtn = document.getElementById('taxTeamSubmitBtn');
+            if (idEl) idEl.value = id;
+            if (nameEl) nameEl.value = name;
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+            if (subBtn) subBtn.textContent = 'Update Member';
+            nameEl.focus();
+        }
+
+        async function saveTaxTeamMember(e) {
+            e.preventDefault();
+            const id = document.getElementById('taxTeamFormId')?.value;
+            const name = (document.getElementById('taxTeamFormName')?.value || '').trim();
+            if (!name) return alert('Please enter member name.');
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/tax-team/${id}` : '/api/tax-team';
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                if (res.ok) {
+                    resetTaxTeamForm();
+                    await fetchTaxTeamMembers();
+                    if (typeof fetchCustomerRecords === 'function') fetchCustomerRecords(true);
+                    if (typeof loadWorkloadSummary === 'function') loadWorkloadSummary();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || err.error || 'Failed to save member'));
+                }
+            } catch (err) {
+                alert('Error saving Tax Team member: ' + err.message);
+            }
+        }
+
+        async function deleteTaxTeamMember(id, name) {
+            if (!confirm(`Are you sure you want to delete Tax Prep member "${name}"?`)) return;
+            try {
+                const res = await fetch(`/api/tax-team/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchTaxTeamMembers();
+                    if (typeof fetchCustomerRecords === 'function') fetchCustomerRecords(true);
+                    if (typeof loadWorkloadSummary === 'function') loadWorkloadSummary();
+                } else {
+                    const err = await res.json();
+                    alert('Error deleting member: ' + (err.detail || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error deleting member: ' + err.message);
+            }
+        }
     </script>
+
+    <!-- ── TAX PREP TEAM MANAGEMENT MODAL ────────────────────────── -->
+    <div id="taxTeamModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 2000; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: #0f172a; border: 1px solid rgba(250, 204, 21, 0.4); border-radius: 20px; max-width: 650px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(250, 204, 21, 0.2); color: #fff; overflow: hidden;">
+            <!-- Modal Header -->
+            <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+                <div>
+                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 800; color: #fff; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                        👥 Tax Prep Team <span style="color: #facc15;">Management</span>
+                    </h3>
+                    <p style="color: #94a3b8; font-size: 0.82rem; margin: 0;">Add, modify, and delete team members available for assigned customer tax preparation.</p>
+                </div>
+                <button onclick="closeTaxTeamModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 4px; border-radius: 50%; font-size: 1.2rem;">✖</button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+                <!-- Form to Add/Edit Member -->
+                <form id="taxTeamForm" onsubmit="saveTaxTeamMember(event)" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 14px; padding: 16px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                    <input type="hidden" id="taxTeamFormId">
+                    <div style="flex: 1; min-width: 220px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax Prep Team Member Name *</label>
+                        <input type="text" id="taxTeamFormName" required placeholder="e.g. Mary, John, Sarah..." style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 9px 14px; font-size: 0.9rem; color: #fff; outline: none;">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="taxTeamCancelEditBtn" onclick="resetTaxTeamForm()" style="display: none; padding: 9px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; font-weight: 700; border-radius: 10px; font-size: 0.82rem; cursor: pointer;">Cancel</button>
+                        <button type="submit" id="taxTeamSubmitBtn" style="padding: 9px 22px; background: linear-gradient(135deg, #facc15, #eab308); color: #000; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(250, 204, 21, 0.35);">Add Member</button>
+                    </div>
+                </form>
+
+                <!-- Table of Team Members -->
+                <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; background: rgba(0,0,0,0.2); overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: #94a3b8; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">
+                                <th style="padding: 12px 18px;">ID</th>
+                                <th style="padding: 12px 18px;">Tax Prep Name</th>
+                                <th style="padding: 12px 18px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taxTeamTableBody">
+                            <tr><td colSpan="3" style="padding: 24px; text-align: center; color: #94a3b8;">Loading Tax Prep Team members...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); display: flex; justify-content: flex-end;">
+                <button onclick="closeTaxTeamModal()" style="padding: 8px 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 0.8rem; font-weight: 800; border-radius: 10px; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

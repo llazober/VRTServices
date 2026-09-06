@@ -924,6 +924,37 @@ def init_billing_tables():
         if conn:
             conn.close()
 
+def init_tax_team_table():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS "TaxTeam" (
+                    "id"        BIGSERIAL PRIMARY KEY,
+                    "name"      VARCHAR(200) UNIQUE NOT NULL,
+                    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+            try:
+                cur.execute('SELECT COUNT(*) FROM "TaxTeam";')
+                row = cur.fetchone()
+                if row and row[0] == 0:
+                    cur.execute("""
+                        INSERT INTO "TaxTeam" ("name") VALUES ('Mary'), ('John') ON CONFLICT DO NOTHING;
+                    """)
+                    conn.commit()
+            except Exception as seed_err:
+                print(f"Notice seeding TaxTeam: {seed_err}")
+            print("TaxTeam table initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing TaxTeam table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 try:
     init_customer_table()
     ensure_catchall_customer()
@@ -933,6 +964,7 @@ try:
     init_history_table()
     init_coa_table()
     init_billing_tables()
+    init_tax_team_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -2546,6 +2578,99 @@ async def portal_upload_file(
         print(f"[ERROR in portal_upload_file]: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── TAX TEAM API ENDPOINTS ────────────────────────────────────────────
+@app.get("/api/tax-team")
+async def get_tax_team(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT id, name, "createdAt" as created_at FROM "TaxTeam" ORDER BY name ASC;')
+            rows = cur.fetchall() or []
+            return {"team": [dict(r) for r in rows]}
+    except Exception as e:
+        print(f"Error fetching TaxTeam: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/tax-team")
+async def create_tax_team_member(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Tax Prep Name is required")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('INSERT INTO "TaxTeam" ("name") VALUES (%s) RETURNING id, name, "createdAt" as created_at;', (name,))
+            new_row = dict(cur.fetchone())
+            conn.commit()
+            return new_row
+    except Exception as e:
+        print(f"Error creating TaxTeam member: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.put("/api/tax-team/{team_id}")
+async def update_tax_team_member(team_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Tax Prep Name is required")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('UPDATE "TaxTeam" SET "name" = %s, "updatedAt" = CURRENT_TIMESTAMP WHERE id = %s RETURNING id, name;', (name, team_id))
+            updated_row = cur.fetchone()
+            if not updated_row:
+                raise HTTPException(status_code=404, detail="Tax Team member not found")
+            conn.commit()
+            return dict(updated_row)
+    except Exception as e:
+        print(f"Error updating TaxTeam member: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.delete("/api/tax-team/{team_id}")
+async def delete_tax_team_member(team_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM "TaxTeam" WHERE id = %s RETURNING id;', (team_id,))
+            deleted = cur.fetchone()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Tax Team member not found")
+            conn.commit()
+            return {"success": True, "id": team_id}
+    except Exception as e:
+        print(f"Error deleting TaxTeam member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()
