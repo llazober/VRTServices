@@ -5835,7 +5835,7 @@
                 </div>
 
                 <!-- Step 4 -->
-                <div id="step_accountant_reviewed_card" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                <div id="step_accountant_reviewed_card" onclick="if(event.target.tagName !== 'INPUT') { const c = document.getElementById('step_accountant_reviewed'); c.checked = !c.checked; toggleChecklistStep('accountant_reviewed', c.checked); }" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; cursor: pointer;">
                     <div style="display: flex; align-items: center; gap: 14px;">
                         <input type="checkbox" id="step_accountant_reviewed" onchange="toggleChecklistStep('accountant_reviewed', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
                         <div>
@@ -7290,6 +7290,9 @@
                 });
                 if (res.ok) {
                     await loadComplianceData();
+                    if (typeof currentChecklistCustomerId !== 'undefined' && currentChecklistCustomerId) {
+                        await loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
+                    }
                 }
             } catch (err) {
                 alert('Error updating status: ' + err.message);
