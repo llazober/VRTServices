@@ -2987,7 +2987,7 @@ async def update_compliance_event_status(event_id: int, request: Request):
                         pass
 
                 in_proc_slug, _ = get_in_process_period(cur, cid, "bookkeeping")
-                periods_to_update = list(set([p for p in [ym_slug, in_proc_slug] if p]))
+                periods_to_update = list(set([p for p in [ym_slug, in_proc_slug, "in_process"] if p]))
 
                 if cat == "Bookkeeping Close":
                     for p_slug in periods_to_update:
@@ -4489,14 +4489,8 @@ async def toggle_customer_checklist_step(customer_id: str, request: Request):
 
             new_in_process_slug, new_in_process_label = get_in_process_period(cur, real_cust_id, workflow_mode)
 
-        # If period just completed and shifted to next month, fetch the new In Process checklist
-        if val and old_in_process_slug != new_in_process_slug:
-            res = await get_customer_checklist(real_cust_id, new_in_process_slug, workflow_mode, request)
-            res["just_archived"] = True
-            res["archived_message"] = f"🎉 {old_in_process_label} Completed & Archived! In Process reset for {new_in_process_label}"
-            return res
-        else:
-            return await get_customer_checklist(real_cust_id, period, workflow_mode, request)
+        # Always return updated checklist for current period so UI shows Step 4 checked (100% complete)
+        return await get_customer_checklist(real_cust_id, period, workflow_mode, request)
     except HTTPException as he:
         raise he
     except Exception as e:

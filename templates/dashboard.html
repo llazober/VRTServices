@@ -5838,7 +5838,7 @@
                 <!-- Step 4 -->
                 <div id="step_accountant_reviewed_card" onclick="if(event.target.tagName !== 'INPUT') { const c = document.getElementById('step_accountant_reviewed'); c.checked = !c.checked; toggleChecklistStep('accountant_reviewed', c.checked); }" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; cursor: pointer;">
                     <div style="display: flex; align-items: center; gap: 14px;">
-                        <input type="checkbox" id="step_accountant_reviewed" onchange="toggleChecklistStep('accountant_reviewed', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
+                        <input type="checkbox" id="step_accountant_reviewed" onchange="toggleChecklistStep('accountant_reviewed', this.checked)" onclick="event.stopPropagation()" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
                         <div>
                             <h4 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">4. Accountant Reviewed & Reconciled</h4>
                             <p style="font-size: 0.73rem; color: #94a3b8; margin: 2px 0 0 0;">Final accountant review completed and ready for export to QBO/Accounting software</p>
