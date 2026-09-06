@@ -7185,21 +7185,61 @@
             loadComplianceData();
         }
 
+        function formatDateMMDDYYYY(dateStr) {
+            if (!dateStr) return '—';
+            const clean = String(dateStr).trim().split('T')[0];
+            const parts = clean.split('-');
+            if (parts.length === 3) {
+                const [yyyy, mm, dd] = parts;
+                return `${mm}/${dd}/${yyyy}`;
+            }
+            return dateStr;
+        }
+
         function renderComplianceSummaryKPIs() {
-            const overdue = complianceCurrentEvents.filter(e => e.status === 'Overdue').length;
-            const upcoming = complianceCurrentEvents.filter(e => e.status === 'Pending' || e.status === 'In Progress').length;
-            const activeMonth = complianceCurrentEvents.length;
-            const completed = complianceCurrentEvents.filter(e => e.status === 'Completed').length;
-            const pct = activeMonth > 0 ? Math.round((completed / activeMonth) * 100) : 0;
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            const in7DaysEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 23, 59, 59, 999);
+
+            let overdueCount = 0;
+            let dueNext7DaysCount = 0;
+            let completedCount = 0;
+
+            (complianceCurrentEvents || []).forEach(e => {
+                const isDone = e.status === 'Completed';
+                if (isDone) {
+                    completedCount++;
+                    return;
+                }
+
+                if (e.due_date) {
+                    const cleanDate = String(e.due_date).trim().split('T')[0];
+                    const parts = cleanDate.split('-');
+                    if (parts.length === 3) {
+                        const dueDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0);
+                        if (dueDate < todayStart || e.status === 'Overdue') {
+                            overdueCount++;
+                        } else if (dueDate >= todayStart && dueDate <= in7DaysEnd) {
+                            dueNext7DaysCount++;
+                        }
+                    }
+                } else if (e.status === 'Overdue') {
+                    overdueCount++;
+                }
+            });
+
+            const totalEvents = complianceCurrentEvents ? complianceCurrentEvents.length : 0;
+            const activePending = totalEvents - completedCount;
+            const pct = totalEvents > 0 ? Math.round((completedCount / totalEvents) * 100) : 0;
 
             const elOver = document.getElementById('complianceKpiOverdue');
             const elUp = document.getElementById('complianceKpiUpcoming');
             const elActive = document.getElementById('complianceKpiActiveMonth');
             const elComp = document.getElementById('complianceKpiCompletedMetric');
 
-            if (elOver) elOver.textContent = overdue;
-            if (elUp) elUp.textContent = upcoming;
-            if (elActive) elActive.textContent = activeMonth;
+            if (elOver) elOver.textContent = overdueCount;
+            if (elUp) elUp.textContent = dueNext7DaysCount;
+            if (elActive) elActive.textContent = activePending;
             if (elComp) elComp.textContent = `${pct}%`;
         }
 
@@ -7292,7 +7332,7 @@
 
                 return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                        <td style="padding: 12px 18px; font-family: monospace; font-weight: 700; color: #facc15;">${e.due_date || '—'}</td>
+                        <td style="padding: 12px 18px; font-family: monospace; font-weight: 700; color: #facc15;">${formatDateMMDDYYYY(e.due_date)}</td>
                         <td style="padding: 12px 18px; font-weight: 700; color: #fff;">${e.customer_legal_name || 'Customer #' + e.customer_id}</td>
                         <td style="padding: 12px 18px;">
                             <span style="background: ${badge.bg}; border: 1px solid ${badge.border}; color: ${badge.color}; padding: 3px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 700;">${badge.icon} ${e.category}</span>
