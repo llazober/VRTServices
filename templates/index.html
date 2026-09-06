@@ -1361,9 +1361,8 @@
                 return;
             }
 
-            if (modal.parentElement !== document.body) {
-                document.body.appendChild(modal);
-            }
+            document.body.appendChild(modal);
+            modal.style.zIndex = '2147483647';
 
             const iconBox = document.getElementById('customAlertIconBox');
             const titleEl = document.getElementById('customAlertTitle');
@@ -1447,9 +1446,8 @@
                     return;
                 }
 
-                if (modal.parentElement !== document.body) {
-                    document.body.appendChild(modal);
-                }
+                document.body.appendChild(modal);
+                modal.style.zIndex = '2147483647';
 
                 customConfirmPromiseResolver = resolve;
 
