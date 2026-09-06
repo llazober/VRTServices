@@ -6940,6 +6940,9 @@
                 select.innerHTML = html;
                 if (currentVal) select.value = currentVal;
             });
+            if (typeof populateComplianceModalDropdowns === 'function') {
+                populateComplianceModalDropdowns();
+            }
         }
 
         function openTaxTeamModal() {
@@ -7054,6 +7057,9 @@
         async function loadComplianceData() {
             if ((!currentCustomerRecords || currentCustomerRecords.length === 0) && typeof fetchCustomerRecords === 'function') {
                 await fetchCustomerRecords();
+            }
+            if ((!currentTaxTeamList || currentTaxTeamList.length === 0) && typeof fetchTaxTeamMembers === 'function') {
+                await fetchTaxTeamMembers();
             }
             currentCustomerList = currentCustomerRecords;
             populateComplianceModalDropdowns();
@@ -7380,19 +7386,31 @@
             const custs = (typeof currentCustomerRecords !== 'undefined' && currentCustomerRecords.length > 0) 
                 ? currentCustomerRecords 
                 : (currentCustomerList || []);
-            const taxTeam = currentTaxTeamList || [];
+            const taxTeam = (typeof currentTaxTeamList !== 'undefined') ? currentTaxTeamList : [];
 
             if (custSelect) {
+                const cur = custSelect.value;
                 custSelect.innerHTML = `<option value="">Select Customer *</option>` + custs.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || ''})</option>`).join('');
+                if (cur) custSelect.value = cur;
             }
             if (filterCust) {
+                const cur = filterCust.value;
                 filterCust.innerHTML = `<option value="all">All Customers</option>` + custs.map(c => `<option value="${c.id}">${c.legal_name}</option>`).join('');
+                if (cur) filterCust.value = cur;
             }
             if (taxPrepSelect) {
+                const cur = taxPrepSelect.value;
                 taxPrepSelect.innerHTML = `<option value="">-- Unassigned --</option>` + taxTeam.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                if (cur) taxPrepSelect.value = cur;
             }
             if (filterTaxPrep) {
-                filterTaxPrep.innerHTML = `<option value="all">All Tax Preps</option>` + taxTeam.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                const cur = filterTaxPrep.value;
+                let taxPrepFilterHtml = `<option value="all">All Tax Preps</option><option value="unassigned">-- Unassigned --</option>`;
+                taxTeam.forEach(t => {
+                    taxPrepFilterHtml += `<option value="${t.name}">${t.name}</option>`;
+                });
+                filterTaxPrep.innerHTML = taxPrepFilterHtml;
+                if (cur) filterTaxPrep.value = cur;
             }
         }
 
