@@ -5613,6 +5613,11 @@
                 if (!res.ok) throw new Error(data.detail || 'Failed to update checklist step');
 
                 renderChecklistUI(data);
+                populateChecklistPeriodDropdown(data);
+                const reopenBtn = document.getElementById('btnReopenChecklist');
+                if (reopenBtn) {
+                    reopenBtn.style.display = (!data.is_in_process) ? 'inline-block' : 'none';
+                }
 
                 if (typeof fetchPendingWorkload === 'function') {
                     fetchPendingWorkload();
