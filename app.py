@@ -5936,7 +5936,7 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Fetch all active customers
-            sql = "SELECT id, custumer_number, customer_type, legal_name, display_name, email, phone, status, parent_name FROM customer WHERE LOWER(status) = 'active'"
+            sql = "SELECT id, custumer_number, customer_type, legal_name, display_name, assigned_user_id, email, phone, status, parent_name FROM customer WHERE LOWER(status) = 'active'"
             params = []
 
             if target_parent:
@@ -6082,6 +6082,7 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                         "custumer_number": cust.get("custumer_number"),
                         "legal_name": cust.get("legal_name"),
                         "display_name": cust.get("display_name"),
+                        "assigned_user_id": cust.get("assigned_user_id") or "",
                         "email": cust.get("email") or "",
                         "phone": cust.get("phone") or "",
                         "customer_type": c_type,

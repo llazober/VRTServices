@@ -5147,7 +5147,10 @@
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.2s ease;">
                         <td style="padding: 12px 18px; font-weight: 700; color: #fff;">
                             ${item.legal_name || item.display_name}
-                            <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;">${item.custumer_number || ''}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; font-family: monospace; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 3px;">
+                                <span>${item.custumer_number || ''}</span>
+                                ${item.assigned_user_id ? `<span style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; padding: 1px 7px; border-radius: 5px; font-size: 0.7rem; font-weight: 700; font-family: sans-serif;">👤 ${item.assigned_user_id}</span>` : ''}
+                            </div>
                         </td>
                         <td style="padding: 12px 18px;">${typeBadge}</td>
                         <td style="padding: 12px 18px;">${wfHtml}</td>
