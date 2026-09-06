@@ -1,6 +1,6 @@
 # Compliance Calendar Module - Technical Specification & Implementation Plan
 
-This document outlines the complete architectural design and step-by-step technical plan for integrating a **Compliance Calendar Module** into VRT Services CRM (`d:\VRTServices`).
+This document outlines the complete architectural design and technical specification for integrating a **Compliance Calendar Module** into VRT Services CRM (`d:\VRTServices`).
 
 ---
 
@@ -22,8 +22,8 @@ Every client account in VRTServices (`customer` table) has recurring and one-off
 
 1. **Preset Generation Mode**:
    - Preset compliance schedule generation will be **manual via button click** (`⚡ Generate Preset Compliance Schedule`) inside the Compliance Calendar screen or Customer details.
-2. **Notification Channel**:
-   - Automated Resend email alerts (`RESEND_API_KEY`) will notify internal **Assigned Tax Preps** (`TaxTeam`) 7 days, 3 days, and day-of upcoming or overdue deadlines.
+2. **Notification & Alert Channel**:
+   - Automated Resend email notifications (`RESEND_API_KEY`) will be sent **strictly to internal Assigned Tax Preps** (`TaxTeam`) 7 days, 3 days, and day-of upcoming or overdue deadlines.
 
 ---
 
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_compliance_events_tax_prep ON compliance_calendar
 
 ---
 
-## 4. Backend API Endpoints (`app.py`)
+## 4. Backend API Endpoints & Job Processor (`app.py`)
 
 - `GET /compliance`: Render the main Compliance Calendar page tab.
 - `GET /api/compliance/events`: Fetch compliance deadlines with filtering by `customer_id`, `category`, `status`, `assigned_tax_prep`, `month`, and `year`.
@@ -66,6 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_compliance_events_tax_prep ON compliance_calendar
 - `DELETE /api/compliance/events/{event_id}`: Remove a compliance deadline.
 - `POST /api/compliance/events/{event_id}/status`: Toggle status (`Completed`, `Pending`, `In Progress`, `Waived`) with audit logging.
 - `POST /api/compliance/generate-preset/{customer_id}`: Manually generate standard compliance preset schedule for a client via button click.
+- **Daily Cron Job**: Scan upcoming/overdue events and dispatch Resend email notifications strictly to internal Assigned Tax Preps (`TaxTeam`).
 
 ---
 
