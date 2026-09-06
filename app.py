@@ -2970,43 +2970,7 @@ async def update_compliance_event_status(event_id: int, request: Request):
             if not row:
                 raise HTTPException(status_code=404, detail="Compliance event not found.")
 
-            # ── 2-WAY SYNC TO WORKFLOW CHECKLIST ─────────────────────────────
-            try:
-                cid = row["customer_id"]
-                cat = (row.get("category") or "").strip()
-                is_done = (new_status == "Completed")
-                due_d = row.get("due_date")
 
-                ym_slug = None
-                if due_d:
-                    try:
-                        import datetime
-                        d_obj = due_d if hasattr(due_d, 'strftime') else datetime.date.fromisoformat(str(due_d)[:10])
-                        ym_slug = d_obj.strftime("%Y-%m")
-                    except Exception:
-                        pass
-
-                in_proc_slug, _ = get_in_process_period(cur, cid, "bookkeeping")
-                periods_to_update = list(set([p for p in [ym_slug, in_proc_slug, "in_process"] if p]))
-
-                if cat == "Bookkeeping Close":
-                    for p_slug in periods_to_update:
-                        cur.execute("""
-                            INSERT INTO customer_task_checklist (customer_id, period, accountant_reviewed)
-                            VALUES (%s, %s, %s)
-                            ON CONFLICT (customer_id, period)
-                            DO UPDATE SET accountant_reviewed = EXCLUDED.accountant_reviewed, updated_at = CURRENT_TIMESTAMP;
-                        """, (cid, p_slug, is_done))
-                elif cat in ("Corporate Tax", "Estimated Tax", "1099/W2"):
-                    for p_slug in periods_to_update:
-                        cur.execute("""
-                            INSERT INTO customer_task_checklist (customer_id, period, tax_efile, tax_accepted)
-                            VALUES (%s, %s, %s, %s)
-                            ON CONFLICT (customer_id, period)
-                            DO UPDATE SET tax_efile = EXCLUDED.tax_efile, tax_accepted = EXCLUDED.tax_accepted, updated_at = CURRENT_TIMESTAMP;
-                        """, (cid, p_slug, is_done, is_done))
-            except Exception as sync_err:
-                print(f"Warning: Failed to sync compliance event status to checklist: {sync_err}")
             
             conn.commit()
             res = dict(row)
@@ -4420,63 +4384,7 @@ async def toggle_customer_checklist_step(customer_id: str, request: Request):
                         WHERE customer_id = %s AND (period = %s OR period = %s OR period = 'in_process');
                     """, (val, real_cust_id, period, old_in_process_slug))
 
-                # ── AUTOMATIC SYNC WITH COMPLIANCE CALENDAR MODULE ─────────────────
-                try:
-                    if step_key == "accountant_reviewed":
-                        new_status = "Completed" if val else "Pending"
-                        ym_str = None
-                        if period and len(period) >= 7 and "-" in period[:7]:
-                            ym_str = period[:7]
 
-                        # 1. Try matching year-month for Bookkeeping Close
-                        if ym_str:
-                            cur.execute("""
-                                UPDATE compliance_calendar_events
-                                SET status = %s, updated_at = CURRENT_TIMESTAMP
-                                WHERE customer_id = %s AND category = 'Bookkeeping Close' AND due_date LIKE %s;
-                            """, (new_status, real_cust_id, f"{ym_str}%"))
-
-                        # 2. Try matching any pending Bookkeeping Close event for customer
-                        if cur.rowcount == 0:
-                            cur.execute("""
-                                UPDATE compliance_calendar_events
-                                SET status = %s, updated_at = CURRENT_TIMESTAMP
-                                WHERE id IN (
-                                    SELECT id FROM compliance_calendar_events
-                                    WHERE customer_id = %s AND category = 'Bookkeeping Close'
-                                    ORDER BY due_date ASC
-                                    LIMIT 1
-                                );
-                            """, (new_status, real_cust_id))
-
-                        # 3. If no event existed at all, auto-create the Bookkeeping Close compliance deadline
-                        if cur.rowcount == 0:
-                            import datetime
-                            due_date_str = f"{ym_str}-15" if (ym_str and len(ym_str)==7) else datetime.date.today().isoformat()
-                            tax_prep = cust.get("assigned_user_id") or None
-                            title_period = period.replace("_", " ").title() if period else "Monthly"
-                            cur.execute("""
-                                INSERT INTO compliance_calendar_events (
-                                    customer_id, category, title, description, jurisdiction,
-                                    due_date, frequency, assigned_tax_prep, status
-                                ) VALUES (
-                                    %s, 'Bookkeeping Close', %s, 'Monthly Bookkeeping Close & Reconciliations', 'Internal',
-                                    %s, 'Monthly', %s, %s
-                                );
-                            """, (
-                                real_cust_id, f"Monthly Bookkeeping Close - {title_period}",
-                                due_date_str, tax_prep, new_status
-                            ))
-
-                    elif step_key in ("tax_efile", "tax_accepted"):
-                        new_status = "Completed" if val else "Pending"
-                        cur.execute("""
-                            UPDATE compliance_calendar_events
-                            SET status = %s, updated_at = CURRENT_TIMESTAMP
-                            WHERE customer_id = %s AND category IN ('Corporate Tax', 'Estimated Tax', '1099/W2');
-                        """, (new_status, real_cust_id))
-                except Exception as sync_comp_err:
-                    print(f"Warning: Auto-syncing checklist step to compliance failed: {sync_comp_err}")
 
             if notes is not None:
                 cur.execute("""
@@ -4545,23 +4453,7 @@ async def reopen_customer_checklist(customer_id: str, request: Request):
                 WHERE customer_id = %s;
             """, (real_cust_id,))
 
-            # Sync compliance event back to Pending
-            try:
-                ym_str = target_period[:7] if (target_period and len(target_period) >= 7 and "-" in target_period[:7]) else None
-                if ym_str:
-                    cur.execute("""
-                        UPDATE compliance_calendar_events
-                        SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
-                        WHERE customer_id = %s AND category = 'Bookkeeping Close' AND due_date LIKE %s;
-                    """, (real_cust_id, f"{ym_str}%"))
-                else:
-                    cur.execute("""
-                        UPDATE compliance_calendar_events
-                        SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
-                        WHERE customer_id = %s AND category = 'Bookkeeping Close';
-                    """, (real_cust_id,))
-            except Exception as comp_sync_err:
-                print(f"Warning: Failed to sync compliance on period reopen: {comp_sync_err}")
+
 
             conn.commit()
 

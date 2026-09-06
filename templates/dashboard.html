@@ -5622,9 +5622,7 @@
                 if (typeof fetchPendingWorkload === 'function') {
                     fetchPendingWorkload();
                 }
-                if (typeof loadComplianceData === 'function') {
-                    loadComplianceData();
-                }
+
 
                 if (data.just_archived) {
                     alert(data.archived_message || '🎉 Workflow Completed & Archived!');
@@ -5679,7 +5677,7 @@
                 const reopenBtn = document.getElementById('btnReopenChecklist');
                 if (reopenBtn) reopenBtn.style.display = 'none';
 
-                if (typeof loadComplianceData === 'function') await loadComplianceData();
+
             } catch (err) {
                 alert(`❌ Reopen Error: ${err.message}`);
             }
