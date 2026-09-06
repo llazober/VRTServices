@@ -6060,7 +6060,8 @@ async def create_billing_schedule(request: Request):
     billing_day = int(payload.get("billing_day") or 1)
     description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
     auto_send = bool(payload.get("auto_send", True))
-    payment_terms_days = int(payload.get("payment_terms_days") or 15)
+    raw_pt = payload.get("payment_terms_days")
+    payment_terms_days = int(raw_pt) if raw_pt is not None and str(raw_pt).strip() != "" else 15
 
     if not customer_id or billing_amount <= 0:
         raise HTTPException(status_code=400, detail="Valid customer_id and positive billing_amount are required.")
@@ -6118,7 +6119,8 @@ async def update_billing_schedule(schedule_id: str, request: Request):
     billing_day = int(payload.get("billing_day") or 1)
     description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
     auto_send = bool(payload.get("auto_send", True))
-    payment_terms_days = int(payload.get("payment_terms_days") or 15)
+    raw_pt = payload.get("payment_terms_days")
+    payment_terms_days = int(raw_pt) if raw_pt is not None and str(raw_pt).strip() != "" else 15
     status = payload.get("status") or "Active"
 
     if not customer_id or billing_amount <= 0:
