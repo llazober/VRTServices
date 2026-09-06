@@ -5412,6 +5412,7 @@ async def get_billing_overview():
                 SELECT 
                     COALESCE(SUM(total_amount), 0) AS total_billed,
                     COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_paid,
+                    COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_collected,
                     COALESCE(SUM(CASE WHEN status = 'SENT' THEN total_amount ELSE 0 END), 0) AS total_outstanding,
                     COALESCE(SUM(CASE WHEN status = 'OVERDUE' OR (status = 'SENT' AND due_date < CURRENT_DATE) THEN total_amount ELSE 0 END), 0) AS total_overdue,
                     COUNT(CASE WHEN status = 'SENT' THEN 1 END) AS count_sent,
@@ -5422,9 +5423,23 @@ async def get_billing_overview():
             """)
             stats = cur.fetchone() or {}
 
-            cur.execute("SELECT COUNT(*) AS active_schedules FROM customer_billing_schedules WHERE status = 'Active';")
+            cur.execute("""
+                SELECT 
+                    COALESCE(SUM(billing_amount), 0) AS mrr,
+                    COUNT(*) AS active_subscribers,
+                    COUNT(*) AS active_schedules
+                FROM customer_billing_schedules 
+                WHERE status = 'Active';
+            """)
             sched_row = cur.fetchone()
-            stats["active_schedules"] = sched_row["active_schedules"] if sched_row else 0
+            if sched_row:
+                stats["mrr"] = float(sched_row["mrr"] or 0)
+                stats["active_subscribers"] = int(sched_row["active_subscribers"] or 0)
+                stats["active_schedules"] = int(sched_row["active_schedules"] or 0)
+            else:
+                stats["mrr"] = 0.0
+                stats["active_subscribers"] = 0
+                stats["active_schedules"] = 0
 
             return dict(stats)
     except Exception as e:
