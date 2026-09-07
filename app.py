@@ -7057,34 +7057,51 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
         raise HTTPException(status_code=400, detail="Invalid file path.")
     
     clean_rel_path = path.replace("\\", "/").strip("/")
-    full_path = os.path.normpath(os.path.join(rag_engine.KB_DIR, clean_rel_path.replace("/", os.sep)))
-    
-    if not full_path.startswith(os.path.normpath(rag_engine.KB_DIR)):
-        raise HTTPException(status_code=403, detail="Access denied: Invalid path scope.")
-
-    if os.path.exists(full_path):
-        try:
-            os.remove(full_path)
-        except Exception as e:
-            print(f"[KB FILE DELETE ERROR] Could not remove {full_path}: {e}")
-
     filename = clean_rel_path.split("/")[-1]
+    
+    # 1. Case-insensitive physical file deletion across knowledge base directory
+    kb_base = os.path.normpath(rag_engine.KB_DIR)
+    deleted_files = 0
+    if os.path.exists(kb_base):
+        for root, _, files in os.walk(kb_base):
+            for f in files:
+                if f.lower() == filename.lower() or f.lower() == (filename + ".md").lower():
+                    target_file = os.path.join(root, f)
+                    try:
+                        os.remove(target_file)
+                        deleted_files += 1
+                        print(f"[KB DELETE DISK] Removed file: {target_file}")
+                    except Exception as e:
+                        print(f"[KB DELETE DISK ERROR] {target_file}: {e}")
+
+    # 2. Case-insensitive database record deletion from knowledge_articles
+    deleted_db_rows = 0
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute("""
                 DELETE FROM knowledge_articles 
-                WHERE rel_path = %s OR filename = %s OR rel_path LIKE %s;
-            """, (clean_rel_path, filename, f"%/{filename}"))
+                WHERE LOWER(rel_path) = LOWER(%s) 
+                   OR LOWER(filename) = LOWER(%s) 
+                   OR rel_path ILIKE %s
+                   OR filename ILIKE %s;
+            """, (clean_rel_path, filename, f"%{filename}%", f"%{filename.split('.')[0]}%"))
+            deleted_db_rows = cur.rowcount
             conn.commit()
+            print(f"[KB DELETE DB] Deleted {deleted_db_rows} rows from knowledge_articles for {filename}.")
     except Exception as e:
         print(f"[KB DB DELETE ERROR] {clean_rel_path}: {e}")
     finally:
         if conn:
             conn.close()
 
-    return {"success": True, "message": "Article deleted successfully."}
+    return {
+        "success": True, 
+        "message": f"Article '{filename}' deleted successfully.",
+        "disk_deleted": deleted_files,
+        "db_rows_deleted": deleted_db_rows
+    }
 
 @app.post("/api/knowledge/upload")
 async def upload_knowledge_doc(
