@@ -19,7 +19,7 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load chunks strictly from PostgreSQL document_chunk table for a specific tenant."""
+    """Load chunks from PostgreSQL document_chunk table, falling back to disk markdown files if DB chunks are empty."""
     chunks = []
     try:
         from app import get_db_connection
@@ -43,6 +43,35 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
         conn.close()
     except Exception as e:
         print(f"[RAG DB CHUNK LOAD ERROR] {e}")
+
+    # Fallback / Disk Knowledge Base Loader for guaranteed baseline documents (e.g. company_info.md)
+    try:
+        tenant_dir = os.path.join(KB_DIR, tenant_slug)
+        if os.path.exists(tenant_dir):
+            for f in os.listdir(tenant_dir):
+                if f.endswith(".md"):
+                    rel_path = f"{tenant_slug}/{f}"
+                    # Skip if already loaded from DB
+                    if any(c.get("source") == rel_path for c in chunks):
+                        continue
+                    full_p = os.path.join(tenant_dir, f)
+                    with open(full_p, "r", encoding="utf-8") as file_obj:
+                        file_content = file_obj.read()
+                    if file_content.strip():
+                        raw_sections = re.split(r'\n(?=#{1,3}\s)', file_content)
+                        title = f.replace(".md", "").replace("_", " ").title()
+                        for sec in raw_sections:
+                            clean_sec = sec.strip()
+                            if len(clean_sec) > 10:
+                                chunks.append({
+                                    "source": rel_path,
+                                    "title": title,
+                                    "category": "Company Info",
+                                    "content": clean_sec
+                                })
+    except Exception as e_disk:
+        print(f"[RAG DISK CHUNK LOAD NOTICE]: {e_disk}")
+
     return chunks
 
 def tokenize(text: str) -> List[str]:

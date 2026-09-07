@@ -1013,6 +1013,53 @@ def rechunk_document_db(cur, doc_id: int, tenant_slug: str, content: str):
     except Exception as e:
         print(f"[RECHUNK DB ERROR] doc_id {doc_id}: {e}")
 
+
+def seed_knowledge_base_from_disk(cur):
+    """Seed disk knowledge base files into PostgreSQL document and document_chunk tables if not present."""
+    kb_base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base")
+    if not os.path.exists(kb_base_dir):
+        return
+
+    for root, dirs, files in os.walk(kb_base_dir):
+        for f in files:
+            if f.endswith(".md"):
+                full_path = os.path.join(root, f)
+                rel_path = os.path.relpath(full_path, kb_base_dir).replace("\\", "/")
+                tenant_slug = rel_path.split("/")[0] if "/" in rel_path else "vrt_services"
+                
+                try:
+                    with open(full_path, "r", encoding="utf-8") as file_obj:
+                        content = file_obj.read()
+                except Exception:
+                    continue
+
+                if not content.strip():
+                    continue
+
+                lines = content.strip().split("\n")
+                title = f.replace(".md", "").replace("_", " ").title()
+                for line in lines:
+                    if line.startswith("# "):
+                        title = line.replace("# ", "").strip()
+                        break
+
+                try:
+                    cur.execute("SELECT id FROM document WHERE rel_path = %s;", (rel_path,))
+                    row = cur.fetchone()
+                    if not row:
+                        cur.execute("""
+                            INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            RETURNING id;
+                        """, (tenant_slug, "Company Info" if "company_info" in f else "Documentation", title, rel_path, f, content))
+                        doc_res = cur.fetchone()
+                        doc_id = doc_res["id"] if isinstance(doc_res, dict) else (doc_res[0] if doc_res else None)
+                        if doc_id:
+                            rechunk_document_db(cur, doc_id, tenant_slug, content)
+                            print(f"[KB AUTO-SEED] Inserted '{title}' ({rel_path}) into DB with id={doc_id}")
+                except Exception as e_seed:
+                    print(f"[KB AUTO-SEED NOTICE] {rel_path}: {e_seed}")
+
 def init_document_tables():
     conn = None
     try:
@@ -1044,13 +1091,10 @@ def init_document_tables():
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-            # Clean purge of initial default template articles so Knowledge Base is 100% user-managed
-            cur.execute("""
-                DELETE FROM document 
-                WHERE rel_path IN ('vrt_services/company_info.md', 'vrt_services/irs_pub17_general_tax.md', 'vrt_services/service_faq.md');
-            """)
             conn.commit()
-            print("Document tables (document, document_chunk) initialized successfully.")
+            seed_knowledge_base_from_disk(cur)
+            conn.commit()
+            print("Document tables (document, document_chunk) initialized and seeded successfully.")
     except Exception as e:
         print(f"Error initializing document tables: {e}")
     finally:
