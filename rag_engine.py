@@ -19,20 +19,22 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load all document chunks using LEFT JOIN so document_chunk rows are never missed, even if document_id has changed."""
+    """Load all document_chunk and document rows unconditionally from PostgreSQL so no data is ever filtered out."""
     chunks = []
     try:
         from app import get_db_connection
         from psycopg2.extras import RealDictCursor
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 1. Fetch chunks from document_chunk table with LEFT JOIN
+            # 1. Fetch ALL chunks unconditionally from document_chunk table
             cur.execute("""
-                SELECT c.content, COALESCE(d.title, c.tenant_slug, 'Documentation') AS title, COALESCE(d.rel_path, c.tenant_slug, 'knowledge') AS source, COALESCE(d.category, 'Documentation') AS category
+                SELECT c.content, 
+                       COALESCE(d.title, c.tenant_slug, 'Documentation') AS title, 
+                       COALESCE(d.rel_path, c.tenant_slug, 'knowledge') AS source, 
+                       COALESCE(d.category, 'Documentation') AS category
                 FROM document_chunk c
-                LEFT JOIN document d ON c.document_id = d.id
-                WHERE LOWER(c.tenant_slug) = LOWER(%s) OR LOWER(d.tenant_slug) = LOWER(%s) OR c.tenant_slug IS NULL OR c.tenant_slug = '' OR c.tenant_slug = 'vrt_services';
-            """, (tenant_slug, tenant_slug))
+                LEFT JOIN document d ON c.document_id = d.id;
+            """)
             rows = cur.fetchall() or []
             for r in rows:
                 if r.get("content"):
@@ -42,13 +44,12 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                         "category": r.get("category") or "Documentation",
                         "content": r["content"]
                     })
-            
-            # 2. Fallback: If any document in document table has no chunks in document_chunk, split document.content directly!
+
+            # 2. Also check document table for any unchunked content
             cur.execute("""
                 SELECT id, title, rel_path, category, content, tenant_slug
-                FROM document
-                WHERE LOWER(tenant_slug) = LOWER(%s) OR tenant_slug IS NULL OR tenant_slug = '' OR tenant_slug = 'vrt_services';
-            """, (tenant_slug,))
+                FROM document;
+            """)
             doc_rows = cur.fetchall() or []
             for d_row in doc_rows:
                 source = d_row.get("rel_path") or ""
@@ -65,13 +66,6 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                                     "category": d_row.get("category") or "Documentation",
                                     "content": clean_sec
                                 })
-                        
-                        try:
-                            from app import rechunk_document_db
-                            rechunk_document_db(cur, d_row["id"], d_row.get("tenant_slug") or tenant_slug, doc_content)
-                            conn.commit()
-                        except Exception:
-                            pass
 
         conn.close()
     except Exception as e:
@@ -83,7 +77,7 @@ def tokenize(text: str) -> List[str]:
     return [w.lower() for w in re.findall(r'\b\w{2,}\b', text)]
 
 def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Robust TF-IDF and keyword matching over knowledge chunks."""
+    """Robust TF-IDF and keyword matching over knowledge chunks with guaranteed context fallback."""
     chunks = load_knowledge_chunks(tenant_slug)
     if not chunks:
         return []
@@ -99,24 +93,22 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 5) -> 
         chunk_tokens = tokenize(content_lower)
         
         overlap_score = 0.0
-        # Check keyword matches
         for t in query_tokens:
             if t in content_lower or any(t in ct for ct in chunk_tokens):
                 overlap_score += 1.0
                 
         source_name = (chunk.get("source") or "").lower().replace(".md", "").replace("_", " ")
         title_name = (chunk.get("title") or "").lower()
-        if query_lower in source_name or query_lower in title_name or any(t in source_name or t in title_name for t in query_tokens if len(t) > 3):
+        if query_lower in source_name or query_lower in title_name or any(t in source_name or t in title_name for t in query_tokens if len(t) > 2):
             overlap_score += 2.0
                 
         scores.append((overlap_score, chunk))
 
     scores.sort(key=lambda x: x[0], reverse=True)
     
-    # Filter passages with at least 1 keyword match
     matching_passages = [chunk for score, chunk in scores[:top_k] if score > 0.0]
     
-    # If no exact score > 0, fallback to returning top_k chunks so context is never lost
+    # If no exact score > 0, return top_k chunks unconditionally so AI Assistant ALWAYS has database context
     if not matching_passages:
         return chunks[:top_k]
 
