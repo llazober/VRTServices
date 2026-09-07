@@ -2803,8 +2803,8 @@
                             <strong style="color: #fff; display: block;">${inv.legal_name || 'Client #' + inv.customer_id}</strong>
                             <span style="font-size: 0.78rem; color: #94a3b8;">${inv.email || ''}</span>
                         </td>
-                        <td style="padding: 14px 18px; color: #cbd5e1;">${inv.issue_date || 'N/A'}</td>
-                        <td style="padding: 14px 18px; color: #f87171; font-weight: 600;">${inv.due_date || 'N/A'}</td>
+                        <td style="padding: 14px 18px; color: #cbd5e1;">${formatDateMMDDYYYY(inv.issue_date)}</td>
+                        <td style="padding: 14px 18px; color: #f87171; font-weight: 600;">${formatDateMMDDYYYY(inv.due_date)}</td>
                         <td style="padding: 14px 18px; color: #94a3b8; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${inv.description || ''}</td>
                         <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem;">$${parseFloat(inv.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td style="padding: 14px 18px;">

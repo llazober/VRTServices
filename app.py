@@ -5922,11 +5922,23 @@ def generate_invoice_number(cur) -> str:
     next_num = 1001 + last_id
     return f"INV-{year_str}-{next_num}"
 
+def format_date_mmddyyyy(date_val) -> str:
+    if not date_val:
+        return "N/A"
+    s = str(date_val).strip()
+    if not s:
+        return "N/A"
+    clean_s = s.split("T")[0].split(" ")[0]
+    parts = clean_s.split("-")
+    if len(parts) == 3 and len(parts[0]) == 4:
+        return f"{parts[1]}/{parts[2]}/{parts[0]}"
+    return s
+
 def format_invoice_email_html(invoice: dict, customer: dict) -> str:
     """Renders executive HTML email template for sending invoices to clients."""
     inv_num = invoice.get("invoice_number", "INV-0000")
-    issue_date = str(invoice.get("issue_date") or "")
-    due_date = str(invoice.get("due_date") or "")
+    issue_date = format_date_mmddyyyy(invoice.get("issue_date"))
+    due_date = format_date_mmddyyyy(invoice.get("due_date"))
     description = invoice.get("description") or "Monthly Accounting & Tax Services"
     total_amount = float(invoice.get("total_amount") or invoice.get("amount") or 0.0)
     legal_name = customer.get("legal_name") or "Valued Client"
