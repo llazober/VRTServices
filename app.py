@@ -1040,9 +1040,13 @@ def init_knowledge_articles_table():
             # 2. Restore DB articles to disk (so articles created/edited by user survive container redeployment)
             cur.execute("SELECT tenant_slug, rel_path, content FROM knowledge_articles;")
             rows = cur.fetchall() or []
+            valid_rel_paths = set()
+            valid_filenames = set()
             for row in rows:
                 r_path = row["rel_path"]
                 cnt = row["content"]
+                valid_rel_paths.add(r_path.lower())
+                valid_filenames.add(os.path.basename(r_path).lower())
                 full_p = os.path.join(kb_base, r_path.replace("/", os.sep))
                 try:
                     os.makedirs(os.path.dirname(full_p), exist_ok=True)
@@ -1050,6 +1054,21 @@ def init_knowledge_articles_table():
                         f.write(cnt)
                 except Exception as e_restore:
                     print(f"[KB RESTORE ERROR] {r_path}: {e_restore}")
+
+            # 3. Purge orphaned physical files on disk that were deleted from DB
+            if os.path.exists(kb_base):
+                for root, _, files in os.walk(kb_base):
+                    for fname in files:
+                        if fname.endswith(".md") or fname.endswith(".txt"):
+                            rel_check = os.path.relpath(os.path.join(root, fname), kb_base).replace("\\", "/").lower()
+                            if rel_check not in valid_rel_paths and fname.lower() not in valid_filenames:
+                                if fname.lower() not in ["company_info.md", "irs_pub17_general_tax.md", "service_faq.md", "tel_link_setup_guide.md"]:
+                                    try:
+                                        os.remove(os.path.join(root, fname))
+                                        print(f"[KB DISK CLEANUP] Removed orphaned disk file: {rel_check}")
+                                    except Exception as e_del:
+                                        print(f"[KB DISK CLEANUP ERROR] {rel_check}: {e_del}")
+
             print(f"Knowledge Base DB synced successfully ({len(rows)} articles active).")
     except Exception as e:
         print(f"Error initializing knowledge_articles table: {e}")
@@ -6930,17 +6949,14 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
     kb_base = rag_engine.KB_DIR
 
-    # Query active articles from database to prevent listing deleted rows
-    db_articles = {}
+    # Primary source of truth: Query PostgreSQL database table
+    db_articles = []
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT tenant_slug, rel_path, filename, title FROM knowledge_articles;")
-            rows = cur.fetchall() or []
-            for r in rows:
-                db_articles[r["rel_path"].lower()] = r
-                db_articles[r["filename"].lower()] = r
+            cur.execute("SELECT id, tenant_slug, rel_path, filename, title FROM knowledge_articles ORDER BY title ASC;")
+            db_articles = cur.fetchall() or []
     except Exception as e:
         print(f"[KB LIST DB ERROR] {e}")
     finally:
@@ -6950,49 +6966,56 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     all_flat_docs = []
     category_list = []
 
-    available_slugs = []
-    if os.path.exists(kb_base):
-        for item in sorted(os.listdir(kb_base)):
-            item_path = os.path.join(kb_base, item)
-            if os.path.isdir(item_path):
-                available_slugs.append(item)
+    grouped_by_slug = {}
+    for art in db_articles:
+        s = art["tenant_slug"]
+        if s not in grouped_by_slug:
+            grouped_by_slug[s] = []
+        
+        doc_obj = {
+            "id": art.get("id"),
+            "filename": art.get("filename"),
+            "rel_path": art.get("rel_path"),
+            "path": art.get("rel_path"),
+            "title": art.get("title"),
+            "tenant_slug": s
+        }
+        grouped_by_slug[s].append(doc_obj)
+        all_flat_docs.append(doc_obj)
 
-    if tenant_slug not in available_slugs and available_slugs:
+    # Fallback to disk scan if database table is completely empty
+    if not db_articles and os.path.exists(kb_base):
+        for slug in sorted(os.listdir(kb_base)):
+            cat_dir = os.path.join(kb_base, slug)
+            if os.path.isdir(cat_dir):
+                cat_items = []
+                for file in sorted(os.listdir(cat_dir)):
+                    if file.endswith(".md") or file.endswith(".txt"):
+                        rel_path = f"{slug}/{file}"
+                        title = file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+                        doc_obj = {
+                            "filename": file,
+                            "rel_path": rel_path,
+                            "path": rel_path,
+                            "title": title,
+                            "tenant_slug": slug
+                        }
+                        cat_items.append(doc_obj)
+                        all_flat_docs.append(doc_obj)
+                grouped_by_slug[slug] = cat_items
+
+    available_slugs = list(grouped_by_slug.keys())
+    if tenant_slug not in available_slugs:
         available_slugs.insert(0, tenant_slug)
 
     for slug in available_slugs:
-        cat_dir = os.path.join(kb_base, slug)
         cat_name = "VRT Services Knowledge" if slug == "vrt_services" else ("Datalazo LLC Knowledge" if slug == "datalazo_llc" else f"{slug.replace('_', ' ').title()} Knowledge")
         icon = "🏢" if slug == "vrt_services" else "💻"
-        cat_items = []
-
-        if os.path.exists(cat_dir):
-            for file in sorted(os.listdir(cat_dir)):
-                if file.endswith(".md") or file.endswith(".txt"):
-                    rel_path = f"{slug}/{file}"
-                    
-                    # If DB has records, verify file is in DB (or if DB empty, allow file)
-                    db_entry = db_articles.get(rel_path.lower()) or db_articles.get(file.lower())
-                    if db_articles and not db_entry:
-                        # Exclude files deleted from DB
-                        continue
-
-                    title = db_entry["title"] if db_entry and db_entry.get("title") else file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
-                    doc_obj = {
-                        "filename": file,
-                        "rel_path": rel_path,
-                        "path": rel_path,
-                        "title": title,
-                        "tenant_slug": slug
-                    }
-                    cat_items.append(doc_obj)
-                    all_flat_docs.append(doc_obj)
-
         category_list.append({
             "category": cat_name,
             "slug": slug,
             "icon": icon,
-            "items": cat_items
+            "items": grouped_by_slug.get(slug, [])
         })
 
     response = JSONResponse({
