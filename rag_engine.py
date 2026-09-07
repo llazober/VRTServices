@@ -89,14 +89,14 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> 
         scores.append((overlap_score, chunk))
 
     scores.sort(key=lambda x: x[0], reverse=True)
-    if not scores or scores[0][0] <= 0.1:
+    if not scores or scores[0][0] < 0.25:
         return []
 
     top_score = scores[0][0]
     filtered_passages = []
     for score, chunk in scores[:top_k]:
-        # Only keep secondary passages if they are close in relevance score (at least 65% of top score)
-        if score > 0.2 and (score >= top_score * 0.65):
+        # Only keep passages with solid relevance score
+        if score >= 0.25 and (score >= top_score * 0.65):
             filtered_passages.append(chunk)
 
     return filtered_passages
@@ -221,6 +221,8 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
     provider = (os.environ.get("AI_PROVIDER") or "").strip().upper()
 
     company_name = "VRT Services" if get_tenant_slug(parent_name) == "vrt_services" else "Datalazo LLC"
+    clean_query = (user_query or "").strip()
+    is_greeting = clean_query.lower() in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "help", "who are you"]
 
     # Context Construction
     context_str = f"Target Company: {company_name}\n"
@@ -247,14 +249,21 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         context_str += f"\n--- KNOWLEDGE BASE PASSAGES ---\n"
         for p in passages:
             context_str += f"Source ({p['source']}):\n{p['content']}\n\n"
+    elif not status_info and not customer_ref_not_found:
+        context_str += f"\n--- KNOWLEDGE BASE PASSAGES ---\nNo relevant knowledge base articles or documents were found in the database for the user query: \"{clean_query}\".\n"
 
     system_prompt = (
         f"You are the official AI Knowledge Assistant for {company_name}. "
         "Your goal is to provide concise, friendly, accurate, and professional help to clients and visitors. "
         "Always use clean Markdown formatting (bolding, bullet points, checklists). "
+        "STRICT GROUNDING REQUIREMENT: You MUST answer user questions using ONLY information found in the provided Knowledge Base Passages or Customer Task Status context. "
+        "If the user is asking an informational question and the provided context does NOT contain relevant information, or if no knowledge base articles were found for the topic, you MUST state clearly and explicitly: "
+        f"'I am sorry, but I do not have information about **{clean_query}** in our Knowledge Base.' "
+        "Do NOT invent information, speculate, make assumptions, or provide details about unrelated topics. "
+        "If the user is sending a simple greeting (e.g. 'hello', 'hi'), greet them warmly and invite them to ask about documented company policies or check their customer status with their reference code. "
         "If answering a customer task status query, clearly specify the Bookkeeping Period (e.g. July 2026) and Tax Preparation Year (e.g. Tax Year 2025), along with their progress and pending actions. "
         "If a customer reference code was searched but NOT found in the database, explicitly state that the customer reference code does not exist in our records and ask them to verify their reference code (e.g., CUST-1001) or contact support. "
-        "If giving general tax information, add a brief note that information is for guidance and formal advice is finalized upon review."
+        "If giving general tax information based on knowledge base context, add a brief note that information is for guidance and formal advice is finalized upon review."
     )
 
     # 1. Try Google Gemini API first if configured
@@ -269,7 +278,7 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
                     }
                 ],
                 "generationConfig": {
-                    "temperature": 0.3,
+                    "temperature": 0.2,
                     "maxOutputTokens": 600
                 }
             }
@@ -299,7 +308,7 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Context:\n{context_str}\n\nUser Question: {user_query}"}
                 ],
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "max_tokens": 600
             }
             req = urllib.request.Request(
@@ -346,10 +355,13 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
         passage_texts = [p["content"].strip() for p in passages]
         res_lines.append("\n\n---\n\n".join(passage_texts))
-    else:
-        res_lines.append(f"Welcome to **{company_name}** Assistant!\n")
+    elif is_greeting:
+        res_lines.append(f"Hello! Welcome to **{company_name}** Assistant.\n")
         res_lines.append("How can I assist you today?")
         res_lines.append("- Ask a tax or filing question (e.g. *IRS Form 8879 rules* or *business mileage deduction*).")
         res_lines.append("- Consult your customer task progress by typing your reference code (e.g. `CUST-1001`).")
+    else:
+        res_lines.append(f"I am sorry, but I do not have information about **\"{clean_query}\"** in our Knowledge Base.\n")
+        res_lines.append("Please try asking about our documented company policies, tax services, or check your customer task progress by typing your reference code (e.g. `CUST-1001`).")
 
     return "\n".join(res_lines)
