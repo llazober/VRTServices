@@ -19,23 +19,41 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load all document_chunk and document rows unconditionally from PostgreSQL so no data is ever filtered out."""
+    """Load all document_chunk and document rows 100% dynamically from PostgreSQL (supports both lowercase and PascalCase schemas)."""
     chunks = []
     try:
         from app import get_db_connection
         from psycopg2.extras import RealDictCursor
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 1. Fetch ALL chunks unconditionally from document_chunk table
-            cur.execute("""
-                SELECT c.content, 
-                       COALESCE(d.title, c.tenant_slug, 'Documentation') AS title, 
-                       COALESCE(d.rel_path, c.tenant_slug, 'knowledge') AS source, 
-                       COALESCE(d.category, 'Documentation') AS category
-                FROM document_chunk c
-                LEFT JOIN document d ON c.document_id = d.id;
-            """)
-            rows = cur.fetchall() or []
+            # 1. Try fetching from document_chunk (lowercase) or "DocumentChunk" (PascalCase)
+            rows = []
+            try:
+                cur.execute("""
+                    SELECT c.content, 
+                           COALESCE(d.title, c.tenant_slug, 'Documentation') AS title, 
+                           COALESCE(d.rel_path, c.tenant_slug, 'knowledge') AS source, 
+                           COALESCE(d.category, 'Documentation') AS category
+                    FROM document_chunk c
+                    LEFT JOIN document d ON c.document_id = d.id;
+                """)
+                rows = cur.fetchall() or []
+            except Exception as e_lc:
+                conn.rollback()
+                try:
+                    cur.execute("""
+                        SELECT c.content, 
+                               COALESCE(d.title, c."tenantSlug", 'Documentation') AS title, 
+                               COALESCE(d."relPath", c."tenantSlug", 'knowledge') AS source, 
+                               COALESCE(d.category, 'Documentation') AS category
+                        FROM "DocumentChunk" c
+                        LEFT JOIN "Document" d ON c."documentId" = d.id;
+                    """)
+                    rows = cur.fetchall() or []
+                except Exception as e_pc:
+                    conn.rollback()
+                    print(f"[RAG DB CHUNK QUERY ERROR]: {e_lc} | {e_pc}")
+
             for r in rows:
                 if r.get("content"):
                     chunks.append({
@@ -45,17 +63,24 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                         "content": r["content"]
                     })
 
-            # 2. Also check document table for any unchunked content
-            cur.execute("""
-                SELECT id, title, rel_path, category, content, tenant_slug
-                FROM document;
-            """)
-            doc_rows = cur.fetchall() or []
+            # 2. Also check document / "Document" table for any unchunked documents
+            doc_rows = []
+            try:
+                cur.execute("SELECT id, title, rel_path, category, content FROM document;")
+                doc_rows = cur.fetchall() or []
+            except Exception:
+                conn.rollback()
+                try:
+                    cur.execute('SELECT id, title, "relPath" as rel_path, category, content FROM "Document";')
+                    doc_rows = cur.fetchall() or []
+                except Exception:
+                    conn.rollback()
+
             for d_row in doc_rows:
                 source = d_row.get("rel_path") or ""
                 if not any(c.get("source") == source for c in chunks):
                     doc_content = d_row.get("content", "")
-                    if doc_content.strip():
+                    if doc_content and doc_content.strip():
                         raw_sections = re.split(r'\n(?=#{1,3}\s)', doc_content)
                         for sec in raw_sections:
                             clean_sec = sec.strip()
@@ -70,28 +95,6 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
         conn.close()
     except Exception as e:
         print(f"[RAG DB CHUNK LOAD ERROR] {e}")
-
-    # 3. Always ensure Core Company Contact & Overview Chunks exist as a permanent safety net
-    has_contact = any(
-        "notification@vrtservices12.com" in (c.get("content") or "") or 
-        "contact information" in (c.get("content") or "").lower() or 
-        "contact information" in (c.get("title") or "").lower()
-        for c in chunks
-    )
-    
-    if not has_contact:
-        chunks.append({
-            "source": "company_contact_info",
-            "title": "Contact Information & Hours",
-            "category": "Company Information",
-            "content": (
-                "## Contact Information & Business Hours\n"
-                "- **Support Email:** notification@vrtservices12.com\n"
-                "- **Business Hours:** Monday – Friday, 8:00 AM – 6:00 PM EST (Closed Weekends & Federal Holidays)\n"
-                "- **Services Offered:** Tax Preparation (Individual Form 1040, LLC Form 1065, Corporate Form 1120/1120S), Enterprise Accounting, Bookkeeping Advisory, Bank Statement Reconciliation, IRS Form 8879 Processing, and QuickBooks Online (QBO) Integration.\n"
-                "- **Client Portal & File Upload:** Upload documents securely via the Client Storage Portal or reply directly to any portal email notification."
-            )
-        })
 
     return chunks
 
