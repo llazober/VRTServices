@@ -19,18 +19,19 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load chunks strictly from PostgreSQL document_chunk table for a specific tenant."""
+    """Load chunks from document_chunk table AND fallback to document.content in PostgreSQL if document_chunk is empty."""
     chunks = []
     try:
         from app import get_db_connection
         from psycopg2.extras import RealDictCursor
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch chunks from document_chunk table
             cur.execute("""
                 SELECT c.content, d.title, d.rel_path AS source, d.category
                 FROM document_chunk c
                 JOIN document d ON c.document_id = d.id
-                WHERE c.tenant_slug = %s OR d.tenant_slug = %s;
+                WHERE LOWER(c.tenant_slug) = LOWER(%s) OR LOWER(d.tenant_slug) = LOWER(%s) OR c.tenant_slug IS NULL;
             """, (tenant_slug, tenant_slug))
             rows = cur.fetchall() or []
             for r in rows:
@@ -40,9 +41,44 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                     "category": r["category"],
                     "content": r["content"]
                 })
+            
+            # 2. Fallback: If any document in document table has no chunks in document_chunk, split document.content directly!
+            cur.execute("""
+                SELECT id, title, rel_path, category, content, tenant_slug
+                FROM document
+                WHERE LOWER(tenant_slug) = LOWER(%s) OR tenant_slug IS NULL OR tenant_slug = '';
+            """, (tenant_slug,))
+            doc_rows = cur.fetchall() or []
+            for d_row in doc_rows:
+                source = d_row["rel_path"]
+                # If this document has no chunks loaded from document_chunk, chunk its content on the fly!
+                if not any(c.get("source") == source for c in chunks):
+                    doc_content = d_row.get("content", "")
+                    if doc_content.strip():
+                        raw_sections = re.split(r'\n(?=#{1,3}\s)', doc_content)
+                        for sec in raw_sections:
+                            clean_sec = sec.strip()
+                            if len(clean_sec) > 10:
+                                chunks.append({
+                                    "source": source,
+                                    "title": d_row.get("title") or "Document",
+                                    "category": d_row.get("category") or "Documentation",
+                                    "content": clean_sec
+                                })
+                        
+                        # Auto-rechunk in DB so document_chunk stays populated
+                        try:
+                            from app import rechunk_document_db
+                            rechunk_document_db(cur, d_row["id"], d_row.get("tenant_slug") or tenant_slug, doc_content)
+                            conn.commit()
+                            print(f"[RAG AUTO RECHUNK] Auto-populated document_chunk for doc id={d_row['id']}")
+                        except Exception as e_rec:
+                            print(f"[RAG AUTO RECHUNK NOTICE]: {e_rec}")
+
         conn.close()
     except Exception as e:
         print(f"[RAG DB CHUNK LOAD ERROR] {e}")
+
     return chunks
 
 def tokenize(text: str) -> List[str]:
