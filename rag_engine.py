@@ -76,8 +76,8 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
 def tokenize(text: str) -> List[str]:
     return [w.lower() for w in re.findall(r'\b\w{2,}\b', text)]
 
-def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Robust TF-IDF and keyword matching over knowledge chunks with guaranteed context fallback."""
+def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 8) -> List[Dict[str, Any]]:
+    """Robust TF-IDF, intent-boosted, and keyword matching over knowledge chunks with guaranteed context fallback."""
     chunks = load_knowledge_chunks(tenant_slug)
     if not chunks:
         return []
@@ -87,32 +87,52 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 5) -> 
         return chunks[:top_k]
 
     scores = []
-    query_lower = query.lower()
+    query_lower = (query or "").lower().strip()
+    
     for chunk in chunks:
         content_lower = (chunk.get("content") or "").lower()
-        chunk_tokens = tokenize(content_lower)
+        title_lower = (chunk.get("title") or "").lower()
+        source_lower = (chunk.get("source") or "").lower()
         
-        overlap_score = 0.0
+        score = 0.0
+        
+        # 1. Exact full query match boost
+        if query_lower and query_lower in content_lower:
+            score += 20.0
+        if query_lower and query_lower in title_lower:
+            score += 25.0
+            
+        # 2. Individual token matches
+        chunk_tokens = set(tokenize(content_lower))
         for t in query_tokens:
-            if t in content_lower or any(t in ct for ct in chunk_tokens):
-                overlap_score += 1.0
+            if len(t) <= 1:
+                continue
+            if t in title_lower:
+                score += 5.0
+            if t in content_lower:
+                score += 3.0
+            if t in chunk_tokens:
+                score += 2.0
                 
-        source_name = (chunk.get("source") or "").lower().replace(".md", "").replace("_", " ")
-        title_name = (chunk.get("title") or "").lower()
-        if query_lower in source_name or query_lower in title_name or any(t in source_name or t in title_name for t in query_tokens if len(t) > 2):
-            overlap_score += 2.0
-                
-        scores.append((overlap_score, chunk))
+        # 3. Special intent boost for contact / support / hours queries
+        contact_terms = ["contact", "email", "phone", "hours", "support", "address", "location", "reach"]
+        if any(term in query_lower for term in contact_terms):
+            if any(term in content_lower for term in ["contact", "email", "hours", "phone", "support", "notification@", "monday", "est"]):
+                score += 30.0
 
+        scores.append((score, chunk))
+
+    # Sort ALL chunks by score descending
     scores.sort(key=lambda x: x[0], reverse=True)
     
-    matching_passages = [chunk for score, chunk in scores[:top_k] if score > 0.0]
+    # Filter chunks with score > 0 across entire database
+    matching_passages = [chunk for score, chunk in scores if score > 0.0]
     
-    # If no exact score > 0, return top_k chunks unconditionally so AI Assistant ALWAYS has database context
-    if not matching_passages:
-        return chunks[:top_k]
+    if matching_passages:
+        return matching_passages[:top_k]
 
-    return matching_passages
+    # Fallback: Return top_k chunks unconditionally if no positive scores
+    return [chunk for score, chunk in scores[:top_k]]
 
 def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Optional[Dict[str, Any]]:
     """Retrieve customer profile and task checklist progress from database with separate Bookkeeping & Tax In Process periods."""

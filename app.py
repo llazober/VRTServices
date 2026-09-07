@@ -6866,7 +6866,7 @@ async def chat_ai_assistant(request: Request):
                 conn.close()
 
         # Retrieve relevant passages from vector store / knowledge base
-        passages = rag_engine.retrieve_relevant_passages(user_message, tenant_slug, top_k=3)
+        passages = rag_engine.retrieve_relevant_passages(user_message, tenant_slug, top_k=6)
 
         # Synthesize response
         ai_reply = rag_engine.synthesize_ai_response(
