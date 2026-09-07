@@ -994,130 +994,102 @@ def init_compliance_tables():
         if conn:
             conn.close()
 
-def init_knowledge_articles_table():
-    import rag_engine
+def rechunk_document_db(cur, doc_id: int, tenant_slug: str, content: str):
+    """Chunk document text into document_chunk table for RAG retrieval."""
+    try:
+        cur.execute("DELETE FROM document_chunk WHERE document_id = %s;", (doc_id,))
+        if not content:
+            return
+        raw_sections = re.split(r'\n(?=#{1,3}\s)', content)
+        chunk_idx = 0
+        for sec in raw_sections:
+            clean_sec = sec.strip()
+            if len(clean_sec) > 10:
+                cur.execute("""
+                    INSERT INTO document_chunk (document_id, tenant_slug, chunk_index, content)
+                    VALUES (%s, %s, %s, %s);
+                """, (doc_id, tenant_slug, chunk_idx, clean_sec))
+                chunk_idx += 1
+    except Exception as e:
+        print(f"[RECHUNK DB ERROR] doc_id {doc_id}: {e}")
+
+def init_document_tables():
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge_articles (
+                CREATE TABLE IF NOT EXISTS document (
                     id          SERIAL PRIMARY KEY,
-                    tenant_slug VARCHAR(100) NOT NULL,
+                    tenant_slug VARCHAR(100) NOT NULL DEFAULT 'vrt_services',
+                    category    VARCHAR(100) NOT NULL DEFAULT 'Documentation',
+                    title       VARCHAR(255) NOT NULL,
                     rel_path    VARCHAR(255) NOT NULL UNIQUE,
                     filename    VARCHAR(255) NOT NULL,
-                    title       VARCHAR(255) NOT NULL,
-                    content     TEXT NOT NULL,
+                    content     TEXT NOT NULL DEFAULT '',
+                    tags        VARCHAR(255) DEFAULT '',
+                    is_published BOOLEAN NOT NULL DEFAULT TRUE,
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge_articles_meta (
-                    key VARCHAR(100) PRIMARY KEY,
-                    value VARCHAR(255) NOT NULL
+                CREATE TABLE IF NOT EXISTS document_chunk (
+                    id          SERIAL PRIMARY KEY,
+                    document_id INT NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+                    tenant_slug VARCHAR(100) NOT NULL DEFAULT 'vrt_services',
+                    chunk_index INT NOT NULL DEFAULT 0,
+                    content     TEXT NOT NULL,
+                    metadata    JSONB DEFAULT '{}'::jsonb,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.commit()
 
-            # Check if initial seeding has already been performed
-            cur.execute("SELECT value FROM knowledge_articles_meta WHERE key = 'initial_seed_done';")
-            meta_row = cur.fetchone()
-            already_seeded = bool(meta_row and meta_row.get("value") == "true")
-
-            kb_base = rag_engine.KB_DIR
-            if not already_seeded and os.path.exists(kb_base):
-                # 1. Seed database from disk ONLY ONCE on fresh deployment
-                for slug in os.listdir(kb_base):
-                    slug_dir = os.path.join(kb_base, slug)
-                    if os.path.isdir(slug_dir):
-                        for fname in os.listdir(slug_dir):
-                            if fname.endswith(".md") or fname.endswith(".txt"):
-                                rel_p = f"{slug}/{fname}"
-                                fpath = os.path.join(slug_dir, fname)
-                                try:
-                                    with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-                                        fcontent = f.read()
-                                    title = fname.replace("_", " ").replace(".md", "").replace(".txt", "").title()
-                                    cur.execute("""
-                                        INSERT INTO knowledge_articles (tenant_slug, rel_path, filename, title, content)
-                                        VALUES (%s, %s, %s, %s, %s)
-                                        ON CONFLICT (rel_path) DO NOTHING;
-                                    """, (slug, rel_p, fname, title, fcontent))
-                                except Exception as e_seed:
-                                    print(f"[KB SEED ERROR] {rel_p}: {e_seed}")
-                cur.execute("""
-                    INSERT INTO knowledge_articles_meta (key, value)
-                    VALUES ('initial_seed_done', 'true')
-                    ON CONFLICT (key) DO UPDATE SET value = 'true';
-                """)
+            # Seed default initial documents if table is empty
+            cur.execute("SELECT COUNT(*) AS cnt FROM document;")
+            count_row = cur.fetchone() or {}
+            if count_row.get("cnt", 0) == 0:
+                default_docs = [
+                    {
+                        "tenant_slug": "vrt_services",
+                        "category": "Documentation",
+                        "title": "Company Info",
+                        "rel_path": "vrt_services/company_info.md",
+                        "filename": "company_info.md",
+                        "content": "# VRT Services -- Company Overview & Portal Guide\n\n## About VRT Services\nVRT Services is an enterprise accounting, tax preparation, and bookkeeping advisory firm. We provide client portal services, tax organizer processing, bank statement reconciliation, and QuickBooks Online integration for individuals, LLCs, and corporations.\n\n## Contact Information & Hours\n- **Primary Support Email:** notification@vrtservices12.com\n- **Notification Domain:** notification@datalazo.net\n- **Business Hours:** Monday - Friday, 8:00 AM - 6:00 PM EST\n- **Client Portal:** https://vrt.datalazo.net / https://crm.datalazo.net\n\n## Primary Services Provided\n1. **Individual Tax Returns (Form 1040):** W-2, 1099, Schedule C, itemized deductions, and state tax filings.\n2. **Corporate & LLC Taxes (Form 1120 / 1120-S / 1065):** Business income tax returns, K-1 generation, and payroll tax compliance.\n3. **Monthly Bookkeeping & Bank Statement OCR:** Automated extraction of bank statements and check images into QuickBooks Chart of Accounts."
+                    },
+                    {
+                        "tenant_slug": "vrt_services",
+                        "category": "Documentation",
+                        "title": "Irs Pub17 General Tax",
+                        "rel_path": "vrt_services/irs_pub17_general_tax.md",
+                        "filename": "irs_pub17_general_tax.md",
+                        "content": "# IRS Publication 17 -- General Tax Guidelines\n\n## Overview\nIRS Publication 17 covers general rules for filing individual income tax returns. It includes guidance on gross income, filing status, standard vs itemized deductions, credit calculations, and tax planning strategies.\n\n## Standard Deductions & Thresholds\nFiling status determines your standard deduction amount. Taxpayers who are 65 or older or blind qualify for an additional deduction."
+                    },
+                    {
+                        "tenant_slug": "vrt_services",
+                        "category": "Documentation",
+                        "title": "Service Faq",
+                        "rel_path": "vrt_services/service_faq.md",
+                        "filename": "service_faq.md",
+                        "content": "# VRT Services -- Frequently Asked Questions (FAQ)\n\n## Client Portal Access\nQ: How do I access my tax organizers?\nA: Log in to the client portal at https://vrt.datalazo.net and navigate to the Tax Checklist section."
+                    }
+                ]
+                for doc in default_docs:
+                    cur.execute("""
+                        INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (rel_path) DO NOTHING
+                        RETURNING id;
+                    """, (doc["tenant_slug"], doc["category"], doc["title"], doc["rel_path"], doc["filename"], doc["content"]))
+                    res = cur.fetchone()
+                    if res:
+                        rechunk_document_db(cur, res["id"], doc["tenant_slug"], doc["content"])
                 conn.commit()
-
-            # 2. Sync active DB articles to disk
-            cur.execute("SELECT tenant_slug, rel_path, content FROM knowledge_articles;")
-            rows = cur.fetchall() or []
-            valid_rel_paths = set()
-            valid_filenames = set()
-            for row in rows:
-                r_path = row["rel_path"]
-                cnt = row["content"]
-                valid_rel_paths.add(r_path.lower())
-                valid_filenames.add(os.path.basename(r_path).lower())
-                full_p = os.path.join(kb_base, r_path.replace("/", os.sep))
-                try:
-                    os.makedirs(os.path.dirname(full_p), exist_ok=True)
-                    with open(full_p, "w", encoding="utf-8") as f:
-                        f.write(cnt)
-                except Exception as e_restore:
-                    print(f"[KB RESTORE ERROR] {r_path}: {e_restore}")
-
-            # 3. Purge orphaned physical files on disk that were deleted from DB
-            if os.path.exists(kb_base):
-                for root, _, files in os.walk(kb_base):
-                    for fname in files:
-                        if fname.endswith(".md") or fname.endswith(".txt"):
-                            rel_check = os.path.relpath(os.path.join(root, fname), kb_base).replace("\\", "/").lower()
-                            if rel_check not in valid_rel_paths and fname.lower() not in valid_filenames:
-                                try:
-                                    os.remove(os.path.join(root, fname))
-                                    print(f"[KB DISK CLEANUP] Removed orphaned disk file: {rel_check}")
-                                except Exception as e_del:
-                                    print(f"[KB DISK CLEANUP ERROR] {rel_check}: {e_del}")
-
-            print(f"Knowledge Base DB synced successfully ({len(rows)} articles active).")
+            print("Document tables (document, document_chunk) initialized successfully.")
     except Exception as e:
-        print(f"Error initializing knowledge_articles table: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-def upsert_kb_doc_in_db(tenant_slug: str, rel_path: str, filename: str, title: str, content: str):
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO knowledge_articles (tenant_slug, rel_path, filename, title, content, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (rel_path) 
-                DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP;
-            """, (tenant_slug, rel_path, filename, title, content))
-            conn.commit()
-    except Exception as e:
-        print(f"[KB DB UPSERT ERROR] {rel_path}: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-def delete_kb_doc_from_db(rel_path: str, tenant_slug: str):
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM knowledge_articles WHERE rel_path = %s AND tenant_slug = %s;", (rel_path, tenant_slug))
-            conn.commit()
-    except Exception as e:
-        print(f"[KB DB DELETE ERROR] {rel_path}: {e}")
+        print(f"Error initializing document tables: {e}")
     finally:
         if conn:
             conn.close()
@@ -1133,7 +1105,7 @@ try:
     init_billing_tables()
     init_tax_team_table()
     init_compliance_tables()
-    init_knowledge_articles_table()
+    init_document_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -6962,20 +6934,21 @@ async def chat_ai_assistant(request: Request):
 async def list_knowledge_docs(request: Request, parent_name: str = ""):
     import rag_engine
     tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
-    kb_base = rag_engine.KB_DIR
 
     all_flat_docs = []
     category_list = []
     grouped_by_slug = {}
 
-    db_connected = False
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, tenant_slug, rel_path, filename, title FROM knowledge_articles ORDER BY title ASC;")
+            cur.execute("""
+                SELECT id, tenant_slug, category, title, rel_path, filename, created_at, updated_at 
+                FROM document 
+                ORDER BY title ASC;
+            """)
             db_articles = cur.fetchall() or []
-            db_connected = True
             
             for art in db_articles:
                 s = art["tenant_slug"]
@@ -6988,7 +6961,9 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
                     "rel_path": art.get("rel_path"),
                     "path": art.get("rel_path"),
                     "title": art.get("title"),
-                    "tenant_slug": s
+                    "category": art.get("category", "Documentation"),
+                    "tenant_slug": s,
+                    "updated_at": str(art.get("updated_at") or "")
                 }
                 grouped_by_slug[s].append(doc_obj)
                 all_flat_docs.append(doc_obj)
@@ -6997,27 +6972,6 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     finally:
         if conn:
             conn.close()
-
-    # Fallback to disk scan ONLY if database connection fails
-    if not db_connected and os.path.exists(kb_base):
-        for slug in sorted(os.listdir(kb_base)):
-            cat_dir = os.path.join(kb_base, slug)
-            if os.path.isdir(cat_dir):
-                cat_items = []
-                for file in sorted(os.listdir(cat_dir)):
-                    if file.endswith(".md") or file.endswith(".txt"):
-                        rel_path = f"{slug}/{file}"
-                        title = file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
-                        doc_obj = {
-                            "filename": file,
-                            "rel_path": rel_path,
-                            "path": rel_path,
-                            "title": title,
-                            "tenant_slug": slug
-                        }
-                        cat_items.append(doc_obj)
-                        all_flat_docs.append(doc_obj)
-                grouped_by_slug[slug] = cat_items
 
     available_slugs = list(grouped_by_slug.keys())
     if tenant_slug not in available_slugs:
@@ -7046,15 +7000,32 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
 
 @app.get("/api/knowledge/doc")
 async def get_knowledge_doc(request: Request, path: str = ""):
-    import rag_engine
-    if not path or ".." in path:
+    if not path:
         raise HTTPException(status_code=400, detail="Invalid path")
-    full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="Knowledge document not found")
-    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
-    return {"success": True, "path": path, "content": content}
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM document 
+                WHERE rel_path = %s OR id::text = %s OR LOWER(filename) = LOWER(%s);
+            """, (path, path, os.path.basename(path)))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Knowledge document not found")
+            return {
+                "success": True, 
+                "id": row["id"],
+                "path": row["rel_path"], 
+                "title": row["title"],
+                "content": row["content"],
+                "category": row.get("category", "Documentation"),
+                "tenant_slug": row["tenant_slug"]
+            }
+    finally:
+        if conn:
+            conn.close()
 
 @app.post("/api/knowledge/save")
 async def save_knowledge_doc(request: Request):
@@ -7065,24 +7036,41 @@ async def save_knowledge_doc(request: Request):
     parent_name = (body.get("parent_name") or get_current_username(request) or "VRT Services").strip()
     tenant_slug = rag_engine.get_tenant_slug(parent_name)
 
-    if not rel_path or ".." in rel_path:
+    if not rel_path:
         raise HTTPException(status_code=400, detail="Invalid document path.")
     
-    # Enforce strict tenant isolation
-    target_cat = rel_path.split("/")[0] if "/" in rel_path else rel_path
-    if target_cat != tenant_slug:
-        raise HTTPException(status_code=403, detail="Access denied: Cannot edit documents belonging to another organization.")
-
-    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    with open(full_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    
-    filename = os.path.basename(full_path)
+    filename = os.path.basename(rel_path)
     title = filename.replace("_", " ").replace(".md", "").replace(".txt", "").title()
-    upsert_kb_doc_in_db(tenant_slug, rel_path, filename, title, content)
-    
-    return {"success": True, "message": "Article saved successfully.", "path": rel_path}
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE document 
+                SET content = %s, title = %s, updated_at = CURRENT_TIMESTAMP 
+                WHERE rel_path = %s OR LOWER(filename) = LOWER(%s) OR id::text = %s
+                RETURNING id;
+            """, (content, title, rel_path, filename, rel_path))
+            res_row = cur.fetchone()
+            if res_row:
+                doc_id = res_row["id"]
+                rechunk_document_db(cur, doc_id, tenant_slug, content)
+                conn.commit()
+            else:
+                cur.execute("""
+                    INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
+                    VALUES (%s, 'Documentation', %s, %s, %s, %s)
+                    RETURNING id;
+                """, (tenant_slug, title, rel_path, filename, content))
+                new_row = cur.fetchone()
+                if new_row:
+                    rechunk_document_db(cur, new_row["id"], tenant_slug, content)
+                conn.commit()
+        return {"success": True, "message": "Article saved successfully.", "path": rel_path}
+    finally:
+        if conn:
+            conn.close()
 
 @app.post("/api/knowledge/create")
 async def create_knowledge_doc(request: Request):
@@ -7090,108 +7078,77 @@ async def create_knowledge_doc(request: Request):
     body = await request.json()
     parent_name = (body.get("parent_name") or get_current_username(request) or "VRT Services").strip()
     tenant_slug = rag_engine.get_tenant_slug(parent_name)
-    category_slug = tenant_slug
     
     raw_title = (body.get("title") or body.get("filename") or body.get("name") or "").strip()
     title = raw_title[:-3] if raw_title.lower().endswith(".md") else raw_title
-    
     if not title:
         raise HTTPException(status_code=400, detail="Title or Filename is required.")
     
     content = body.get("content") or f"# {title}\n\nWrite article content here..."
-    
     raw_filename = (body.get("filename") or "").strip()
     if raw_filename:
         filename = raw_filename if raw_filename.lower().endswith(".md") else f"{raw_filename}.md"
     else:
         filename = re.sub(r'[^a-zA-Z0-9_-]', '_', title.lower()).strip('_') + ".md"
         
-    rel_path = f"{category_slug}/{filename}"
-    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
-    
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    with open(full_path, "w", encoding="utf-8") as f:
-        f.write(content)
-        
-    upsert_kb_doc_in_db(tenant_slug, rel_path, filename, title, content)
-    return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
+    rel_path = f"{tenant_slug}/{filename}"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
+                VALUES (%s, 'Documentation', %s, %s, %s, %s)
+                ON CONFLICT (rel_path) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+                RETURNING id;
+            """, (tenant_slug, title, rel_path, filename, content))
+            doc_row = cur.fetchone()
+            if doc_row:
+                rechunk_document_db(cur, doc_row["id"], tenant_slug, content)
+            conn.commit()
+        return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
+    finally:
+        if conn:
+            conn.close()
 
 @app.api_route("/api/knowledge/delete", methods=["DELETE", "POST", "GET"])
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
-    import rag_engine
-    
-    # Extract path from query params or JSON body if POST
     if not path:
         path = request.query_params.get("path", "")
     if not path and request.method == "POST":
         try:
             body = await request.json()
             path = body.get("path", "")
-            if not parent_name:
-                parent_name = body.get("parent_name", "")
         except Exception:
             pass
 
-    if not path or ".." in path:
-        raise HTTPException(status_code=400, detail="Invalid file path provided.")
+    if not path:
+        raise HTTPException(status_code=400, detail="Invalid document path provided.")
     
     clean_rel_path = path.replace("\\", "/").strip("/")
     raw_filename = os.path.basename(clean_rel_path)
-    
     base_name = raw_filename[:-3] if raw_filename.lower().endswith(".md") else (raw_filename[:-4] if raw_filename.lower().endswith(".txt") else raw_filename)
     slugified_base = re.sub(r'[^a-zA-Z0-9_-]', '_', base_name.lower()).strip('_')
-    
-    target_patterns = {
-        raw_filename.lower(),
-        f"{raw_filename.lower()}.md",
-        f"{base_name.lower()}.md",
-        f"{slugified_base}.md",
-        f"{slugified_base}.txt"
-    }
 
-    # 1. Case-insensitive physical file deletion across knowledge base directory
-    kb_base = os.path.normpath(rag_engine.KB_DIR)
-    deleted_files = 0
-    if os.path.exists(kb_base):
-        for root, _, files in os.walk(kb_base):
-            for f in files:
-                f_low = f.lower()
-                f_base = f_low[:-3] if f_low.endswith(".md") else (f_low[:-4] if f_low.endswith(".txt") else f_low)
-                f_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', f_base).strip('_')
-                
-                if f_low in target_patterns or f_slug in target_patterns or f_slug == slugified_base:
-                    target_file = os.path.join(root, f)
-                    try:
-                        os.remove(target_file)
-                        deleted_files += 1
-                        print(f"[KB DELETE DISK SUCCESS] Removed file: {target_file}")
-                    except Exception as e:
-                        print(f"[KB DELETE DISK ERROR] {target_file}: {e}")
-
-    # 2. Database record deletion from knowledge_articles
-    deleted_db_rows = 0
+    deleted_rows = 0
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute("""
-                DELETE FROM knowledge_articles 
+                DELETE FROM document 
                 WHERE LOWER(rel_path) = LOWER(%s) 
                    OR LOWER(filename) = LOWER(%s)
                    OR LOWER(title) = LOWER(%s)
-                   OR LOWER(filename) LIKE LOWER(%s)
+                   OR id::text = %s
                    OR rel_path ILIKE %s;
-            """, (clean_rel_path, raw_filename, base_name, f"%{slugified_base}%", f"%{slugified_base}%"))
-            deleted_db_rows = cur.rowcount
-            cur.execute("""
-                INSERT INTO knowledge_articles_meta (key, value)
-                VALUES ('initial_seed_done', 'true')
-                ON CONFLICT (key) DO UPDATE SET value = 'true';
-            """)
+            """, (clean_rel_path, raw_filename, base_name, path, f"%{slugified_base}%"))
+            deleted_rows = cur.rowcount
             conn.commit()
-            print(f"[KB DELETE DB SUCCESS] Deleted {deleted_db_rows} rows from knowledge_articles for {raw_filename}.")
+            print(f"[KB DELETE DB SUCCESS] Deleted {deleted_rows} rows from document table.")
     except Exception as e:
-        print(f"[KB DB DELETE ERROR] {clean_rel_path}: {e}")
+        print(f"[KB DELETE ERROR] {clean_rel_path}: {e}")
     finally:
         if conn:
             conn.close()
@@ -7199,8 +7156,7 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
     return {
         "success": True, 
         "message": f"Article '{base_name}' deleted successfully.",
-        "disk_deleted": deleted_files,
-        "db_rows_deleted": deleted_db_rows
+        "db_rows_deleted": deleted_rows
     }
 
 @app.post("/api/knowledge/upload")
@@ -7217,7 +7173,6 @@ async def upload_knowledge_doc(
     content_bytes = await file.read()
     
     extracted_text = ""
-    
     if ext == ".pdf":
         try:
             import fitz
@@ -7257,13 +7212,24 @@ async def upload_knowledge_doc(
     safe_base = re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(filename)[0].lower()).strip('_')
     md_filename = f"{safe_base}.md"
     rel_path = f"{tenant_slug}/{md_filename}"
-    full_path = os.path.join(rag_engine.KB_DIR, rel_path.replace("/", os.sep))
 
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    with open(full_path, "w", encoding="utf-8") as f:
-        f.write(final_markdown)
-
-    upsert_kb_doc_in_db(tenant_slug, rel_path, md_filename, clean_title, final_markdown)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
+                VALUES (%s, 'Uploaded', %s, %s, %s, %s)
+                ON CONFLICT (rel_path) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+                RETURNING id;
+            """, (tenant_slug, clean_title, rel_path, md_filename, final_markdown))
+            doc_row = cur.fetchone()
+            if doc_row:
+                rechunk_document_db(cur, doc_row["id"], tenant_slug, final_markdown)
+            conn.commit()
+    finally:
+        if conn:
+            conn.close()
 
     return {
         "success": True,

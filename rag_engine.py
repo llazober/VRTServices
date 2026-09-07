@@ -19,35 +19,30 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load and chunk markdown files strictly for a specific tenant."""
+    """Load chunks strictly from PostgreSQL document_chunk table for a specific tenant."""
     chunks = []
-    dirs_to_load = [
-        os.path.join(KB_DIR, tenant_slug)
-    ]
-    
-    for d in dirs_to_load:
-        if not os.path.exists(d):
-            continue
-        for root, _, files in os.walk(d):
-            for file in files:
-                if file.endswith(".md") or file.endswith(".txt"):
-                    file_path = os.path.join(root, file)
-                    try:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                            text = f.read()
-                            
-                        # Split by headers (## or #) or paragraphs
-                        raw_sections = re.split(r'\n(?=#{1,3}\s)', text)
-                        for sec in raw_sections:
-                            clean_sec = sec.strip()
-                            if len(clean_sec) > 20:
-                                chunks.append({
-                                    "source": file,
-                                    "category": "tax" if "shared_irs_tax" in d else "company",
-                                    "content": clean_sec
-                                })
-                    except Exception as e:
-                        print(f"[RAG LOAD ERROR] Failed loading {file_path}: {e}")
+    try:
+        from app import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT c.content, d.title, d.rel_path AS source, d.category
+                FROM document_chunk c
+                JOIN document d ON c.document_id = d.id
+                WHERE c.tenant_slug = %s OR d.tenant_slug = %s;
+            """, (tenant_slug, tenant_slug))
+            rows = cur.fetchall() or []
+            for r in rows:
+                chunks.append({
+                    "source": r["source"],
+                    "title": r["title"],
+                    "category": r["category"],
+                    "content": r["content"]
+                })
+        conn.close()
+    except Exception as e:
+        print(f"[RAG DB CHUNK LOAD ERROR] {e}")
     return chunks
 
 def tokenize(text: str) -> List[str]:
