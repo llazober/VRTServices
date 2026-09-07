@@ -1,0 +1,4542 @@
+// --- SCRIPT 0 ---
+
+        // ── Custom Glassmorphic Alert & Confirm System ─────────────────────────
+        let customAlertCallback = null;
+        let customConfirmPromiseResolver = null;
+
+        function safeEscapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showCustomAlert(msg, type = null, title = null, onConfirm = null) {
+            // Handle caller format signature showCustomAlert(title, message, type)
+            if (typeof title === 'string' && ['success', 'error', 'warning', 'info'].includes(title.toLowerCase())) {
+                const actualTitle = msg;
+                const actualMsg = type;
+                const actualType = title.toLowerCase();
+                msg = actualMsg;
+                type = actualType;
+                title = actualTitle;
+            }
+
+            const formatErrorDetail = (val) => {
+                if (!val) return '';
+                if (typeof val === 'string') return val;
+                if (Array.isArray(val)) return val.map(item => typeof item === 'object' ? (item.msg || item.detail || JSON.stringify(item)) : String(item)).join(', ');
+                if (typeof val === 'object') {
+                    if (val.detail) return formatErrorDetail(val.detail);
+                    if (val.message) return String(val.message);
+                    return JSON.stringify(val);
+                }
+                return String(val);
+            };
+
+            let cleanMsg = formatErrorDetail(msg);
+            let autoType = formatErrorDetail(type) || null;
+            let autoTitle = title;
+
+            if (!autoType) {
+                if (cleanMsg.includes('✅') || cleanMsg.toLowerCase().includes('success')) {
+                    autoType = 'success';
+                } else if (cleanMsg.includes('❌') || cleanMsg.toLowerCase().includes('error') || cleanMsg.toLowerCase().includes('failed')) {
+                    autoType = 'error';
+                } else if (cleanMsg.includes('⚠️') || cleanMsg.toLowerCase().includes('warning') || cleanMsg.toLowerCase().includes('notice')) {
+                    autoType = 'warning';
+                } else {
+                    autoType = 'info';
+                }
+            }
+
+            cleanMsg = cleanMsg.replace(/^([✅❌⚠️ℹ️💬⏳🚀]\s*)+/, '').trim();
+
+            if (!autoTitle) {
+                if (autoType === 'success') autoTitle = 'Success';
+                else if (autoType === 'error') autoTitle = 'Error';
+                else if (autoType === 'warning') autoTitle = 'Attention';
+                else autoTitle = 'System Notification';
+            }
+
+            customAlertCallback = onConfirm;
+
+            let modal = document.getElementById('customAlertModal');
+            if (!modal) {
+                if (window.nativeAlert) window.nativeAlert(msg);
+                else alert(msg);
+                if (onConfirm) onConfirm();
+                return;
+            }
+
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            const iconBox = document.getElementById('customAlertIconBox');
+            const titleEl = document.getElementById('customAlertTitle');
+            const msgEl = document.getElementById('customAlertMessage');
+            const okBtn = document.getElementById('customAlertOkBtn');
+            const card = document.getElementById('customAlertCard');
+
+            titleEl.textContent = autoTitle;
+
+            const lines = cleanMsg.split('\n').filter(l => l.trim().length > 0);
+            msgEl.innerHTML = lines.map(line => {
+                if (line.includes(': ')) {
+                    const parts = line.split(': ');
+                    return `<div style="margin-top: 4px;"><span style="color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">${safeEscapeHtml(parts[0])}:</span> <span style="color: #38bdf8; font-weight: 600; font-family: monospace; font-size: 0.85rem;">${safeEscapeHtml(parts.slice(1).join(': '))}</span></div>`;
+                }
+                return `<div style="margin-bottom: 4px;">${safeEscapeHtml(line)}</div>`;
+            }).join('');
+
+            if (autoType === 'success') {
+                iconBox.innerHTML = '✅';
+                iconBox.style.background = 'rgba(16, 185, 129, 0.15)';
+                iconBox.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                iconBox.style.color = '#10b981';
+                card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.2)';
+                okBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                okBtn.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.4)';
+            } else if (autoType === 'error') {
+                iconBox.innerHTML = '❌';
+                iconBox.style.background = 'rgba(244, 63, 94, 0.15)';
+                iconBox.style.borderColor = 'rgba(244, 63, 94, 0.4)';
+                iconBox.style.color = '#f43f5e';
+                card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(244, 63, 94, 0.2)';
+                okBtn.style.background = 'linear-gradient(135deg, #f43f5e, #be123c)';
+                okBtn.style.boxShadow = '0 4px 14px rgba(244, 63, 94, 0.4)';
+            } else if (autoType === 'warning') {
+                iconBox.innerHTML = '⚠️';
+                iconBox.style.background = 'rgba(245, 158, 11, 0.15)';
+                iconBox.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                iconBox.style.color = '#f59e0b';
+                card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(245, 158, 11, 0.2)';
+                okBtn.style.background = 'linear-gradient(135deg, #f59e0b, #b45309)';
+                okBtn.style.boxShadow = '0 4px 14px rgba(245, 158, 11, 0.4)';
+            } else {
+                iconBox.innerHTML = '💬';
+                iconBox.style.background = 'rgba(59, 130, 246, 0.15)';
+                iconBox.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                iconBox.style.color = '#3b82f6';
+                card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(59, 130, 246, 0.2)';
+                okBtn.style.background = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                okBtn.style.boxShadow = '0 4px 14px rgba(59, 130, 246, 0.4)';
+            }
+
+            modal.style.display = 'flex';
+            setTimeout(() => { if (okBtn) okBtn.focus(); }, 50);
+        }
+
+        function closeCustomAlert() {
+            const modal = document.getElementById('customAlertModal');
+            if (modal) modal.style.display = 'none';
+            if (customAlertCallback) {
+                const cb = customAlertCallback;
+                customAlertCallback = null;
+                cb();
+            }
+        }
+
+        function showCustomConfirm(msg, title = null, confirmText = null, cancelText = null) {
+            return new Promise((resolve) => {
+                let cleanMsg = String(msg || '');
+                let isDelete = cleanMsg.toLowerCase().includes('delete') || cleanMsg.toLowerCase().includes('remove');
+                let autoTitle = title || (isDelete ? 'Confirm Delete' : 'Please Confirm');
+                let autoConfirmText = confirmText || (isDelete ? 'Yes, Delete' : 'Confirm');
+                let autoCancelText = cancelText || 'Cancel';
+
+                cleanMsg = cleanMsg.replace(/^([⚠️🗑️❓❌]\s*)+/, '').trim();
+
+                let modal = document.getElementById('customConfirmModal');
+                if (!modal) {
+                    let res = window.nativeConfirm ? window.nativeConfirm(msg) : true;
+                    resolve(res);
+                    return;
+                }
+
+                if (modal.parentElement !== document.body) {
+                    document.body.appendChild(modal);
+                }
+
+                customConfirmPromiseResolver = resolve;
+
+                const iconBox = document.getElementById('customConfirmIconBox');
+                const titleEl = document.getElementById('customConfirmTitle');
+                const msgEl = document.getElementById('customConfirmMessage');
+                const actionBtn = document.getElementById('customConfirmActionBtn');
+                const cancelBtn = document.getElementById('customConfirmCancelBtn');
+                const card = document.getElementById('customConfirmCard');
+
+                titleEl.textContent = autoTitle;
+                actionBtn.textContent = autoConfirmText;
+                cancelBtn.textContent = autoCancelText;
+
+                const lines = cleanMsg.split('\n').filter(l => l.trim().length > 0);
+                msgEl.innerHTML = lines.map(line => {
+                    if (line.includes(': ')) {
+                        const parts = line.split(': ');
+                        return `<div style="margin-top: 4px;"><span style="color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">${safeEscapeHtml(parts[0])}:</span> <span style="color: #38bdf8; font-weight: 600; font-family: monospace; font-size: 0.85rem;">${safeEscapeHtml(parts.slice(1).join(': '))}</span></div>`;
+                    }
+                    return `<div style="margin-bottom: 4px;">${safeEscapeHtml(line)}</div>`;
+                }).join('');
+
+                if (isDelete) {
+                    iconBox.innerHTML = '🗑️';
+                    iconBox.style.background = 'rgba(244, 63, 94, 0.15)';
+                    iconBox.style.borderColor = 'rgba(244, 63, 94, 0.4)';
+                    iconBox.style.color = '#f43f5e';
+                    card.style.borderColor = 'rgba(244, 63, 94, 0.4)';
+                    card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(244, 63, 94, 0.2)';
+                    actionBtn.style.background = 'linear-gradient(135deg, #f43f5e, #be123c)';
+                    actionBtn.style.boxShadow = '0 4px 14px rgba(244, 63, 94, 0.4)';
+                } else {
+                    iconBox.innerHTML = '❓';
+                    iconBox.style.background = 'rgba(59, 130, 246, 0.15)';
+                    iconBox.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                    iconBox.style.color = '#3b82f6';
+                    card.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                    card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(59, 130, 246, 0.2)';
+                    actionBtn.style.background = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                    actionBtn.style.boxShadow = '0 4px 14px rgba(59, 130, 246, 0.4)';
+                }
+
+                modal.style.display = 'flex';
+                setTimeout(() => { if (actionBtn) actionBtn.focus(); }, 50);
+            });
+        }
+
+        function closeCustomConfirm(result) {
+            const modal = document.getElementById('customConfirmModal');
+            if (modal) modal.style.display = 'none';
+            if (customConfirmPromiseResolver) {
+                const res = customConfirmPromiseResolver;
+                customConfirmPromiseResolver = null;
+                res(Boolean(result));
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            const confirmModal = document.getElementById('customConfirmModal');
+            if (confirmModal && confirmModal.style.display === 'flex') {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeCustomConfirm(false);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    closeCustomConfirm(true);
+                }
+                return;
+            }
+            const alertModal = document.getElementById('customAlertModal');
+            if (alertModal && alertModal.style.display === 'flex') {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    e.preventDefault();
+                    closeCustomAlert();
+                }
+            }
+        });
+
+        if (!window.nativeAlert) {
+            window.nativeAlert = window.alert;
+        }
+        window.alert = function(msg) {
+            showCustomAlert(msg);
+        };
+
+        if (!window.nativeConfirm) {
+            window.nativeConfirm = window.confirm;
+        }
+        window.confirm = function(msg) {
+            showCustomConfirm(msg);
+            return false;
+        };
+
+        const CURRENT_PARENT_NAME = "placeholder";
+        const CURRENT_USER_EMAIL = "placeholder";
+        const RESEND_REPLY_TO_EMAIL = "placeholder";
+
+        let currentCoaRecords = [];
+        let currentParentMappings = [];
+        let currentHistoryRecords = [];
+        let historySortKey = 'accountNumber';
+        let historySortOrder = 'asc';
+        let supportAttachedFile = null;
+        var currentUnreadMap = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleBtn = document.getElementById('toggleSidebar');
+            const body = document.body;
+
+            // Load saved sidebar state
+            const isCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+            if (isCollapsed) {
+                body.classList.add('sidebar-collapsed');
+            }
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    body.classList.toggle('sidebar-collapsed');
+                    localStorage.setItem('sidebar_collapsed', body.classList.contains('sidebar-collapsed'));
+                });
+            }
+
+            syncClientSelectDropdowns();
+            loadWorkloadSummary();
+
+            if (window.location.pathname === '/billing' || '"placeholder"' === 'billing') {
+                initBillingModule();
+            }
+        });
+
+        // --- Helper to close all open app modals ---
+        function closeAllAppModals() {
+            ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal', 'billingScheduleModal', 'billingInvoiceModal', 'billingInvoiceViewModal'].forEach(id => {
+                const modal = document.getElementById(id);
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.style.opacity = '0';
+                }
+            });
+        }
+
+        // ── BILLING MODULE CONTROLLER ──────────────────────────────────────────
+        let billingAllInvoices = [];
+        let billingAllSchedules = [];
+        let billingActiveSubTab = 'invoices';
+
+        async function initBillingModule() {
+            console.log("[BILLING MODULE] Initializing Billing Dashboard...");
+            await Promise.all([
+                loadBillingOverview(),
+                loadBillingInvoices(),
+                loadBillingSchedules(),
+                populateBillingCustomerDropdowns()
+            ]);
+        }
+
+        async function loadBillingOverview() {
+            try {
+                const res = await fetch('/api/billing/overview');
+                if (res.ok) {
+                    const data = await res.json();
+                    const mrrElem = document.getElementById('billingKpiMrr');
+                    const subElem = document.getElementById('billingKpiSubscribers');
+                    const colElem = document.getElementById('billingKpiCollected');
+                    const outElem = document.getElementById('billingKpiOutstanding');
+
+                    if (mrrElem) mrrElem.innerHTML = `$${(data.mrr || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span style="font-size: 0.85rem; color: #94a3b8; font-weight: 400;">/ mo</span>`;
+                    if (subElem) subElem.innerText = data.active_subscribers || 0;
+                    if (colElem) colElem.innerText = `$${(data.total_collected || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    if (outElem) outElem.innerText = `$${(data.total_outstanding || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                }
+            } catch (err) {
+                console.error("[BILLING OVERVIEW ERROR]:", err);
+            }
+        }
+
+        async function populateBillingCustomerDropdowns() {
+            try {
+                const res = await fetch('/api/customers');
+                if (res.ok) {
+                    const data = await res.json();
+                    const customers = data.customers || [];
+                    const optionsHtml = '<option value="">-- Select Client / Customer --</option>' +
+                        customers.map(c => {
+                            const name = c.legal_name || c.display_name || ('Customer #' + c.id);
+                            const num = c.custumer_number || ('CUST-' + c.id);
+                            return `<option value="${c.id}">${name} (${num})</option>`;
+                        }).join('');
+                    
+                    const schedSelect = document.getElementById('scheduleCustomerSelect');
+                    const invSelect = document.getElementById('invoiceCustomerSelect');
+                    if (schedSelect) schedSelect.innerHTML = optionsHtml;
+                    if (invSelect) invSelect.innerHTML = optionsHtml;
+                }
+            } catch (err) {
+                console.error("[BILLING CUSTOMER DROPDOWN ERROR]:", err);
+            }
+        }
+
+        function switchBillingSubTab(tabName) {
+            billingActiveSubTab = tabName;
+            const invBtn = document.getElementById('billingTabBtnInvoices');
+            const schedBtn = document.getElementById('billingTabBtnSchedules');
+            const invSec = document.getElementById('billingInvoicesSection');
+            const schedSec = document.getElementById('billingSchedulesSection');
+            const filters = document.getElementById('billingInvoiceFilters');
+
+            if (tabName === 'invoices') {
+                if (invBtn) { invBtn.style.background = 'var(--primary-grad)'; invBtn.style.color = '#fff'; }
+                if (schedBtn) { schedBtn.style.background = 'transparent'; schedBtn.style.color = '#94a3b8'; }
+                if (invSec) invSec.style.display = 'block';
+                if (schedSec) schedSec.style.display = 'none';
+                if (filters) filters.style.display = 'flex';
+            } else {
+                if (schedBtn) { schedBtn.style.background = 'linear-gradient(135deg, #c084fc, #9333ea)'; schedBtn.style.color = '#fff'; }
+                if (invBtn) { invBtn.style.background = 'transparent'; invBtn.style.color = '#94a3b8'; }
+                if (schedSec) schedSec.style.display = 'block';
+                if (invSec) invSec.style.display = 'none';
+                if (filters) filters.style.display = 'none';
+            }
+        }
+
+        async function loadBillingInvoices() {
+            const filterElem = document.getElementById('billingStatusFilterSelect');
+            const statusFilter = filterElem ? filterElem.value : 'ALL';
+            try {
+                const res = await fetch(`/api/billing/invoices?status=${statusFilter}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    billingAllInvoices = Array.isArray(data) ? data : (data.invoices || data.data || []);
+                    const cntElem = document.getElementById('billingInvoicesCount');
+                    if (cntElem) cntElem.innerText = billingAllInvoices.length;
+                    renderBillingInvoicesTable(billingAllInvoices);
+                }
+            } catch (err) {
+                console.error("[LOAD INVOICES ERROR]:", err);
+            }
+        }
+
+        function renderBillingInvoicesTable(invoices) {
+            const tbody = document.getElementById('billingInvoicesTableBody');
+            if (!tbody) return;
+
+            if (!invoices || invoices.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No invoices found. Click <strong>+ Create Invoice</strong> to generate one.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = invoices.map(inv => {
+                let badgeStyle = "background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);";
+                if (inv.status === 'PAID') badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
+                else if (inv.status === 'SENT') badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
+                else if (inv.status === 'OVERDUE') badgeStyle = "background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);";
+                else if (inv.status === 'CANCELLED') badgeStyle = "background: rgba(100, 116, 139, 0.2); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3);";
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 14px 18px; font-weight: 700; color: #38bdf8; font-family: monospace;">${inv.invoice_number}</td>
+                        <td style="padding: 14px 18px;">
+                            <strong style="color: #fff; display: block;">${inv.legal_name || 'Client #' + inv.customer_id}</strong>
+                            <span style="font-size: 0.78rem; color: #94a3b8;">${inv.email || ''}</span>
+                        </td>
+                        <td style="padding: 14px 18px; color: #cbd5e1;">${inv.issue_date || 'N/A'}</td>
+                        <td style="padding: 14px 18px; color: #f87171; font-weight: 600;">${inv.due_date || 'N/A'}</td>
+                        <td style="padding: 14px 18px; color: #94a3b8; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${inv.description || ''}</td>
+                        <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem;">$${parseFloat(inv.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td style="padding: 14px 18px;">
+                            <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${inv.status}</span>
+                        </td>
+                        <td style="padding: 14px 18px; text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <button onclick="viewInvoiceHtml('${inv.id}', '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
+                                ${inv.status !== 'PAID' ? `<button onclick="markInvoiceStatus('${inv.id}', 'PAID')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
+                                <button onclick="sendInvoiceEmail('${inv.id}')" title="Send Resend Email to Client" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>
+                                <button onclick="deleteInvoice('${inv.id}')" title="Delete Invoice" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadBillingSchedules() {
+            try {
+                const res = await fetch('/api/billing/schedules');
+                if (res.ok) {
+                    const data = await res.json();
+                    billingAllSchedules = Array.isArray(data) ? data : (data.schedules || data.data || []);
+                    const cntElem = document.getElementById('billingSchedulesCount');
+                    if (cntElem) cntElem.innerText = billingAllSchedules.length;
+                    renderBillingSchedulesTable(billingAllSchedules);
+                }
+            } catch (err) {
+                console.error("[LOAD SCHEDULES ERROR]:", err);
+            }
+        }
+
+        function renderBillingSchedulesTable(schedules) {
+            const tbody = document.getElementById('billingSchedulesTableBody');
+            if (!tbody) return;
+
+            if (!schedules || schedules.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No recurring billing schedules configured. Click <strong onclick="openCreateScheduleModal()" style="cursor: pointer; color: #c084fc; text-decoration: underline;">+ New Schedule</strong> to create one.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = schedules.map(s => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 14px 18px;">
+                        <strong style="color: #fff; display: block;">${s.legal_name || 'Client #' + s.customer_id}</strong>
+                        <span style="font-size: 0.78rem; color: #94a3b8;">${s.custumer_number || ''}</span>
+                    </td>
+                    <td style="padding: 14px 18px; font-weight: 800; color: #c084fc; font-size: 0.95rem;">$${parseFloat(s.billing_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / mo</td>
+                    <td style="padding: 14px 18px; color: #38bdf8; font-weight: 700;">Day ${s.billing_day} of month</td>
+                    <td style="padding: 14px 18px; color: #cbd5e1;">Net ${s.payment_terms_days || 30} Days</td>
+                    <td style="padding: 14px 18px;">
+                        ${s.auto_send ? `<span style="color: #4ade80; font-weight: 700;">✓ Enabled</span>` : `<span style="color: #64748b;">Disabled</span>`}
+                    </td>
+                    <td style="padding: 14px 18px; color: #94a3b8;">${s.last_billed_at ? new Date(s.last_billed_at).toLocaleDateString() : 'Never'}</td>
+                    <td style="padding: 14px 18px;">
+                        <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
+                    </td>
+                    <td style="padding: 14px 18px; text-align: right; white-space: nowrap;">
+                        <button onclick="editSchedule('${s.id}')" title="Edit Recurring Schedule" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; margin-right: 6px;">✏️ Edit</button>
+                        <button onclick="deleteSchedule('${s.id}')" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterBillingTable() {
+            const input = document.getElementById('billingSearchInput');
+            const query = (input ? input.value : '').toLowerCase().trim();
+            if (billingActiveSubTab === 'invoices') {
+                const filtered = billingAllInvoices.filter(inv => 
+                    (inv.invoice_number || '').toLowerCase().includes(query) ||
+                    (inv.legal_name || '').toLowerCase().includes(query) ||
+                    (inv.description || '').toLowerCase().includes(query)
+                );
+                renderBillingInvoicesTable(filtered);
+            } else {
+                const filtered = billingAllSchedules.filter(s => 
+                    (s.legal_name || '').toLowerCase().includes(query) ||
+                    (s.custumer_number || '').toLowerCase().includes(query) ||
+                    (s.description || '').toLowerCase().includes(query)
+                );
+                renderBillingSchedulesTable(filtered);
+            }
+        }
+
+        // --- Modals Control Functions ---
+        function openCreateScheduleModal() {
+            closeAllAppModals();
+            populateBillingCustomerDropdowns();
+            const idElem = document.getElementById('scheduleFormId');
+            if (idElem) idElem.value = '';
+            const titleElem = document.getElementById('scheduleModalTitleText');
+            if (titleElem) titleElem.innerText = '🔄 New Recurring Billing Schedule';
+            const submitBtn = document.getElementById('scheduleSubmitBtn');
+            if (submitBtn) submitBtn.innerText = 'Create Schedule';
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
+            }
+        }
+
+        async function editSchedule(scheduleId) {
+            closeAllAppModals();
+            await populateBillingCustomerDropdowns();
+            const sched = billingAllSchedules.find(s => String(s.id) === String(scheduleId));
+            if (!sched) return;
+
+            const idElem = document.getElementById('scheduleFormId');
+            if (idElem) idElem.value = scheduleId;
+
+            const custSelect = document.getElementById('scheduleCustomerSelect');
+            if (custSelect) custSelect.value = sched.customer_id;
+
+            const amtInput = document.getElementById('scheduleAmountInput');
+            if (amtInput) amtInput.value = sched.billing_amount;
+
+            const dayInput = document.getElementById('scheduleDayInput');
+            if (dayInput) dayInput.value = sched.billing_day || 1;
+
+            const descInput = document.getElementById('scheduleDescInput');
+            if (descInput) descInput.value = sched.description || '';
+
+            const termsSelect = document.getElementById('scheduleTermsSelect');
+            if (termsSelect) termsSelect.value = sched.payment_terms_days || 30;
+
+            const autoCheck = document.getElementById('scheduleAutoSendCheck');
+            if (autoCheck) autoCheck.checked = !!sched.auto_send;
+
+            const titleElem = document.getElementById('scheduleModalTitleText');
+            if (titleElem) titleElem.innerText = '✏️ Edit Recurring Billing Schedule';
+
+            const submitBtn = document.getElementById('scheduleSubmitBtn');
+            if (submitBtn) submitBtn.innerText = 'Save Schedule';
+
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
+            }
+        }
+
+        function closeCreateScheduleModal() {
+            const modal = document.getElementById('billingScheduleModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        async function submitCreateSchedule(event) {
+            event.preventDefault();
+            const scheduleId = document.getElementById('scheduleFormId').value;
+            const custVal = document.getElementById('scheduleCustomerSelect').value;
+            const amtVal = document.getElementById('scheduleAmountInput').value;
+            if (!custVal || !amtVal) {
+                showCustomAlert("Input Error", "Please select a client and enter a valid monthly fee.", "error");
+                return;
+            }
+
+            const payload = {
+                customer_id: parseInt(custVal),
+                billing_amount: parseFloat(amtVal),
+                billing_day: parseInt(document.getElementById('scheduleDayInput').value || '1'),
+                description: document.getElementById('scheduleDescInput').value || '',
+                payment_terms_days: parseInt(document.getElementById('scheduleTermsSelect').value || '30'),
+                auto_send: document.getElementById('scheduleAutoSendCheck').checked
+            };
+
+            const isEdit = !!scheduleId;
+            const url = isEdit ? `/api/billing/schedules/${scheduleId}` : '/api/billing/schedules';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    closeCreateScheduleModal();
+                    showCustomAlert("Success", isEdit ? "Recurring billing schedule updated!" : "Recurring billing schedule created successfully!", "success");
+                    loadBillingOverview();
+                    loadBillingSchedules();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to save schedule.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error saving schedule.", "error");
+            }
+        }
+
+        function openCreateInvoiceModal() {
+            closeAllAppModals();
+            populateBillingCustomerDropdowns();
+            const modal = document.getElementById('billingInvoiceModal');
+            if (modal) {
+                const defaultDue = new Date();
+                defaultDue.setDate(defaultDue.getDate() + 15);
+                const dueElem = document.getElementById('invoiceDueDateInput');
+                if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
+            }
+        }
+
+        function closeCreateInvoiceModal() {
+            const modal = document.getElementById('billingInvoiceModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        async function submitCreateInvoice(event) {
+            event.preventDefault();
+            const custVal = document.getElementById('invoiceCustomerSelect').value;
+            const amtVal = document.getElementById('invoiceAmountInput').value;
+            if (!custVal || !amtVal) {
+                showCustomAlert("Input Error", "Please select a client and enter a valid total amount.", "error");
+                return;
+            }
+
+            const payload = {
+                customer_id: parseInt(custVal),
+                amount: parseFloat(amtVal),
+                due_date: document.getElementById('invoiceDueDateInput').value,
+                description: document.getElementById('invoiceDescInput').value || '',
+                send_now: document.getElementById('invoiceSendNowCheck').checked
+            };
+
+            try {
+                const res = await fetch('/api/billing/invoices', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    closeCreateInvoiceModal();
+                    showCustomAlert("Success", `Invoice #${data.invoice_number} created successfully!`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    const err = await res.json();
+                    showCustomAlert("Error", err.detail || "Failed to create invoice.", "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error creating invoice.", "error");
+            }
+        }
+
+        async function sendInvoiceEmail(invoiceId) {
+            if (!invoiceId) {
+                showCustomAlert("Error", "Invalid invoice selection.", "error");
+                return;
+            }
+            try {
+                const res = await fetch(`/api/billing/invoices/${encodeURIComponent(invoiceId)}/send`, {method: 'POST'});
+                let data = {};
+                try { data = await res.json(); } catch (_) {}
+                if (res.ok) {
+                    showCustomAlert("Email Sent", data.message || "Invoice email sent successfully via Resend!", "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    let errorMsg = "Failed to send invoice email.";
+                    if (typeof data.detail === 'string') errorMsg = data.detail;
+                    else if (Array.isArray(data.detail)) errorMsg = data.detail.map(d => typeof d === 'object' ? (d.msg || d.detail || JSON.stringify(d)) : String(d)).join(', ');
+                    else if (data.message) errorMsg = data.message;
+                    else if (res.statusText) errorMsg = `HTTP Error ${res.status}: ${res.statusText}`;
+                    showCustomAlert("Error", errorMsg, "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", e.message || "Server error sending email.", "error");
+            }
+        }
+
+        async function markInvoiceStatus(invoiceId, newStatus) {
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status: newStatus})
+                });
+                if (res.ok) {
+                    showCustomAlert("Updated", `Invoice status set to ${newStatus}!`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    let errorMsg = "Failed to update status.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error updating status.", "error");
+            }
+        }
+
+        function viewInvoiceHtml(invoiceId, invoiceNumber) {
+            closeAllAppModals();
+            const modal = document.getElementById('billingInvoiceViewModal');
+            const iframe = document.getElementById('invoiceViewIframe');
+            const titleElem = document.getElementById('invoiceViewTitleText');
+            if (titleElem) titleElem.innerText = `Invoice Preview (${invoiceNumber})`;
+            if (iframe) iframe.src = `/api/billing/invoices/${invoiceId}/view`;
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.offsetHeight;
+                modal.style.opacity = '1';
+            }
+        }
+
+        function closeInvoiceViewModal() {
+            const modal = document.getElementById('billingInvoiceViewModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(() => modal.style.display = 'none', 300);
+            }
+        }
+
+        function printInvoiceFrame() {
+            const iframe = document.getElementById('invoiceViewIframe');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            }
+        }
+
+        async function deleteInvoice(invoiceId) {
+            const confirmed = await showCustomConfirm("Are you sure you want to permanently delete this invoice record?", "Delete Invoice", "Yes, Delete", "Cancel");
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}`, {method: 'DELETE'});
+                if (res.ok) {
+                    showCustomAlert("Deleted", "Invoice deleted successfully.", "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    let errorMsg = "Failed to delete invoice.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error deleting invoice.", "error");
+            }
+        }
+
+        async function deleteSchedule(scheduleId) {
+            const confirmed = await showCustomConfirm("Are you sure you want to delete this recurring billing schedule?", "Delete Schedule", "Yes, Delete", "Cancel");
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`/api/billing/schedules/${scheduleId}`, {method: 'DELETE'});
+                if (res.ok) {
+                    showCustomAlert("Deleted", "Recurring schedule deleted successfully.", "success");
+                    loadBillingOverview();
+                    loadBillingSchedules();
+                } else {
+                    let errorMsg = "Failed to delete schedule.";
+                    try {
+                        const err = await res.json();
+                        if (typeof err.detail === 'string') errorMsg = err.detail;
+                        else if (Array.isArray(err.detail)) errorMsg = err.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                        else if (err.message) errorMsg = err.message;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error deleting schedule.", "error");
+            }
+        }
+
+        async function triggerDailyBillingJob() {
+            try {
+                const res = await fetch('/api/billing/run-scheduler', {method: 'POST'});
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === "error") {
+                        showCustomAlert("Scheduler Error", data.message || "Failed to run billing job.", "error");
+                        return;
+                    }
+                    showCustomAlert("Scheduler Triggered", `Generated ${data.generated_count || 0} invoice(s) for today (Day ${data.day}).`, "success");
+                    loadBillingOverview();
+                    loadBillingInvoices();
+                } else {
+                    let errorMsg = "Failed to run billing job.";
+                    try {
+                        const err = await res.json();
+                        errorMsg = err.detail || err.message || errorMsg;
+                    } catch (_) {}
+                    showCustomAlert("Error", errorMsg, "error");
+                }
+            } catch (e) {
+                showCustomAlert("Error", "Server error running billing job.", "error");
+            }
+        }
+
+        // --- Support Modal Logic ---
+        function openSupportModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('supportModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (document.getElementById('supportModalContent')) {
+                document.getElementById('supportModalContent').style.transform = 'scale(1)';
+            }
+        }
+
+        function closeSupportModal() {
+            const modal = document.getElementById('supportModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (document.getElementById('supportModalContent')) {
+                document.getElementById('supportModalContent').style.transform = 'scale(0.9)';
+            }
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        const supportAttachmentArea = document.getElementById('supportAttachmentArea');
+        const supportFileInput = document.getElementById('supportFileInput');
+        if (supportAttachmentArea && supportFileInput) {
+            supportAttachmentArea.addEventListener('click', () => supportFileInput.click());
+            supportFileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    supportAttachedFile = e.target.files[0];
+                    document.getElementById('supportFileText').textContent = supportAttachedFile.name;
+                }
+            });
+        }
+
+        async function sendSupportEmail() {
+            const msgVal = document.getElementById('supportMessage').value.trim();
+            if (!msgVal) {
+                alert('Please enter a message.');
+                return;
+            }
+            const btn = document.getElementById('sendSupportBtn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
+            const formData = new FormData();
+            formData.append('message', msgVal);
+            if (supportAttachedFile) {
+                formData.append('file', supportAttachedFile);
+            }
+
+            try {
+                const response = await fetch('/support', { method: 'POST', body: formData });
+                if (response.ok) {
+                    alert('Support email sent successfully!');
+                    closeSupportModal();
+                } else {
+                    const errText = await response.text();
+                    alert('Failed to send support email: ' + errText);
+                }
+            } catch (error) {
+                alert('Error sending support email: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send Email';
+            }
+        }
+
+        // --- Dropdown Sync ---
+        async function syncClientSelectDropdowns() {
+            try {
+                const [mapRes, custRes] = await Promise.all([
+                    fetch(`/api/clients/parent-mappings?parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`).catch(() => null),
+                    fetch('/api/customers').catch(() => null)
+                ]);
+
+                let clientList = [];
+
+                if (mapRes && mapRes.ok) {
+                    const data = await mapRes.json();
+                    currentParentMappings = data.mappings || [];
+                    clientList.push(...currentParentMappings.map(m => m.clientName.trim()));
+                }
+
+                if (custRes && custRes.ok) {
+                    const custData = await custRes.json();
+                    const customers = custData.customers || [];
+                    clientList.push(...customers.map(c => (c.legal_name || '').trim()).filter(Boolean));
+                }
+
+                clientList = Array.from(new Set(clientList)).filter(Boolean);
+                if (clientList.length === 0) clientList = [CURRENT_PARENT_NAME];
+
+                ['coaClientSelect', 'historyClientSelect'].forEach(id => {
+                    const sel = document.getElementById(id);
+                    if (sel) {
+                        const curVal = sel.value;
+                        sel.innerHTML = clientList.map(n => `<option value="${n}">${n}</option>`).join('');
+                        if (curVal && clientList.includes(curVal)) sel.value = curVal;
+                        else sel.value = clientList[0];
+                    }
+                });
+            } catch (err) {
+                console.error('Error syncing client dropdowns:', err);
+            }
+        }
+
+        // --- COA Modal Functions ---
+        async function openCoaModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('coaModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            await syncClientSelectDropdowns();
+            await fetchCoaRecords();
+        }
+
+        function closeCoaModal() {
+            const modal = document.getElementById('coaModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        async function fetchCoaRecords() {
+            const clientSelect = document.getElementById('coaClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const tbody = document.getElementById('coaTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #94a3b8;">Loading accounts...</td></tr>';
+            try {
+                const res = await fetch(`/api/clients/coa?clientName=${encodeURIComponent(clientName)}&parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
+                const data = await res.json();
+                currentCoaRecords = data.accounts || [];
+                renderCoaTable();
+            } catch (err) {
+                console.error('Error fetching COA:', err);
+                if (tbody) tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load accounts.</td></tr>';
+            }
+        }
+
+        function renderCoaTable() {
+            const query = (document.getElementById('coaSearchInput')?.value || '').toLowerCase();
+            const tbody = document.getElementById('coaTableBody');
+            const totalCount = document.getElementById('coaTotalCount');
+            if (!tbody) return;
+
+            const filtered = currentCoaRecords.filter(a =>
+                (a.accountNumber || '').toLowerCase().includes(query) ||
+                (a.accountName || '').toLowerCase().includes(query) ||
+                (a.type || '').toLowerCase().includes(query)
+            );
+            if (totalCount) totalCount.textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #64748b;">No accounts found. Click ➕ Add Account or Upload CSV.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(acct => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 16px; font-weight: 700; color: #67e8f9;">${acct.parentName || CURRENT_PARENT_NAME}</td>
+                    <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #22d3ee;">${acct.accountNumber}</td>
+                    <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${acct.accountName}</td>
+                    <td style="padding: 10px 16px;">
+                        <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; text-transform: uppercase; font-weight: 700; color: #cbd5e1;">${acct.type || 'Expense'}</span>
+                    </td>
+                    <td style="padding: 10px 16px; text-align: right;">
+                        <button onclick="editCoaRecord('${acct.id || ''}', '${acct.accountNumber.replace(/'/g, "\\'")}', '${acct.accountName.replace(/'/g, "\\'")}', '${(acct.type || 'Expense').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
+                        <button onclick="deleteCoaRecord('${acct.id || ''}')" style="padding: 4px 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleCoaForm() {
+            const form = document.getElementById('coaForm');
+            const btn = document.getElementById('toggleCoaFormBtn');
+            if (!form) return;
+            if (form.style.display === 'none' || !form.style.display) {
+                document.getElementById('coaFormId').value = '';
+                document.getElementById('coaFormNumber').value = '';
+                document.getElementById('coaFormName').value = '';
+                document.getElementById('coaFormType').value = 'Expense';
+                document.getElementById('coaFormSubmitBtn').textContent = 'Save Account';
+                form.style.display = 'grid';
+                if (btn) btn.textContent = 'Cancel';
+            } else {
+                form.style.display = 'none';
+                if (btn) btn.textContent = '➕ Add Account';
+            }
+        }
+
+        function editCoaRecord(id, number, name, type) {
+            const form = document.getElementById('coaForm');
+            const btn = document.getElementById('toggleCoaFormBtn');
+            if (!form) return;
+            document.getElementById('coaFormId').value = id;
+            document.getElementById('coaFormNumber').value = number;
+            document.getElementById('coaFormName').value = name;
+            document.getElementById('coaFormType').value = type || 'Expense';
+            document.getElementById('coaFormSubmitBtn').textContent = 'Update Account';
+            form.style.display = 'grid';
+            if (btn) btn.textContent = 'Cancel';
+        }
+
+        async function saveCoaRecord(e) {
+            e.preventDefault();
+            const id = document.getElementById('coaFormId').value;
+            const clientSelect = document.getElementById('coaClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const accountNumber = document.getElementById('coaFormNumber').value.trim();
+            const accountName = document.getElementById('coaFormName').value.trim();
+            const type = document.getElementById('coaFormType').value;
+
+            try {
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch('/api/clients/coa', {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, clientName, parentName: CURRENT_PARENT_NAME, accountNumber, accountName, type })
+                });
+                if (res.ok) {
+                    toggleCoaForm();
+                    fetchCoaRecords();
+                } else {
+                    const err = await res.json();
+                    alert('Error saving COA: ' + (err.detail || err.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error saving COA: ' + err.message);
+            }
+        }
+
+        async function deleteCoaRecord(id) {
+            if (!id) return;
+            if (!await showCustomConfirm('Are you sure you want to delete this account?')) return;
+            try {
+                const res = await fetch(`/api/clients/coa?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (res.ok) fetchCoaRecords();
+                else alert('Failed to delete account.');
+            } catch (err) {
+                alert('Error deleting account: ' + err.message);
+            }
+        }
+
+        async function handleCoaCsvUpload(input) {
+            const file = input.files?.[0];
+            if (!file) return;
+            const clientSelect = document.getElementById('coaClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const formData = new FormData();
+            formData.append('clientName', clientName);
+            formData.append('parentName', CURRENT_PARENT_NAME);
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/clients/upload-coa', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message || 'COA uploaded successfully!');
+                    fetchCoaRecords();
+                } else {
+                    alert('Error uploading COA CSV: ' + (data.detail || data.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error uploading file: ' + err.message);
+            } finally {
+                input.value = '';
+            }
+        }
+
+        // --- Parent Mappings Modal Functions ---
+        async function openMappingsModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('mappingsModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            await populateCustomerDropdownForMappings();
+            fetchParentMappings();
+        }
+
+        function closeMappingsModal() {
+            const modal = document.getElementById('mappingsModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        async function populateCustomerDropdownForMappings() {
+            const selectEl = document.getElementById('mapFormClientSelect');
+            const customEl = document.getElementById('mapFormClientCustom');
+            if (!selectEl) return;
+
+            selectEl.innerHTML = '<option value="" disabled selected>Loading customers from CRM...</option>';
+            try {
+                const res = await fetch('/api/customers');
+                const data = await res.json();
+                const customers = data.customers || [];
+
+                let optionsHtml = '<option value="" disabled selected>-- Select a Customer --</option>';
+                customers.forEach(c => {
+                    const name = (c.legal_name || '').trim();
+                    if (!name) return;
+                    optionsHtml += `<option value="${name.replace(/"/g, '&quot;')}">${name} (${c.custumer_number})</option>`;
+                });
+                optionsHtml += '<option value="__custom__">✍️ Enter Custom Client Name...</option>';
+                selectEl.innerHTML = optionsHtml;
+
+                if (customers.length === 0) {
+                    selectEl.value = '__custom__';
+                    onMapFormClientSelectChange();
+                } else {
+                    if (customEl) customEl.style.display = 'none';
+                }
+            } catch (err) {
+                console.error('Error loading customers for dropdown:', err);
+                selectEl.innerHTML = '<option value="__custom__" selected>✍️ Enter Custom Client Name...</option>';
+                onMapFormClientSelectChange();
+            }
+        }
+
+        function onMapFormClientSelectChange() {
+            const selectEl = document.getElementById('mapFormClientSelect');
+            const customEl = document.getElementById('mapFormClientCustom');
+            if (!selectEl || !customEl) return;
+
+            if (selectEl.value === '__custom__') {
+                customEl.style.display = 'block';
+                customEl.required = true;
+                customEl.focus();
+            } else {
+                customEl.style.display = 'none';
+                customEl.required = false;
+            }
+        }
+
+        async function fetchParentMappings() {
+            const tbody = document.getElementById('mappingsTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #94a3b8;">Loading mappings...</td></tr>';
+            try {
+                const res = await fetch(`/api/clients/parent-mappings?parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
+                const data = await res.json();
+                currentParentMappings = (data.mappings || []).filter(m =>
+                    (m.parentName || '').trim().toLowerCase() === CURRENT_PARENT_NAME.trim().toLowerCase()
+                );
+                renderMappingsTable();
+            } catch (err) {
+                console.error('Error fetching mappings:', err);
+                if (tbody) tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load mappings.</td></tr>';
+            }
+        }
+
+        function renderMappingsTable() {
+            const tbody = document.getElementById('mappingsTableBody');
+            const totalCount = document.getElementById('mappingsTotalCount');
+            if (!tbody) return;
+            if (totalCount) totalCount.textContent = currentParentMappings.length;
+
+            if (currentParentMappings.length === 0) {
+                tbody.innerHTML = '<tr><td colSpan="2" style="padding: 24px; text-align: center; color: #64748b;">No client mappings found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = currentParentMappings.map(m => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 16px; font-weight: 700; color: #c084fc;">${m.parentName}</td>
+                    <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${m.clientName}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function saveParentMappingRecord(e) {
+            e.preventDefault();
+            const parentName = document.getElementById('mapFormParent').value.trim() || CURRENT_PARENT_NAME;
+            const selectEl = document.getElementById('mapFormClientSelect');
+            const customEl = document.getElementById('mapFormClientCustom');
+            const clientName = (selectEl.value === '__custom__') ? customEl.value.trim() : selectEl.value.trim();
+
+            if (!clientName) {
+                alert('Please select or enter a client name.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/clients/parent-mappings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ parentName, clientName })
+                });
+                if (res.ok) {
+                    selectEl.value = '';
+                    if (customEl) customEl.value = '';
+                    await fetchParentMappings();
+                    await syncClientSelectDropdowns();
+                } else {
+                    const err = await res.json();
+                    alert('Error saving mapping: ' + (err.detail || err.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error saving mapping: ' + err.message);
+            }
+        }
+
+        async function deleteParentMappingRecord(id) {
+            if (!id) return;
+            if (!await showCustomConfirm('Are you sure you want to delete this mapping?')) return;
+            try {
+                const res = await fetch(`/api/clients/parent-mappings?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchParentMappings();
+                    await syncClientSelectDropdowns();
+                } else alert('Failed to delete mapping.');
+            } catch (err) {
+                alert('Error deleting mapping: ' + err.message);
+            }
+        }
+
+        // --- History Rules Modal Functions ---
+        async function openHistoryModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('historyModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            await syncClientSelectDropdowns();
+            fetchHistoryRecords();
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        async function fetchHistoryRecords() {
+            const clientSelect = document.getElementById('historyClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const tbody = document.getElementById('historyTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colSpan="6" style="padding: 24px; text-align: center; color: #94a3b8;">Loading history rules...</td></tr>';
+            try {
+                const res = await fetch(`/api/clients/history?clientName=${encodeURIComponent(clientName)}&parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
+                const data = await res.json();
+                currentHistoryRecords = data.historyRules || [];
+                renderHistoryTable();
+            } catch (err) {
+                console.error('Error fetching history rules:', err);
+                if (tbody) tbody.innerHTML = '<tr><td colSpan="6" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load history rules.</td></tr>';
+            }
+        }
+
+        function handleHistorySort(key) {
+            if (historySortKey === key) {
+                historySortOrder = historySortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                historySortKey = key;
+                historySortOrder = 'asc';
+            }
+            renderHistoryTable();
+        }
+
+        function renderHistoryTable() {
+            const query = (document.getElementById('historySearchInput')?.value || '').toLowerCase();
+            const tbody = document.getElementById('historyTableBody');
+            const totalCount = document.getElementById('historyTotalCount');
+            if (!tbody) return;
+
+            let filtered = currentHistoryRecords.filter(r =>
+                (r.pattern || '').toLowerCase().includes(query) ||
+                (r.description || '').toLowerCase().includes(query) ||
+                (r.accountNumber || '').toLowerCase().includes(query) ||
+                (r.accountName || '').toLowerCase().includes(query)
+            );
+
+            if (historySortKey) {
+                filtered.sort((a, b) => {
+                    const valA = (a[historySortKey] || '').toString();
+                    const valB = (b[historySortKey] || '').toString();
+                    let cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+                    return historySortOrder === 'asc' ? cmp : -cmp;
+                });
+            }
+
+            if (totalCount) totalCount.textContent = filtered.length;
+
+            ['Pattern', 'Account', 'Name', 'Desc'].forEach(col => {
+                const el = document.getElementById(`sort${col}Arrow`);
+                if (el) el.textContent = '↕';
+            });
+            if (historySortKey === 'pattern' && document.getElementById('sortPatternArrow')) {
+                document.getElementById('sortPatternArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
+            } else if (historySortKey === 'accountNumber' && document.getElementById('sortAccountArrow')) {
+                document.getElementById('sortAccountArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
+            } else if (historySortKey === 'accountName' && document.getElementById('sortNameArrow')) {
+                document.getElementById('sortNameArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
+            } else if (historySortKey === 'description' && document.getElementById('sortDescArrow')) {
+                document.getElementById('sortDescArrow').textContent = historySortOrder === 'asc' ? '▲' : '▼';
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colSpan="7" style="padding: 24px; text-align: center; color: #64748b;">No transaction rules found. Click ➕ Add Rule or Upload CSV.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(rule => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 16px; font-weight: 700; color: #6ee7b7;">${rule.parentName || CURRENT_PARENT_NAME}</td>
+                    <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #34d399; text-transform: uppercase;">${rule.pattern}</td>
+                    <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #22d3ee;">${rule.accountNumber}</td>
+                    <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${rule.accountName || '—'}</td>
+                    <td style="padding: 10px 16px; color: #cbd5e1;">${rule.description || '—'}</td>
+                    <td style="padding: 10px 16px;">
+                        <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; text-transform: uppercase; font-weight: 700; color: #cbd5e1;">${rule.transactionType || 'ALL'}</span>
+                    </td>
+                    <td style="padding: 10px 16px; text-align: right;">
+                        <button onclick="editHistoryRecord('${rule.id || ''}', '${(rule.pattern || '').replace(/'/g, "\\'")}', '${(rule.accountNumber || '').replace(/'/g, "\\'")}', '${(rule.accountName || '').replace(/'/g, "\\'")}', '${(rule.transactionType || 'ALL').replace(/'/g, "\\'")}', '${(rule.description || '').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
+                        <button onclick="deleteHistoryRecord('${rule.id || ''}')" style="padding: 4px 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleHistoryForm() {
+            const form = document.getElementById('historyForm');
+            const btn = document.getElementById('toggleHistoryFormBtn');
+            if (!form) return;
+            if (form.style.display === 'none' || !form.style.display) {
+                document.getElementById('historyFormId').value = '';
+                document.getElementById('historyFormPattern').value = '';
+                document.getElementById('historyFormNumber').value = '';
+                document.getElementById('historyFormName').value = '';
+                if (document.getElementById('historyFormDescription')) document.getElementById('historyFormDescription').value = '';
+                document.getElementById('historyFormTxType').value = 'ALL';
+                document.getElementById('historyFormSubmitBtn').textContent = 'Save Rule';
+                form.style.display = 'grid';
+                if (btn) btn.textContent = 'Cancel';
+            } else {
+                form.style.display = 'none';
+                if (btn) btn.textContent = '➕ Add Rule';
+            }
+        }
+
+        function editHistoryRecord(id, pattern, number, name, txType, description) {
+            const form = document.getElementById('historyForm');
+            const btn = document.getElementById('toggleHistoryFormBtn');
+            if (!form) return;
+            document.getElementById('historyFormId').value = id;
+            document.getElementById('historyFormPattern').value = pattern;
+            document.getElementById('historyFormNumber').value = number;
+            document.getElementById('historyFormName').value = name || '';
+            if (document.getElementById('historyFormDescription')) document.getElementById('historyFormDescription').value = description || '';
+            document.getElementById('historyFormTxType').value = txType || 'ALL';
+            document.getElementById('historyFormSubmitBtn').textContent = 'Update Rule';
+            form.style.display = 'grid';
+            if (btn) btn.textContent = 'Cancel';
+        }
+
+        async function saveHistoryRecord(e) {
+            e.preventDefault();
+            const id = document.getElementById('historyFormId').value;
+            const clientSelect = document.getElementById('historyClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const pattern = document.getElementById('historyFormPattern').value.trim();
+            const accountNumber = document.getElementById('historyFormNumber').value.trim();
+            const accountName = document.getElementById('historyFormName').value.trim();
+            const description = document.getElementById('historyFormDescription') ? document.getElementById('historyFormDescription').value.trim() : '';
+            const transactionType = document.getElementById('historyFormTxType').value;
+
+            try {
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch('/api/clients/history', {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, clientName, parentName: CURRENT_PARENT_NAME, pattern, accountNumber, accountName, transactionType, description })
+                });
+                if (res.ok) {
+                    toggleHistoryForm();
+                    fetchHistoryRecords();
+                } else {
+                    const err = await res.json();
+                    alert('Error saving history rule: ' + (err.detail || err.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error saving history rule: ' + err.message);
+            }
+        }
+
+        async function deleteHistoryRecord(id) {
+            if (!id) return;
+            if (!await showCustomConfirm('Are you sure you want to delete this rule?')) return;
+            try {
+                const res = await fetch(`/api/clients/history?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (res.ok) fetchHistoryRecords();
+                else alert('Failed to delete rule.');
+            } catch (err) {
+                alert('Error deleting rule: ' + err.message);
+            }
+        }
+
+        async function handleHistoryCsvUpload(input) {
+            const file = input.files?.[0];
+            if (!file) return;
+            const clientSelect = document.getElementById('historyClientSelect');
+            const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
+            const formData = new FormData();
+            formData.append('clientName', clientName);
+            formData.append('parentName', CURRENT_PARENT_NAME);
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/clients/upload-history', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message || 'History rules uploaded successfully!');
+                    fetchHistoryRecords();
+                } else {
+                    alert('Error uploading history CSV: ' + (data.detail || data.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error uploading file: ' + err.message);
+            } finally {
+                input.value = '';
+            }
+        }
+
+        // --- Customer Management Functions ---
+        let currentCustomerRecords = [];
+
+        async function openCustomerModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('customerModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            fetchCustomerRecords();
+        }
+
+        function closeCustomerModal() {
+            const modal = document.getElementById('customerModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        async function fetchCustomerRecords(isPage = false) {
+            const searchInput = isPage ? document.getElementById('customerPageSearchInput') : document.getElementById('customerSearchInput');
+            const query = searchInput?.value || '';
+            
+            const modalTbody = document.getElementById('customerTableBody');
+            const pageTbody = document.getElementById('customerPageTableBody');
+            
+            if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #94a3b8;">Loading customers...</td></tr>';
+            if (pageTbody) pageTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #94a3b8;">Loading customers...</td></tr>';
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : (window.parentName || '');
+                const res = await fetch(`/api/customers?query=${encodeURIComponent(query)}&parentName=${encodeURIComponent(parentName)}`);
+                const data = await res.json();
+                currentCustomerRecords = data.customers || [];
+                renderCustomerTable();
+            } catch (err) {
+                console.error('Error fetching customers:', err);
+                if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load customers.</td></tr>';
+                if (pageTbody) pageTbody.innerHTML = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load customers.</td></tr>';
+            }
+        }
+
+        function renderCustomerTable() {
+            const modalTbody = document.getElementById('customerTableBody');
+            const pageTbody = document.getElementById('customerPageTableBody');
+            const modalCount = document.getElementById('customerTotalCount');
+            const pageCount = document.getElementById('customerPageTotalCount');
+
+            if (modalCount) modalCount.textContent = currentCustomerRecords.length;
+            if (pageCount) pageCount.textContent = currentCustomerRecords.length;
+
+            const emptyRows = '<tr><td colSpan="8" style="padding: 24px; text-align: center; color: #64748b;">No customer records found. Click ➕ Add New Customer.</td></tr>';
+
+            if (currentCustomerRecords.length === 0) {
+                if (modalTbody) modalTbody.innerHTML = emptyRows;
+                if (pageTbody) pageTbody.innerHTML = emptyRows;
+                return;
+            }
+
+            const rowsHtml = currentCustomerRecords.map(c => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 12px 16px; font-family: monospace; font-weight: 700; color: #e100ff;">
+                        ${c.custumer_number}
+                        <br><span class="unread-reply-dot" id="unreadDot-${c.id}" data-cid="${c.id}" style="display: ${ (window.currentUnreadMap && window.currentUnreadMap[c.id] && window.currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; background: rgba(34, 197, 94, 0.18); border: 1px solid rgba(34, 197, 94, 0.5); color: #4ade80; font-size: 0.64rem; padding: 2px 8px; border-radius: 10px; margin-top: 4px; font-weight: 800; font-family: sans-serif; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);" title="New unread reply received!">🟢 ${window.currentUnreadMap && window.currentUnreadMap[c.id] ? window.currentUnreadMap[c.id].unread_count : 0} NEW</span>
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; color: #cbd5e1;">${c.customer_type || 'Business'}</span>
+                        <br><span style="background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.35); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; color: #c084fc; display: inline-block; margin-top: 4px;">🏢 ${c.parent_name || 'VRT Services'}</span>
+                    </td>
+                    <td style="padding: 12px 16px; font-weight: 700; color: #fff;">
+                        ${c.legal_name}
+                        <br><a href="#" onclick="openCustomerStorageModal(event, ${c.id}); return false;" style="font-size: 0.68rem; color: #38bdf8; text-decoration: underline; font-family: monospace; font-weight: 700;" title="Open customer files in CRM storage modal">📂 ${c.do_folder_path || 'Storage Folder'}</a>
+                    </td>
+                    <td style="padding: 12px 16px; color: #94a3b8;">${c.display_name || '—'}</td>
+                    <td style="padding: 12px 16px; font-family: monospace; color: #67e8f9;">${c.tax_id || '—'}</td>
+                    <td style="padding: 12px 16px; color: #cbd5e1; font-size: 0.8rem;">
+                        ${c.phone ? `<a href="tel:${c.phone.replace(/[^0-9+]/g, '')}" style="color: #38bdf8; text-decoration: underline; font-weight: 600;" title="Click to call ${c.phone}">📞 ${c.phone}</a><br>` : ''}
+                        ${c.email ? `✉️ ${c.email}` : ''}
+                        ${!c.phone && !c.email ? '—' : ''}
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        <span style="background: ${c.status === 'Active' ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 179, 0, 0.15)'}; border: 1px solid ${c.status === 'Active' ? 'rgba(0, 230, 118, 0.35)' : 'rgba(255, 179, 0, 0.35)'}; color: ${c.status === 'Active' ? '#00e676' : '#ffb300'}; padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 700;">${c.status}</span>
+                        ${c.do_storage_status ? `<br><span style="background: ${c.do_storage_status === 'Initialized' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(245, 158, 11, 0.15)'}; border: 1px solid ${c.do_storage_status === 'Initialized' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(245, 158, 11, 0.35)'}; color: ${c.do_storage_status === 'Initialized' ? '#38bdf8' : '#f59e0b'}; padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 700; display: inline-block; margin-top: 4px;">☁️ ${c.do_storage_status}</span>` : ''}
+                    </td>
+                    <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
+                        ${c.phone ? `<a href="tel:${c.phone.replace(/[^0-9+]/g, '')}" style="padding: 4px 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; text-decoration: none; display: inline-block; margin-right: 4px;" title="Call ${c.phone} via default phone app">📞 CALL</a>` : ''}
+                        <button onclick="openCustomerChecklistModal(event, ${c.id}, null, '${(c.customer_type || c.type || 'Business').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="View & Manage Workflow Checklist">📋 LIST</button>
+                        <button onclick="openSendCustomerEmailModal(event, ${c.id})" style="padding: 4px 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Send Email Message to Customer">✉️ MAIL</button>
+                        <button onclick="openCustomerCommsHistoryModal(${c.id})" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="View Outbound Emails & Customer Replies">💬 HIST <span class="unread-history-badge" id="unreadHistoryDot-${c.id}" data-cid="${c.id}" style="display: ${ (window.currentUnreadMap && window.currentUnreadMap[c.id] && window.currentUnreadMap[c.id].unread_count > 0) ? 'inline-block' : 'none'}; background: #22c55e; color: #000; font-size: 0.62rem; padding: 1px 4px; border-radius: 8px; margin-left: 3px; font-weight: 900;">${window.currentUnreadMap && window.currentUnreadMap[c.id] ? window.currentUnreadMap[c.id].unread_count : 0} NEW</span></button>
+                        <button onclick="openCustomerStorageModal(event, ${c.id})" style="padding: 4px 8px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Open customer storage file manager">📂 FOLDER</button>
+                        <button onclick="initCustomerStorage(event, ${c.id})" style="padding: 4px 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Initialize Storage Folders">${c.do_storage_status === 'Initialized' ? '⚡ RE-INIT' : '☁️ INIT'}</button>
+                        <button onclick="editCustomerRecord(${c.id})" style="padding: 4px 8px; background: rgba(225, 0, 255, 0.15); border: 1px solid rgba(225, 0, 255, 0.35); color: #e100ff; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 4px;" title="Edit Customer Account Details">✏️ EDIT</button>
+                        <button onclick="deleteCustomerRecord(${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}', '${(c.legal_name || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; cursor: pointer;" title="Delete Customer Record">🗑️ DEL</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (modalTbody) modalTbody.innerHTML = rowsHtml;
+            if (pageTbody) pageTbody.innerHTML = rowsHtml;
+            if (typeof checkUnreadCommunicationsAlerts === 'function') {
+                checkUnreadCommunicationsAlerts();
+            }
+        }
+
+        async function initCustomerStorage(event, customerId) {
+            if (event) event.stopPropagation();
+            const btn = event ? event.currentTarget : null;
+            const originalText = btn ? btn.textContent : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Initializing...';
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${customerId}/init-storage`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || 'Failed to initialize storage');
+                
+                if (data.success) {
+                    const openNow = await showCustomConfirm(`✅ Customer Storage initialized successfully!\n\nFolder Path:\n${data.path}\n\nFolders Created:\n` + (data.folders || []).join('\n') + `\n\nWould you like to open this customer's folder now?`, 'Storage Initialized', 'Open Folder Now', 'Dismiss');
+                    if (openNow) {
+                        openCustomerStorageModal(null, customerId);
+                    }
+                } else {
+                    alert(`⚠️ Storage Initialization Notice:\n${data.message}`);
+                }
+                await fetchCustomerRecords();
+            } catch (err) {
+                alert(`❌ Storage Error: ${err.message}`);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }
+        }
+
+        // --- Customer Storage File Explorer Modal Logic ---
+        let currentStorageCustomerId = null;
+        let currentStorageCustomerName = '';
+        let currentStorageRootFolder = '';
+        let currentStoragePrefix = '';
+        let currentStorageData = null;
+
+        async function openCustomerStorageModal(event, customerId) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            currentStorageCustomerId = customerId;
+            currentStoragePrefix = '';
+
+            // Get or find the modal — it is appended to body at page load
+            let modal = document.getElementById('customerStorageModal');
+            if (!modal) {
+                console.error('customerStorageModal not found in DOM');
+                alert('Storage modal not found. Please refresh the page (Ctrl+F5).');
+                return;
+            }
+
+            // Ensure it is a direct child of body for correct stacking
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+
+            await loadStorageFolder(customerId, '');
+        }
+
+        function closeCustomerStorageModal() {
+            const modal = document.getElementById('customerStorageModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.style.opacity = '0';
+            currentStorageCustomerId = null;
+            currentStorageData = null;
+        }
+
+        async function loadStorageFolder(customerId, prefix) {
+            if (prefix && typeof prefix === 'string' && prefix.includes('%')) {
+                try { prefix = decodeURIComponent(prefix); } catch (e) {}
+            }
+            const spinner = document.getElementById('storageLoadingSpinner');
+            const tbody = document.getElementById('storageFilesTbody');
+            if (spinner) spinner.style.display = 'block';
+            if (tbody) tbody.innerHTML = '';
+
+            try {
+                const url = `/api/customers/${customerId}/storage/files` + (prefix ? `?prefix=${encodeURIComponent(prefix)}` : '');
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.detail || 'Failed to fetch storage files');
+
+                currentStorageCustomerName = data.customer_name;
+                currentStorageRootFolder = data.root_folder;
+                currentStoragePrefix = data.current_prefix;
+                currentStorageData = data;
+
+                const titleEl = document.getElementById('storageModalTitle');
+                const subtitleEl = document.getElementById('storageModalSubtitle');
+                const parentBadge = data.parent_name ? `<span style="font-size:0.75rem; background:rgba(168,85,247,0.2); border:1px solid rgba(168,85,247,0.4); color:#c084fc; padding:2px 8px; border-radius:4px; font-weight:700; margin-right:8px;">🏢 ${data.parent_name}</span>` : '';
+                if (titleEl) titleEl.innerHTML = `${parentBadge}📂 ${data.customer_name} — Storage`;
+                if (subtitleEl) subtitleEl.textContent = `Parent: ${data.parent_name || 'VRT Services'} | Bucket: ${data.bucket} | Path: ${data.current_prefix}`;
+
+                renderStorageBreadcrumbs();
+                renderStorageItems(data.subfolders, data.files);
+
+            } catch (err) {
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="padding: 24px; text-align: center; color: #f87171;">⚠️ ${err.message}<br><button onclick="reinitStorageFromModal()" style="margin-top: 12px; padding: 6px 14px; background: #38bdf8; border: none; color: #000; font-weight: 700; border-radius: 6px; cursor: pointer;">⚡ Initialize Storage Folders</button></td></tr>`;
+                }
+            } finally {
+                if (spinner) spinner.style.display = 'none';
+            }
+        }
+
+        function renderStorageBreadcrumbs() {
+            const container = document.getElementById('storageBreadcrumbs');
+            if (!container || !currentStorageData) return;
+
+            const root = currentStorageRootFolder;
+            const current = currentStoragePrefix;
+            const cid = currentStorageCustomerId;
+
+            let relativePath = current.startsWith(root) ? current.substring(root.length) : '';
+            const parts = relativePath.split('/').filter(Boolean);
+
+            const pLabel = currentStorageData.parent_name ? `${currentStorageData.parent_name} / ` : '';
+            // Use data-prefix attributes — no inline onclick string injection
+            let html = `<span class="breadcrumb-nav" data-prefix="${root.replace(/"/g, '&quot;')}" data-cid="${cid}" style="cursor: pointer; color: #38bdf8; text-decoration: underline; font-weight: 700;">🏠 ${pLabel}${currentStorageCustomerName}</span>`;
+
+            let accumulated = root;
+            parts.forEach((part, idx) => {
+                accumulated += part + '/';
+                const isLast = idx === parts.length - 1;
+                html += ` <span style="color: #64748b;">/</span> `;
+                if (isLast) {
+                    html += `<span style="color: #fff; font-weight: 700;">${part}</span>`;
+                } else {
+                    html += `<span class="breadcrumb-nav" data-prefix="${accumulated.replace(/"/g, '&quot;')}" data-cid="${cid}" style="cursor: pointer; color: #38bdf8; text-decoration: underline;">${part}</span>`;
+                }
+            });
+
+            container.innerHTML = html;
+
+            // Attach click events to breadcrumb spans
+            container.querySelectorAll('.breadcrumb-nav').forEach(el => {
+                el.addEventListener('click', () => {
+                    const p = el.getAttribute('data-prefix');
+                    const c = parseInt(el.getAttribute('data-cid'), 10);
+                    if (p && c) loadStorageFolder(c, p);
+                });
+            });
+        }
+
+        function formatBytes(bytes, decimals = 1) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (['pdf'].includes(ext)) return '📄';
+            if (['csv', 'xlsx', 'xls'].includes(ext)) return '📊';
+            if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return '🖼️';
+            if (['json', 'txt', 'log'].includes(ext)) return '📝';
+            return '📎';
+        }
+
+        function renderStorageItems(subfolders = [], files = []) {
+            const tbody = document.getElementById('storageFilesTbody');
+            const stats = document.getElementById('storageFileStats');
+            if (!tbody) return;
+
+            let rowsHtml = '';
+            const cid = currentStorageCustomerId;
+
+            // If not at root, show '..' go up folder row
+            if (currentStoragePrefix !== currentStorageRootFolder) {
+                const cleanPrefix = currentStoragePrefix.endsWith('/') ? currentStoragePrefix.slice(0, -1) : currentStoragePrefix;
+                const parts = cleanPrefix.split('/');
+                parts.pop();
+                let upPrefix = parts.join('/') + '/';
+                if (!upPrefix.startsWith(currentStorageRootFolder)) upPrefix = currentStorageRootFolder;
+
+                rowsHtml += `<tr class="storage-nav-row" data-prefix="${upPrefix.replace(/"/g, '&quot;')}" data-cid="${cid}" style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 12px; font-weight: 700; color: #38bdf8;" colspan="4">
+                        📁 .. <span style="font-weight: 400; color: #94a3b8; font-size: 0.75rem;">(Go up to parent folder)</span>
+                    </td>
+                </tr>`;
+            }
+
+            if (subfolders.length === 0 && files.length === 0) {
+                rowsHtml += `<tr><td colspan="4" style="padding: 30px; text-align: center; color: #64748b;">No files or subfolders found in this directory. Click <strong>Upload File</strong> above to add files.</td></tr>`;
+            } else {
+                // Render Subfolders — use data-prefix to avoid inline escaping issues
+                subfolders.forEach(sf => {
+                    rowsHtml += `<tr class="storage-item-row storage-nav-row" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-cid="${cid}" data-name="${sf.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; cursor: pointer;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 10px 12px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1rem;">📁</span> ${sf.name}/
+                        </td>
+                        <td style="padding: 10px 12px; color: #64748b; font-family: monospace;">—</td>
+                        <td style="padding: 10px 12px; color: #64748b;">Folder</td>
+                        <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
+                            <button class="storage-open-btn" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-cid="${cid}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;">Open ↗</button>
+                            <button class="storage-delete-folder-btn" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-name="${sf.name.replace(/"/g, '&quot;')}" data-cid="${cid}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete folder and all its contents">🗑️</button>
+                        </td>
+                    </tr>`;
+                });
+
+                // Render Files
+                files.forEach(f => {
+                    const icon = getFileIcon(f.name);
+                    const dateStr = f.last_modified ? new Date(f.last_modified).toLocaleString() : '—';
+                    const isPdf = f.name.toLowerCase().endsWith('.pdf');
+                    const attrKey = (f.key || '').replace(/"/g, '&quot;');
+                    const attrName = (f.name || '').replace(/"/g, '&quot;');
+                    const attrUrl = (f.url || '').replace(/"/g, '&quot;');
+
+                    rowsHtml += `
+                        <tr class="storage-item-row ${isPdf ? 'storage-pdf-row' : ''}" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" data-name-search="${f.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 10px 12px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px; word-break: break-all; ${isPdf ? 'cursor: pointer;' : ''}">
+                                <span style="font-size: 1.1rem;">${icon}</span> ${f.name}
+                            </td>
+                            <td style="padding: 10px 12px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${formatBytes(f.size)}</td>
+                            <td style="padding: 10px 12px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;">${dateStr}</td>
+                            <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
+                                ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : ''}
+                                <button class="storage-rename-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Rename file">✏️ Rename</button>
+                                <button class="storage-move-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Move file to another folder">🚚 Move</button>
+                                <a href="/api/storage/download?key=${encodeURIComponent(attrKey)}" target="_blank" download style="padding: 4px 10px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-decoration: none; margin-right: 6px; display: inline-block;">📥 Download</a>
+                                <button class="storage-delete-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete file">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            tbody.innerHTML = rowsHtml;
+
+            // Delegated event handler: navigate on row/button click using data-prefix
+            tbody.querySelectorAll('.storage-nav-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('.storage-open-btn') || e.target.closest('.storage-delete-folder-btn')) return;
+                    const p = row.getAttribute('data-prefix');
+                    const c = parseInt(row.getAttribute('data-cid'), 10);
+                    if (p && c) loadStorageFolder(c, p);
+                });
+            });
+            tbody.querySelectorAll('.storage-open-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const p = btn.getAttribute('data-prefix');
+                    const c = parseInt(btn.getAttribute('data-cid'), 10);
+                    if (p && c) loadStorageFolder(c, p);
+                });
+            });
+            tbody.querySelectorAll('.storage-delete-folder-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const p = btn.getAttribute('data-prefix');
+                    const n = btn.getAttribute('data-name');
+                    const c = parseInt(btn.getAttribute('data-cid'), 10);
+                    deleteStorageFolder(p, n, c);
+                });
+            });
+            tbody.querySelectorAll('.storage-pdf-row').forEach(row => {
+                row.querySelector('td')?.addEventListener('click', (e) => {
+                    const key = row.getAttribute('data-key');
+                    const name = row.getAttribute('data-name');
+                    const url = row.getAttribute('data-url');
+                    openPdfViewerModal(e, key, name, url);
+                });
+            });
+            tbody.querySelectorAll('.storage-preview-pdf-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    const url = btn.getAttribute('data-url');
+                    openPdfViewerModal(e, key, name, url);
+                });
+            });
+            tbody.querySelectorAll('.storage-rename-file-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    renameStorageFile(e, key, name);
+                });
+            });
+            tbody.querySelectorAll('.storage-move-file-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    openMoveFileModal(e, key, name);
+                });
+            });
+            tbody.querySelectorAll('.storage-delete-file-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    deleteStorageFile(e, key, name);
+                });
+            });
+
+            if (stats) stats.textContent = `${subfolders.length} folder(s), ${files.length} file(s)`;
+        }
+
+        function filterStorageItems() {
+            const q = (document.getElementById('storageFileSearchInput')?.value || '').toLowerCase().trim();
+            const rows = document.querySelectorAll('.storage-item-row');
+            rows.forEach(r => {
+                const name = r.getAttribute('data-name-search') || r.getAttribute('data-name') || '';
+                r.style.display = name.includes(q) ? '' : 'none';
+            });
+        }
+
+        async function handleStorageFileUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            const targetPrefix = currentStoragePrefix || currentStorageRootFolder;
+            const fileList = Array.from(files);
+            let successCount = 0;
+            let errors = [];
+
+            const spinner = document.getElementById('storageLoadingSpinner');
+            if (spinner) {
+                spinner.style.display = 'block';
+                spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Uploading ${fileList.length} file(s)...`;
+            }
+
+            for (const file of fileList) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_prefix', targetPrefix);
+
+                try {
+                    const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || data.message || `Failed to upload ${file.name}`);
+                    successCount++;
+                } catch (err) {
+                    errors.push(`${file.name}: ${err.message}`);
+                }
+            }
+
+            event.target.value = '';
+            await refreshCurrentStorageFolder();
+
+            if (errors.length === 0) {
+                if (fileList.length === 1) {
+                    alert(`✅ File "${fileList[0].name}" uploaded successfully!`);
+                } else {
+                    alert(`✅ All ${successCount} files uploaded successfully!`);
+                }
+            } else {
+                alert(`⚠️ Uploaded ${successCount} of ${fileList.length} files.\n\nErrors:\n` + errors.join('\n'));
+            }
+        }
+
+        async function deleteStorageFile(event, key, name) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            if (!key || !name) return;
+
+            if (!await showCustomConfirm(`Are you sure you want to delete file "${name}"?`)) return;
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/file?key=${encodeURIComponent(key)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Delete failed');
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Delete Error: ${err.message}`);
+            }
+        }
+
+        async function renameStorageFile(event, oldKey, oldName) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            if (!oldKey || !oldName) return;
+
+            const newName = prompt(`Rename file '${oldName}' to:`, oldName);
+            if (newName === null) return; // user cancelled
+            const trimmed = newName.trim();
+            if (!trimmed || trimmed === oldName) return;
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/rename-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_key: oldKey, new_name: trimmed })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || 'Rename failed');
+
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Rename Error: ${err.message}`);
+            }
+        }
+
+        let pendingMoveSourceKey = null;
+        let pendingMoveFileName = null;
+
+        async function openMoveFileModal(event, sourceKey, fileName) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            if (!sourceKey || !fileName || !currentStorageCustomerId) return;
+
+            pendingMoveSourceKey = sourceKey;
+            pendingMoveFileName = fileName;
+
+            const nameEl = document.getElementById('moveFileTargetName');
+            if (nameEl) nameEl.textContent = fileName;
+
+            const selectEl = document.getElementById('moveFileFolderSelect');
+            if (selectEl) {
+                selectEl.innerHTML = `<option value="">⌛ Loading available folders...</option>`;
+            }
+
+            const customGroup = document.getElementById('moveFileCustomGroup');
+            if (customGroup) customGroup.style.display = 'none';
+
+            let modal = document.getElementById('moveFileModal');
+            if (modal) {
+                document.body.appendChild(modal);
+                modal.style.zIndex = '2147483649';
+                modal.style.display = 'flex';
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/folders`);
+                const data = await res.json();
+                if (res.ok && data.folders && selectEl) {
+                    let optionsHtml = `<option value="">🏠 Customer Root (${data.parent_name ? data.parent_name + ' / ' : ''}${data.customer_name})</option>`;
+                    data.folders.forEach(fPath => {
+                        let icon = '📁';
+                        if (fPath.toLowerCase().startsWith('inbox')) icon = '📥';
+                        else if (fPath.toLowerCase().startsWith('tax')) icon = '📂';
+                        else if (fPath.toLowerCase().startsWith('bank')) icon = '📊';
+                        else if (fPath.toLowerCase().startsWith('check')) icon = '🧾';
+
+                        optionsHtml += `<option value="${fPath}">${icon} ${fPath}</option>`;
+                    });
+                    optionsHtml += `<option value="custom">✏️ Enter Custom Folder Path...</option>`;
+                    selectEl.innerHTML = optionsHtml;
+
+                    if (data.folders.includes('Inbox/')) {
+                        selectEl.value = 'Inbox/';
+                    } else if (data.folders.length > 0) {
+                        selectEl.value = data.folders[0];
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching folders for move modal:", err);
+            }
+        }
+
+        function closeMoveFileModal() {
+            let modal = document.getElementById('moveFileModal');
+            if (modal) modal.style.display = 'none';
+            pendingMoveSourceKey = null;
+            pendingMoveFileName = null;
+        }
+
+        function handleMoveFolderSelectChange(val) {
+            const customGroup = document.getElementById('moveFileCustomGroup');
+            if (customGroup) {
+                customGroup.style.display = (val === 'custom') ? 'block' : 'none';
+            }
+        }
+
+        async function confirmSubmitMoveFile() {
+            if (!pendingMoveSourceKey || !currentStorageCustomerId) return;
+
+            const selectEl = document.getElementById('moveFileFolderSelect');
+            const customInputEl = document.getElementById('moveFileCustomInput');
+            let chosenFolder = selectEl ? selectEl.value : '';
+
+            if (chosenFolder === 'custom') {
+                chosenFolder = customInputEl ? customInputEl.value.trim() : '';
+                if (!chosenFolder) {
+                    alert('Please enter a custom folder path');
+                    return;
+                }
+            }
+
+            if (!chosenFolder) return;
+            if (!chosenFolder.endsWith('/')) chosenFolder += '/';
+
+            const rootPath = (currentStorageRootFolder || '').replace(/\/$/, '') + '/';
+            let targetFolderKey = chosenFolder;
+            if (!chosenFolder.startsWith(rootPath) && rootPath) {
+                targetFolderKey = rootPath + chosenFolder.replace(/^\//, '');
+            }
+
+            const submitBtn = document.getElementById('submitMoveFileBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '🚚 Moving...';
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/move-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_key: pendingMoveSourceKey, target_folder_key: targetFolderKey })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || 'Move file failed');
+
+                closeMoveFileModal();
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Move File Error: ${err.message}`);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚚 Move File Now';
+                }
+            }
+        }
+
+        async function refreshCurrentStorageFolder() {
+            if (currentStorageCustomerId) {
+                await loadStorageFolder(currentStorageCustomerId, currentStoragePrefix);
+            }
+        }
+
+        async function reinitStorageFromModal() {
+            if (!currentStorageCustomerId) return;
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/init-storage`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Init failed');
+                alert(`✅ Storage initialized successfully!\n\nFolder Path: ${data.path}`);
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Storage Init Error: ${err.message}`);
+            }
+        }
+
+        async function createStorageFolder() {
+            if (!currentStorageCustomerId) return;
+
+            const folderName = prompt('Enter the name for the new folder:', '');
+            if (folderName === null) return; // user cancelled
+            const trimmed = folderName.trim();
+            if (!trimmed) {
+                alert('Folder name cannot be empty.');
+                return;
+            }
+
+            const parentPrefix = currentStoragePrefix || currentStorageRootFolder;
+
+            try {
+                const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/mkdir`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folder_name: trimmed, parent_prefix: parentPrefix })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to create folder');
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Create Folder Error: ${err.message}`);
+            }
+        }
+
+        async function deleteStorageFolder(prefix, folderName, customerId) {
+            const cid = customerId || currentStorageCustomerId;
+            if (!cid || !prefix) return;
+
+            if (!await showCustomConfirm(`⚠️ Delete folder "${folderName}"?\n\nThis will permanently delete the folder and ALL files inside it. This cannot be undone.`)) return;
+
+            try {
+                const res = await fetch(`/api/customers/${cid}/storage/folder?prefix=${encodeURIComponent(prefix)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Delete failed');
+                await refreshCurrentStorageFolder();
+            } catch (err) {
+                alert(`❌ Delete Folder Error: ${err.message}`);
+            }
+        }
+
+        function getNextCustomerNumber() {
+            let maxNum = 1000;
+            if (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords)) {
+                currentCustomerRecords.forEach(c => {
+                    const numStr = (c.custumer_number || '').toString();
+                    const match = numStr.match(/\d+/);
+                    if (match) {
+                        const val = parseInt(match[0], 10);
+                        if (!isNaN(val) && val > maxNum && val < 999999) {
+                            maxNum = val;
+                        }
+                    }
+                });
+            }
+            return 'CUST-' + (maxNum + 1);
+        }
+
+        function setLegalNameReadOnly(prefix, isReadOnly) {
+            const el = document.getElementById(`${prefix}LegalName`);
+            if (!el) return;
+            el.readOnly = isReadOnly;
+            if (isReadOnly) {
+                el.style.background = 'rgba(255,255,255,0.03)';
+                el.style.color = '#94a3b8';
+                el.style.cursor = 'not-allowed';
+                el.title = 'Legal Name cannot be modified when updating an existing customer.';
+            } else {
+                el.style.background = 'rgba(255,255,255,0.05)';
+                el.style.color = '#ffffff';
+                el.style.cursor = 'text';
+                el.title = '';
+            }
+        }
+
+        function toggleCustomerForm() {
+            const form = document.getElementById('customerForm');
+            const btn = document.getElementById('toggleCustomerFormBtn');
+            if (!form) return;
+            if (form.style.display === 'none' || !form.style.display) {
+                const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+                setVal('customerFormId', '');
+                setVal('customerFormNumber', getNextCustomerNumber());
+                setVal('customerFormType', 'Business');
+                setVal('customerFormLegalName', '');
+                setVal('customerFormDisplayName', '');
+                setVal('customerFormTaxId', '');
+                setVal('customerFormStatus', 'Active');
+                setVal('customerFormPhone', '');
+                setVal('customerFormEmail', '');
+                setVal('customerFormWebsite', '');
+                setVal('customerFormNotes', '');
+                setLegalNameReadOnly('customerForm', false);
+                const subBtn = document.getElementById('customerFormSubmitBtn');
+                if (subBtn) subBtn.textContent = 'Save Customer';
+                form.style.display = 'grid';
+                if (btn) btn.textContent = 'Cancel';
+            } else {
+                form.style.display = 'none';
+                if (btn) btn.textContent = '➕ Add New Customer';
+            }
+        }
+
+        function toggleCustomerPageForm() {
+            const form = document.getElementById('customerPageForm');
+            if (!form) return;
+            if (form.style.display === 'none' || !form.style.display) {
+                const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+                setVal('customerPageFormId', '');
+                setVal('customerPageFormNumber', getNextCustomerNumber());
+                setVal('customerPageFormType', 'Business');
+                setVal('customerPageFormLegalName', '');
+                setVal('customerPageFormDisplayName', '');
+                setVal('customerPageFormTaxId', '');
+                setVal('customerPageFormStatus', 'Active');
+                setVal('customerPageFormPhone', '');
+                setVal('customerPageFormEmail', '');
+                setVal('customerPageFormWebsite', '');
+                setVal('customerPageFormNotes', '');
+                setLegalNameReadOnly('customerPageForm', false);
+                const subBtn = document.getElementById('customerPageFormSubmitBtn');
+                if (subBtn) subBtn.textContent = 'Save Customer';
+                form.style.display = 'grid';
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        function editCustomerRecord(id) {
+            const rec = currentCustomerRecords.find(item => item.id == id);
+            if (!rec) return;
+
+            const modalForm = document.getElementById('customerForm');
+            const pageForm = document.getElementById('customerPageForm');
+
+            const populateForm = (prefix, targetForm) => {
+                const setVal = (idKey, val) => { const el = document.getElementById(`${prefix}${idKey}`); if (el) el.value = val; };
+                setVal('Id', rec.id);
+                setVal('Number', rec.custumer_number || '');
+                setVal('Type', rec.customer_type || 'Business');
+                setVal('LegalName', rec.legal_name || '');
+                setVal('DisplayName', rec.display_name || '');
+                setVal('TaxId', rec.tax_id || '');
+                setVal('Status', rec.status || 'Active');
+                setVal('Phone', rec.phone || '');
+                setVal('Email', rec.email || '');
+                setVal('Website', rec.website || '');
+                setVal('Notes', rec.notes || '');
+                setLegalNameReadOnly(prefix, true);
+                const subBtn = document.getElementById(`${prefix}SubmitBtn`);
+                if (subBtn) subBtn.textContent = 'Update Customer';
+                targetForm.style.display = 'grid';
+            };
+
+            if (pageForm) populateForm('customerPageForm', pageForm);
+            if (modalForm) populateForm('customerForm', modalForm);
+        }
+
+        async function saveCustomerRecord(e, isPage = false) {
+            e.preventDefault();
+            const prefix = isPage ? 'customerPageForm' : 'customerForm';
+            const getVal = (idKey) => (document.getElementById(`${prefix}${idKey}`)?.value || '').trim();
+            const id = document.getElementById(`${prefix}Id`)?.value || '';
+            const payload = {
+                custumer_number: getVal('Number'),
+                customer_type: getVal('Type') || 'Business',
+                legal_name: getVal('LegalName'),
+                display_name: getVal('DisplayName'),
+                tax_id: getVal('TaxId'),
+                status: getVal('Status') || 'Active',
+                phone: getVal('Phone'),
+                email: getVal('Email'),
+                website: getVal('Website'),
+                notes: getVal('Notes'),
+                parent_name: CURRENT_PARENT_NAME
+            };
+
+            try {
+                const url = id ? `/api/customers/${id}` : '/api/customers';
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    if (isPage) toggleCustomerPageForm();
+                    else toggleCustomerForm();
+                    await fetchCustomerRecords();
+                    if (typeof fetchParentMappings === 'function') await fetchParentMappings();
+                    if (typeof syncClientSelectDropdowns === 'function') await syncClientSelectDropdowns();
+                    if (typeof populateCustomerDropdownForMappings === 'function') await populateCustomerDropdownForMappings();
+                } else {
+                    const err = await res.json();
+                    alert('Error saving customer: ' + (err.detail || err.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Error saving customer: ' + err.message);
+            }
+        }
+
+        function showDeleteCustomerConfirmModal(customerNum, legalName) {
+            return new Promise((resolve) => {
+                let modal = document.getElementById('deleteCustomerConfirmModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'deleteCustomerConfirmModal';
+                    modal.style.cssText = 'display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px; animation: alertFadeIn 0.2s ease-out;';
+                    modal.innerHTML = `
+                        <div style="background: #0f172a; border: 1px solid rgba(244, 63, 94, 0.5); border-radius: 20px; max-width: 520px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(244, 63, 94, 0.25); color: #fff; overflow: hidden;">
+                            <div style="padding: 28px 24px 16px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;">
+                                <div style="width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #f43f5e;">
+                                    ⚠️
+                                </div>
+                                <div style="width: 100%;">
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 800; color: #f43f5e; margin: 0 0 10px 0; letter-spacing: -0.01em;">
+                                        PERMANENT DELETE WARNING
+                                    </h3>
+                                    <div id="deleteCustomerWarningText" style="font-size: 0.88rem; color: #e2e8f0; line-height: 1.6; text-align: left; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                                    </div>
+                                    <div style="text-align: left;">
+                                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+                                            🔑 Enter Admin Password to Authorize Deletion:
+                                        </label>
+                                        <input type="password" id="deleteCustomerAdminPasswordInput" placeholder="Enter admin password..." style="width: 100%; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 10px; padding: 10px 14px; font-size: 0.92rem; color: #fff; outline: none; transition: border-color 0.2s ease;">
+                                        <div id="deleteCustomerPasswordError" style="display: none; color: #fb7185; font-size: 0.78rem; font-weight: 600; margin-top: 6px;">
+                                            Please enter the Admin Password to proceed.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="padding: 16px 24px 24px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.3);">
+                                <button type="button" id="deleteCustomerCancelBtn" style="flex: 1; padding: 11px 18px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #cbd5e1; font-weight: 700; border-radius: 10px; font-size: 0.85rem; cursor: pointer;">
+                                    Cancel
+                                </button>
+                                <button type="button" id="deleteCustomerConfirmBtn" style="flex: 1; padding: 11px 18px; background: linear-gradient(135deg, #f43f5e, #be123c); color: #ffffff; font-weight: 800; border: none; border-radius: 10px; font-size: 0.85rem; cursor: pointer; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.4);">
+                                    PERMANENTLY DELETE
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                }
+
+                const warningEl = document.getElementById('deleteCustomerWarningText');
+                const pwdInput = document.getElementById('deleteCustomerAdminPasswordInput');
+                const pwdErr = document.getElementById('deleteCustomerPasswordError');
+                const cancelBtn = document.getElementById('deleteCustomerCancelBtn');
+                const confirmBtn = document.getElementById('deleteCustomerConfirmBtn');
+
+                const displayNameStr = legalName ? `'${legalName}' (${customerNum})` : `'${customerNum}'`;
+
+                warningEl.innerHTML = `
+                    <strong>This action will remove all records in all files and tables related to customer <span style="color: #f43f5e;">${safeEscapeHtml(displayNameStr)}</span></strong> (including Parent Mappings, Chart of Accounts, task checklists, and Vendor Rules).<br><br>
+                    <span style="color: #f87171; font-weight: 700;">⚠️ You will NOT be able to restore any data after this action.</span>
+                `;
+
+                pwdInput.value = '';
+                pwdErr.style.display = 'none';
+                modal.style.display = 'flex';
+
+                setTimeout(() => pwdInput.focus(), 100);
+
+                const handleCancel = () => {
+                    modal.style.display = 'none';
+                    cleanupListeners();
+                    resolve(null);
+                };
+
+                const handleConfirm = () => {
+                    const val = (pwdInput.value || '').trim();
+                    if (!val) {
+                        pwdErr.style.display = 'block';
+                        pwdInput.focus();
+                        return;
+                    }
+                    modal.style.display = 'none';
+                    cleanupListeners();
+                    resolve(val);
+                };
+
+                const handleKeyDown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleConfirm();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        handleCancel();
+                    }
+                };
+
+                function cleanupListeners() {
+                    cancelBtn.removeEventListener('click', handleCancel);
+                    confirmBtn.removeEventListener('click', handleConfirm);
+                    pwdInput.removeEventListener('keydown', handleKeyDown);
+                }
+
+                cancelBtn.addEventListener('click', handleCancel);
+                confirmBtn.addEventListener('click', handleConfirm);
+                pwdInput.addEventListener('keydown', handleKeyDown);
+            });
+        }
+
+        async function deleteCustomerRecord(id, num, legalName = '') {
+            if (!id) return;
+            const adminPassword = await showDeleteCustomerConfirmModal(num, legalName);
+            if (!adminPassword) return;
+
+            try {
+                const res = await fetch(`/api/customers/${id}?admin_password=${encodeURIComponent(adminPassword)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Admin-Password': adminPassword
+                    }
+                });
+                if (res.ok) {
+                    await fetchCustomerRecords();
+                    if (typeof fetchParentMappings === 'function') await fetchParentMappings();
+                    if (typeof syncClientSelectDropdowns === 'function') await syncClientSelectDropdowns();
+                    if (typeof populateCustomerDropdownForMappings === 'function') await populateCustomerDropdownForMappings();
+                    showAlert('Customer and all related records, files, and rules deleted successfully.', 'success', 'Customer Deleted');
+                } else {
+                    const err = await res.json();
+                    showAlert('Error deleting customer: ' + (err.detail || err.error || 'Failed'), 'error', 'Delete Failed');
+                }
+            } catch (err) {
+                showAlert('Error deleting customer: ' + err.message, 'error', 'Delete Error');
+            }
+        }
+
+        // Load customer page data if active tab is customers or URL pathname is /customers
+        if (window.location.pathname === '/customers' || '"placeholder"' === 'customers') {
+            fetchCustomerRecords(true);
+        }
+
+        // --- PDF Viewer Modal Functions ---
+        function openPdfViewerModal(event, s3KeyOrUrl, fileName, rawUrl) {
+            if (event) {
+                event.stopPropagation();
+                if (event.preventDefault) event.preventDefault();
+            }
+            let modal = document.getElementById('pdfViewerModal');
+            if (!modal) return;
+            const titleEl = document.getElementById('pdfViewerTitle');
+            const iframeEl = document.getElementById('pdfViewerIframe');
+            const extBtn = document.getElementById('pdfViewerExternalBtn');
+            const dlBtn = document.getElementById('pdfViewerDownloadBtn');
+
+            // Use in-app view-pdf and download streaming endpoints to stream files with correct headers
+            const keyParam = encodeURIComponent(s3KeyOrUrl || '');
+            const inlineViewUrl = `/api/storage/view-pdf?key=${keyParam}`;
+            const downloadUrl = `/api/storage/download?key=${keyParam}`;
+
+            if (titleEl) titleEl.textContent = fileName || 'PDF Document Viewer';
+            if (iframeEl) iframeEl.src = inlineViewUrl;
+            if (extBtn) extBtn.href = inlineViewUrl;
+            if (dlBtn) dlBtn.href = downloadUrl;
+
+            document.body.appendChild(modal);
+            modal.style.zIndex = '2147483649';
+            modal.style.display = 'flex';
+        }
+
+        function closePdfViewerModal() {
+            const modal = document.getElementById('pdfViewerModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            const iframeEl = document.getElementById('pdfViewerIframe');
+            if (iframeEl) iframeEl.src = '';
+        }
+
+        // --- Customer Bookkeeping Workflow Checklist Functions ---
+        let currentChecklistCustomerId = null;
+        let currentChecklistPeriod = null;
+
+        async function openCustomerChecklistModal(event, customerId, period, customerType) {
+            if (event) event.stopPropagation();
+            currentChecklistCustomerId = customerId;
+            let modal = document.getElementById('customerChecklistModal');
+            if (!modal) return;
+
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            // Fallback: look up customerType from currentCustomerRecords if not explicitly passed
+            if (!customerType && typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords)) {
+                const found = currentCustomerRecords.find(c => String(c.id) === String(customerId));
+                if (found) {
+                    customerType = found.customer_type || found.type || '';
+                }
+            }
+
+            const isIndividual = (customerType || '').toString().trim().toLowerCase() === 'individual';
+            const bkTabBtn = document.getElementById('tabBkWorkflow');
+            if (bkTabBtn) {
+                bkTabBtn.style.display = isIndividual ? 'none' : 'inline-flex';
+            }
+
+            if (isIndividual) {
+                switchWorkflowTab('tax');
+            } else {
+                switchWorkflowTab('bookkeeping');
+            }
+
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+
+            await loadCustomerChecklist(customerId, period);
+        }
+
+        function closeCustomerChecklistModal() {
+            const modal = document.getElementById('customerChecklistModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.style.opacity = '0';
+            currentChecklistCustomerId = null;
+            if (typeof fetchPendingWorkload === 'function') {
+                fetchPendingWorkload();
+            }
+        }
+
+        // --- Customer Email Communication Functions ---
+        let currentEmailCustomerId = null;
+
+        async function openSendCustomerEmailModal(event, customerId) {
+            if (event) event.stopPropagation();
+            const cid = customerId || currentChecklistCustomerId;
+            if (!cid) return;
+
+            let cust = (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+                ? currentCustomerRecords.find(c => c.id == cid)
+                : null;
+
+            if (!cust && typeof rawWorkloadData !== 'undefined' && Array.isArray(rawWorkloadData)) {
+                cust = rawWorkloadData.find(w => w.customer_id == cid || w.id == cid);
+            }
+
+            if (!cust || !cust.email) {
+                try {
+                    const res = await fetch(`/api/customers/${cid}`);
+                    if (res.ok) {
+                        const fetchedCust = await res.json();
+                        if (fetchedCust) cust = Object.assign({}, cust || {}, fetchedCust);
+                    }
+                } catch(e) {}
+            }
+
+            currentEmailCustomerId = cid;
+            let modal = document.getElementById('sendCustomerEmailModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+
+            const titleEl = document.getElementById('sendEmailModalTitle');
+            const subtitleEl = document.getElementById('sendEmailModalSubtitle');
+            const toEl = document.getElementById('emailFormTo');
+            const replyToEl = document.getElementById('emailFormReplyTo');
+            const tplEl = document.getElementById('emailFormTemplateSelect');
+
+            const custName = cust ? (cust.legal_name || cust.display_name || cust.customer_name) : `Customer #${cid}`;
+            const custNum = cust ? (cust.custumer_number || cust.customer_id || cust.id) : cid;
+            const custEmail = cust ? (cust.email || '') : '';
+
+            if (titleEl) titleEl.textContent = `📧 Send Email — ${custName}`;
+            if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Email: ${custEmail || 'Not configured'}`;
+            if (toEl) toEl.value = custEmail;
+            let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'notification@vrtservices12.com';
+            if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
+                defaultReplyTo = 'notification@vrtservices12.com';
+            }
+            if (replyToEl) replyToEl.value = defaultReplyTo;
+            if (tplEl) tplEl.value = 'custom';
+
+            applyEmailTemplate('custom', cust || { legal_name: custName, custumer_number: custNum, email: custEmail });
+            modal.style.zIndex = '2147483648';
+            modal.style.display = 'flex';
+        }
+
+        function closeSendCustomerEmailModal() {
+            const modal = document.getElementById('sendCustomerEmailModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function applyEmailTemplate(type, custData) {
+            const subjectEl = document.getElementById('emailFormSubject');
+            const msgEl = document.getElementById('emailFormMessage');
+            if (!subjectEl || !msgEl) return;
+
+            const cust = custData || currentCustomerRecords.find(c => c.id == currentEmailCustomerId) || {};
+            const name = cust.legal_name || cust.display_name || 'Client';
+
+            if (type === 'tax_docs') {
+                subjectEl.value = `Tax Organizer & Document Request for ${name}`;
+                msgEl.value = `Dear ${name},\n\nWe hope this message finds you well.\n\nWe are preparing your upcoming Tax Return. Please provide your tax organizer details along with your W-2s, 1099s, K-1s, and any relevant tax document statements.\n\nYou can reply directly to this email with your PDF/image attachments, or upload them to your client portal.\n\nThank you,\nAccount Management Team`;
+            } else if (type === 'bk_stmt') {
+                subjectEl.value = `Monthly Bank Statement Request - ${name}`;
+                msgEl.value = `Dear ${name},\n\nThis is a reminder regarding your monthly bookkeeping process.\n\nPlease send us your latest bank and credit card statements so our accounting team can extract and categorize your transactions.\n\nSimply reply to this email with your statements attached.\n\nBest regards,\nAccounting Department`;
+            } else if (type === 'sign_8879') {
+                subjectEl.value = `Action Required: Form 8879 E-Signature - ${name}`;
+                msgEl.value = `Dear ${name},\n\nYour Tax Return preparation and review has been completed!\n\nAttached / linked is Form 8879 for your authorization. Please sign and reply to this email with the signed authorization so we can e-file your return with the IRS & State taxing authorities.\n\nThank you,\nTax Preparation Team`;
+            } else {
+                subjectEl.value = `Information Update - ${name}`;
+                msgEl.value = `Dear ${name},\n\n`;
+            }
+        }
+
+        async function submitSendCustomerEmail() {
+            if (!currentEmailCustomerId) return;
+            const toVal = document.getElementById('emailFormTo')?.value || '';
+            const replyToVal = document.getElementById('emailFormReplyTo')?.value || '';
+            const subjectVal = document.getElementById('emailFormSubject')?.value || '';
+            const msgVal = document.getElementById('emailFormMessage')?.value || '';
+            const submitBtn = document.getElementById('sendEmailSubmitBtn');
+
+            if (!toVal) {
+                alert('❌ Customer does not have an email address configured. Please edit customer and add an email address first.');
+                return;
+            }
+            if (!subjectVal || !msgVal) {
+                alert('❌ Subject line and Message body are required.');
+                return;
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '⏳ Sending...';
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentEmailCustomerId}/send-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject: subjectVal,
+                        message: msgVal,
+                        reply_to: replyToVal
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    let errDetail = 'Failed to send email';
+                    if (typeof data.detail === 'string') errDetail = data.detail;
+                    else if (Array.isArray(data.detail)) errDetail = data.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+                    else if (data.message) errDetail = data.message;
+                    throw new Error(errDetail);
+                }
+
+                alert(`✅ ${data.message}\nReply-To configured as: ${data.reply_to}`);
+                closeSendCustomerEmailModal();
+            } catch (err) {
+                alert(`❌ Email Error: ${err.message}`);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Send Email';
+                }
+            }
+        }
+
+        async function checkUnreadCommunicationsAlerts() {
+            try {
+                const res = await fetch('/api/communications/unread-summary');
+                const data = await res.json();
+                const total = data.total_unread || 0;
+                currentUnreadMap = data.unread_by_customer || {};
+
+                const badge = document.getElementById('headerUnreadEmailBadge');
+                const badgeText = document.getElementById('headerUnreadCountText');
+                if (badge && badgeText) {
+                    if (total > 0) {
+                        badgeText.textContent = `${total} New ${total === 1 ? 'Reply' : 'Replies'}`;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+
+                // Update unread green dots and counts across customer table rows
+                document.querySelectorAll('.unread-reply-dot').forEach(dot => {
+                    const cid = parseInt(dot.getAttribute('data-cid'), 10);
+                    if (cid && currentUnreadMap[cid] && currentUnreadMap[cid].unread_count > 0) {
+                        const cnt = currentUnreadMap[cid].unread_count;
+                        dot.textContent = `🟢 ${cnt} NEW`;
+                        dot.style.display = 'inline-block';
+                    } else {
+                        dot.style.display = 'none';
+                    }
+                });
+                document.querySelectorAll('.unread-history-badge').forEach(badgeEl => {
+                    const cid = parseInt(badgeEl.getAttribute('data-cid'), 10);
+                    if (cid && currentUnreadMap[cid] && currentUnreadMap[cid].unread_count > 0) {
+                        const cnt = currentUnreadMap[cid].unread_count;
+                        badgeEl.textContent = `${cnt} NEW`;
+                        badgeEl.style.display = 'inline-block';
+                    } else {
+                        badgeEl.style.display = 'none';
+                    }
+                });
+            } catch (err) {
+                console.log('Error checking unread communications:', err);
+            }
+        }
+        setInterval(checkUnreadCommunicationsAlerts, 15000);
+        document.addEventListener('DOMContentLoaded', checkUnreadCommunicationsAlerts);
+
+        function clearAllUnreadAlerts(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        }
+
+        function formatEasternDateTime(dateInput) {
+            if (!dateInput) return '';
+            let d;
+            if (dateInput instanceof Date) {
+                d = dateInput;
+            } else {
+                let str = String(dateInput).trim();
+                if (!str) return '';
+                if (!str.includes('Z') && !str.includes('+') && !str.match(/-\d{2}:\d{2}$/)) {
+                    str = str.replace(' ', 'T') + 'Z';
+                }
+                d = new Date(str);
+            }
+            if (isNaN(d.getTime())) {
+                d = new Date(dateInput);
+            }
+            if (isNaN(d.getTime())) return String(dateInput);
+
+            return d.toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }) + ' ET';
+        }
+
+        let activeHistoryCustomerId = null;
+
+        async function openCatchallInboxModal() {
+            await openCustomerCommsHistoryModal(null, true);
+        }
+
+        async function openCustomerCommsHistoryModal(customerId, showAllInbound = false) {
+            const cid = customerId || currentEmailCustomerId;
+            if (!cid && !showAllInbound) return;
+            activeHistoryCustomerId = cid;
+
+            let modal = document.getElementById('customerCommsHistoryModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+
+            const titleEl = document.getElementById('commsHistoryModalTitle');
+            const subtitleEl = document.getElementById('commsHistoryModalSubtitle');
+
+            const cust = (!showAllInbound && typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+                ? currentCustomerRecords.find(c => c.id == cid)
+                : null;
+
+            if (titleEl) {
+                titleEl.innerHTML = showAllInbound 
+                    ? `📥 Global Inbound Inbox` 
+                    : `💬 Customer Communication History`;
+            }
+
+            if (subtitleEl) {
+                if (showAllInbound) {
+                    subtitleEl.textContent = 'All incoming client email replies and general unassigned emails across all accounts';
+                } else if (cust) {
+                    subtitleEl.innerHTML = `Customer: <strong style="color: #38bdf8;">${cust.legal_name || cust.display_name}</strong> (${cust.custumer_number ? 'Ref: ' + cust.custumer_number + ' | ' : ''}${cust.email ? 'Email: ' + cust.email : 'No email set'})`;
+                } else {
+                    subtitleEl.textContent = `Customer ID #${cid} — Email logs & received replies`;
+                }
+            }
+
+            const listBody = document.getElementById('commsHistoryListBody');
+            if (listBody) listBody.innerHTML = '<p style="text-align: center; color: #94a3b8;">Loading communications history...</p>';
+
+            modal.style.display = 'flex';
+
+            try {
+                const fetchUrl = showAllInbound 
+                    ? '/api/communications/all-inbound' 
+                    : `/api/customers/${cid}/communications`;
+                const res = await fetch(fetchUrl);
+                if (!res.ok) {
+                    const errText = await res.text();
+                    let errMsg = `HTTP ${res.status}`;
+                    try {
+                        const errJson = JSON.parse(errText);
+                        errMsg = errJson.detail || errJson.message || errMsg;
+                    } catch(e) {}
+                    throw new Error(errMsg);
+                }
+                const data = await res.json();
+                const logs = data.communications || [];
+
+                if (logs.length === 0) {
+                    const custName = cust ? (cust.legal_name || cust.display_name) : (showAllInbound ? 'All Customers' : `Customer #${cid}`);
+                    if (listBody) {
+                        listBody.innerHTML = `
+                            <div style="text-align: center; color: #64748b; padding: 36px 20px;">
+                                <div style="font-size: 2.8rem; margin-bottom: 12px;">📭</div>
+                                <h4 style="color: #cbd5e1; margin: 0 0 6px 0; font-size: 1.05rem;">No Inbound Email History Found</h4>
+                                <p style="font-size: 0.82rem; color: #94a3b8; max-width: 440px; margin: 0 auto; line-height: 1.5;">No email communications were found for <strong style="color: #38bdf8;">${custName}</strong>.</p>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                if (listBody) {
+                    const unreadLogs = logs.filter(l => l.direction === 'INBOUND' && !l.is_read && l.status !== 'READ');
+                    const markAllBtn = document.getElementById('commsHistoryMarkAllReadBtn');
+                    if (markAllBtn) {
+                        markAllBtn.style.display = (unreadLogs.length > 0 && !showAllInbound) ? 'inline-block' : 'none';
+                    }
+
+                    listBody.innerHTML = logs.map(item => {
+                        const isOut = item.direction === 'OUTBOUND';
+                        const isRead = item.is_read || item.status === 'READ';
+                        const readDateStr = item.read_at ? formatEasternDateTime(item.read_at) : '';
+
+                        let dirBadge = '';
+                        if (isOut) {
+                            dirBadge = '<span style="background: rgba(6, 182, 212, 0.2); color: #06b6d4; border: 1px solid rgba(6, 182, 212, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">OUTBOUND SENT</span>';
+                        } else {
+                            const readBadge = isRead
+                                ? `<span id="readStatusBadge-${item.id}" style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;" title="Message read">👁️ READ ${readDateStr ? '(' + readDateStr + ')' : ''}</span>`
+                                : `<span id="readStatusBadge-${item.id}" onclick="markSingleCommRead(event, ${item.id})" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.72rem; cursor: pointer; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);" title="Click to mark this email reply as read and stamp read date">🟢 UNREAD — Click to Mark Read</span>`;
+                            
+                            dirBadge = '<span style="background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">INBOUND REPLIED</span> ' + readBadge;
+                        }
+
+                        const custTag = (showAllInbound || !cust)
+                            ? (item.legal_name 
+                                ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">Account: ${item.legal_name} (${item.custumer_number || 'ID #' + item.customer_id})</span> `
+                                : `<span style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.7rem;">Unassigned / Catch-All</span> `)
+                            : '';
+
+                        const dateStr = item.created_at ? formatEasternDateTime(item.created_at) : '';
+                        let atts = item.attachments_json || [];
+                        if (typeof atts === 'string') {
+                            try { atts = JSON.parse(atts); } catch(e) { atts = []; }
+                        }
+                        if (!Array.isArray(atts)) atts = [];
+
+                        let attHtml = '';
+                        if (atts.length > 0) {
+                            attHtml = '<div style="margin-top: 8px; font-size: 0.75rem; color: #38bdf8;"><strong>📎 Saved Attachments:</strong> ' + atts.map(a => {
+                                if (!a) return '';
+                                let filePath = '';
+                                let fileName = '';
+                                if (typeof a === 'object' && a !== null) {
+                                    filePath = a.file_key || a.path || a.filename || a.name || '';
+                                    fileName = a.filename || a.name || (filePath ? String(filePath).split('/').pop() : 'Attachment');
+                                } else {
+                                    filePath = String(a);
+                                    fileName = filePath.split('/').pop();
+                                }
+                                if (!filePath) filePath = fileName;
+                                const escKey = String(filePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                const escName = String(fileName).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                return `<a href="#" onclick="openPdfViewerModal(event, '${escKey}', '${escName}'); return false;" style="color: #38bdf8; text-decoration: underline; margin-right: 8px;">${fileName}</a>`;
+                            }).filter(Boolean).join(' ') + '</div>';
+                        }
+
+                        const displayBody = (item.body_text && item.body_text.trim()) 
+                            ? item.body_text 
+                            : (atts && atts.length > 0)
+                                ? '<span style="color: #38bdf8; font-style: italic;">📎 Attachment received (no text message body provided).</span>'
+                                : '<span style="color: #64748b; font-style: italic;">(No text body in email)</span>';
+
+                        const cardBorder = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)';
+                        const cardBg = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.04)' : 'rgba(255,255,255,0.03)';
+                        const cardClickAttr = (!isOut && !isRead) ? `onclick="markSingleCommRead(event, ${item.id})"` : '';
+
+                        return `
+                            <div id="commCard-${item.id}" ${cardClickAttr} style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; ${ (!isOut && !isRead) ? 'cursor: pointer;' : '' } transition: all 0.2s;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        ${dirBadge}
+                                        ${custTag}
+                                        <strong style="font-size: 0.88rem; color: #fff;">${item.subject || '(No Subject)'}</strong>
+                                    </div>
+                                    <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: #94a3b8;">
+                                    From: <span style="color: #cbd5e1;">${item.sender_email}</span> | To: <span style="color: #cbd5e1;">${item.recipient_email}</span> ${item.reply_to_email ? `| Reply-To: <span style="color: #facc15;">${item.reply_to_email}</span>` : ''}
+                                </div>
+                                <div style="white-space: pre-wrap; font-size: 0.85rem; color: #e2e8f0; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-top: 4px;">${displayBody}</div>
+                                ${attHtml}
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                if (listBody) listBody.innerHTML = `<p style="text-align: center; color: #f87171; padding: 20px;">Error loading communications: ${err.message}</p>`;
+            }
+        }
+
+        async function markSingleCommRead(event, commId) {
+            if (event) event.stopPropagation();
+            const badgeEl = document.getElementById(`readStatusBadge-${commId}`);
+            const cardEl = document.getElementById(`commCard-${commId}`);
+
+            try {
+                const res = await fetch(`/api/communications/${commId}/mark-single-read`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    const readDateStr = data.read_at ? formatEasternDateTime(data.read_at) : formatEasternDateTime(new Date());
+                    if (badgeEl) {
+                        badgeEl.innerHTML = `👁️ READ (${readDateStr})`;
+                        badgeEl.style.background = 'rgba(34, 197, 94, 0.15)';
+                        badgeEl.style.color = '#4ade80';
+                        badgeEl.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+                        badgeEl.style.boxShadow = 'none';
+                        badgeEl.onclick = null;
+                    }
+                    if (cardEl) {
+                        cardEl.style.borderColor = 'rgba(255,255,255,0.08)';
+                        cardEl.style.background = 'rgba(255,255,255,0.03)';
+                        cardEl.onclick = null;
+                        cardEl.style.cursor = 'default';
+                    }
+                    await checkUnreadCommunicationsAlerts();
+                }
+            } catch (err) {
+                console.error("Error marking single communication read:", err);
+            }
+        }
+
+        async function markAllCommsReadForCurrentCustomer() {
+            if (!activeHistoryCustomerId) return;
+            try {
+                await fetch(`/api/customers/${activeHistoryCustomerId}/communications/mark-read`, { method: 'POST' });
+                await openCustomerCommsHistoryModal(activeHistoryCustomerId);
+                await checkUnreadCommunicationsAlerts();
+            } catch (e) {
+                console.error("Error marking all comms read:", e);
+            }
+        }
+
+        function closeCustomerCommsHistoryModal() {
+            const modal = document.getElementById('customerCommsHistoryModal');
+            if (modal) modal.style.display = 'none';
+            const debugBox = document.getElementById('webhookDebugLogBox');
+            if (debugBox) debugBox.remove();
+        }
+
+        async function toggleWebhookLogInspector(event) {
+            if (event) event.stopPropagation();
+            let debugBox = document.getElementById('webhookDebugLogBox');
+            if (debugBox) {
+                debugBox.style.display = (debugBox.style.display === 'none') ? 'block' : 'none';
+                return;
+            }
+            const listBody = document.getElementById('commsHistoryListBody');
+            if (!listBody) return;
+            
+            const newBox = document.createElement('div');
+            newBox.id = 'webhookDebugLogBox';
+            newBox.style.cssText = 'background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 0.78rem; font-family: monospace; color: #cbd5e1;';
+            newBox.innerHTML = 'Loading server webhook debug logs...';
+            listBody.insertBefore(newBox, listBody.firstChild);
+
+            try {
+                const res = await fetch('/api/debug/last-inbound');
+                const data = await res.json();
+                const logs = data.last_webhook_logs || [];
+                if (logs.length === 0) {
+                    newBox.innerHTML = '<strong style="color: #f87171;">⚠️ No Webhooks Received Yet:</strong><br><span style="color: #94a3b8;">The server has not received any HTTP POST webhooks from Resend yet.<br>Please verify in <a href="https://resend.com/webhooks" target="_blank" style="color: #38bdf8; text-decoration: underline;">Resend Dashboard → Webhooks</a> that a Webhook is configured pointing to:<br><code style="color: #4ade80;">https://vrtservices12.com/api/webhooks/resend-inbound</code> for event <code>email.received</code>.</span>';
+                } else {
+                    let html = '<strong style="color: #38bdf8;">📡 Server Webhook Log Audit (Last 5 Hits):</strong><br><br>';
+                    html += logs.map(l => `
+                        <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px; margin-bottom: 6px;">
+                            <span style="color: #facc15;">[${l.created_at || ''}]</span> 
+                            <strong>Status:</strong> <span style="color: ${l.status === 'SUCCESS' ? '#4ade80' : '#f87171'}; font-weight: 800;">${l.status}</span><br>
+                            <strong>From:</strong> ${l.sender_email || 'N/A'} | <strong>To:</strong> ${l.recipient_email || 'N/A'}<br>
+                            <strong>Subject:</strong> ${l.subject || '(No Subject)'}
+                        </div>
+                    `).join('');
+                    newBox.innerHTML = html;
+                }
+            } catch(err) {
+                newBox.innerHTML = `<span style="color: #f87171;">Error fetching debug logs: ${err.message}</span>`;
+            }
+        }
+
+        // --- Workload Summary & Pending Tasks Functions ---
+        let rawWorkloadData = [];
+        let currentWorkloadFilter = 'all';
+
+        async function loadWorkloadSummary() {
+            const tbody = document.getElementById('workloadPendingTableBody');
+            if (!tbody) return;
+            try {
+                const parentParam = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : (window.parentName || '');
+                const res = await fetch(`/api/dashboard/pending-tasks?parentName=${encodeURIComponent(parentParam)}`);
+                const data = await res.json();
+                rawWorkloadData = data.pending_tasks || [];
+
+                const summary = data.summary || {};
+                const kpiBk = document.getElementById('kpiPendingBkCount');
+                const kpiTax = document.getElementById('kpiPendingTaxCount');
+                const kpiTotal = document.getElementById('kpiTotalIncompleteCount');
+
+                if (kpiBk) kpiBk.textContent = summary.pending_bookkeeping_count || 0;
+                if (kpiTax) kpiTax.textContent = summary.pending_tax_count || 0;
+                if (kpiTotal) kpiTotal.textContent = summary.total_incomplete_customers || 0;
+
+                renderWorkloadTable();
+            } catch (err) {
+                console.error('Error loading workload summary:', err);
+                if (tbody) tbody.innerHTML = '<tr><td colSpan="6" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load workload tasks.</td></tr>';
+            }
+        }
+
+        function filterWorkloadTable(mode) {
+            currentWorkloadFilter = mode;
+            ['btnFilterWorkloadAll', 'btnFilterWorkloadBk', 'btnFilterWorkloadTax'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.style.background = 'rgba(255, 255, 255, 0.05)';
+                    btn.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                    btn.style.color = '#94a3b8';
+                }
+            });
+
+            const activeBtnId = mode === 'bk' ? 'btnFilterWorkloadBk' : (mode === 'tax' ? 'btnFilterWorkloadTax' : 'btnFilterWorkloadAll');
+            const activeBtn = document.getElementById(activeBtnId);
+            if (activeBtn) {
+                activeBtn.style.background = 'rgba(250, 204, 21, 0.2)';
+                activeBtn.style.borderColor = 'rgba(250, 204, 21, 0.5)';
+                activeBtn.style.color = '#facc15';
+            }
+            renderWorkloadTable();
+        }
+
+        function renderWorkloadTable() {
+            const tbody = document.getElementById('workloadPendingTableBody');
+            if (!tbody) return;
+
+            let items = (rawWorkloadData || []).filter(i => {
+                const cNum = (i.custumer_number || '').toUpperCase();
+                const dName = (i.display_name || '').toUpperCase();
+                const lName = (i.legal_name || '').toUpperCase();
+                return cNum !== 'CUST-0000' && !dName.includes('CUST-0000') && !lName.includes('UNASSIGNED INBOUND');
+            });
+            if (currentWorkloadFilter === 'bk') {
+                items = items.filter(i => i.bk && i.bk.has_pending);
+            } else if (currentWorkloadFilter === 'tax') {
+                items = items.filter(i => i.tax && i.tax.has_pending);
+            }
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colSpan="6" style="padding: 32px; text-align: center; color: #38ef7d; font-weight: 700;">🎉 All caught up! No pending tasks found for this filter.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => {
+                const isInd = item.is_individual;
+                const typeBadge = isInd 
+                    ? '<span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.72rem;">Individual</span>'
+                    : '<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.72rem;">Business</span>';
+
+                let bkProgressPercent = item.bk ? (item.bk.progress_percent || 0) : 0;
+                let taxProgressPercent = item.tax ? (item.tax.progress_percent || 0) : 0;
+
+                let wfHtml = '';
+                let missingBadges = '';
+                let progressCellHtml = '';
+
+                if (isInd) {
+                    wfHtml = `<span style="color: #f87171; font-weight: 700;">📑 Tax Preparation</span>`;
+                    missingBadges = (item.tax.missing_steps || []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
+                    const taxPeriodLabel = (item.tax && item.tax.period_label) ? item.tax.period_label : 'Tax Year';
+                    progressCellHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 170px;">
+                            <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.73rem;">
+                                <span>📑 Tax (${taxPeriodLabel}):</span>
+                                <span>${taxProgressPercent}%</span>
+                            </div>
+                            <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #f43f5e, #fb7185); border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    wfHtml = `<span style="color: #38bdf8; font-weight: 700;">📊 Bookkeeping</span> & <span style="color: #f87171; font-weight: 700;">📑 Tax Return</span>`;
+                    
+                    let bkBadges = ((item.bk ? item.bk.missing_steps : []) || []).map(s => `<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ ${s}</span>`).join(' ');
+                    let taxBadges = (item.tax ? (item.tax.missing_steps || []) : []).map(s => `<span style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 2px 7px; border-radius: 6px; font-size: 0.72rem;">☐ Tax: ${s}</span>`).join(' ');
+                    missingBadges = [bkBadges, taxBadges].filter(Boolean).join(' ');
+
+                    const bkPeriodLabel = (item.bk && item.bk.period_label) ? item.bk.period_label : 'Current Period';
+                    const taxPeriodLabel = (item.tax && item.tax.period_label) ? item.tax.period_label : 'Tax Year';
+
+                    progressCellHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 170px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #38bdf8; font-size: 0.73rem; margin-bottom: 2px;">
+                                    <span>📊 Bk (${bkPeriodLabel}):</span>
+                                    <span>${bkProgressPercent}%</span>
+                                </div>
+                                <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${bkProgressPercent}%; height: 100%; background: linear-gradient(90deg, #00f2fe, #38bdf8); border-radius: 4px;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-weight: 700; color: #f87171; font-size: 0.73rem; margin-bottom: 2px;">
+                                    <span>📑 Tax (${taxPeriodLabel}):</span>
+                                    <span>${taxProgressPercent}%</span>
+                                </div>
+                                <div style="width: 160px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${taxProgressPercent}%; height: 100%; background: linear-gradient(90deg, #7f00ff, #f43f5e); border-radius: 4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.2s ease;">
+                        <td style="padding: 12px 18px; font-weight: 700; color: #fff;">
+                            ${item.legal_name || item.display_name}
+                            <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;">${item.custumer_number || ''}</div>
+                        </td>
+                        <td style="padding: 12px 18px;">${typeBadge}</td>
+                        <td style="padding: 12px 18px;">${wfHtml}</td>
+                        <td style="padding: 12px 18px; display: flex; gap: 6px; flex-wrap: wrap;">${missingBadges}</td>
+                        <td style="padding: 12px 18px;">${progressCellHtml}</td>
+                        <td style="padding: 12px 18px; text-align: right;">
+                            <button onclick="openCustomerChecklistModal(event, ${item.customer_id}, '${item.period || ''}', '${item.customer_type || ''}')" style="padding: 6px 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; transition: all 0.2s ease;">
+                                📋 Open Checklist
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        let activeWorkflowTab = 'bookkeeping'; // 'bookkeeping' or 'tax'
+
+        function switchWorkflowTab(tabName) {
+            activeWorkflowTab = tabName;
+            const bkTabBtn = document.getElementById('tabBkWorkflow');
+            const taxTabBtn = document.getElementById('tabTaxWorkflow');
+            const bkSection = document.getElementById('checklistBkSection');
+            const taxSection = document.getElementById('checklistTaxSection');
+
+            if (tabName === 'tax') {
+                if (taxTabBtn) {
+                    taxTabBtn.style.background = 'rgba(239, 68, 68, 0.25)';
+                    taxTabBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                    taxTabBtn.style.color = '#f87171';
+                }
+                if (bkTabBtn) {
+                    bkTabBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+                    bkTabBtn.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                    bkTabBtn.style.color = '#94a3b8';
+                }
+                if (bkSection) bkSection.style.display = 'none';
+                if (taxSection) taxSection.style.display = 'flex';
+            } else {
+                if (bkTabBtn) {
+                    bkTabBtn.style.background = 'rgba(56, 189, 248, 0.25)';
+                    bkTabBtn.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+                    bkTabBtn.style.color = '#38bdf8';
+                }
+                if (taxTabBtn) {
+                    taxTabBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+                    taxTabBtn.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                    taxTabBtn.style.color = '#94a3b8';
+                }
+                if (bkSection) bkSection.style.display = 'flex';
+                if (taxSection) taxSection.style.display = 'none';
+            }
+
+            // Re-populate dropdown and reload checklist for selected mode
+            populateChecklistPeriodDropdown();
+            loadCustomerChecklist(null, document.getElementById('checklistPeriodSelect')?.value);
+        }
+
+        async function loadCustomerChecklist(customerId, period) {
+            const cid = customerId || currentChecklistCustomerId;
+            if (!cid) return;
+
+            const selectedPeriod = period || document.getElementById('checklistPeriodSelect')?.value || '';
+            try {
+                const url = `/api/customers/${cid}/checklist?workflow_tab=${encodeURIComponent(activeWorkflowTab)}` + (selectedPeriod ? `&period=${encodeURIComponent(selectedPeriod)}` : '');
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.detail || 'Failed to fetch checklist');
+
+                currentChecklistPeriod = data.period;
+
+                const titleEl = document.getElementById('checklistModalTitle');
+                const subtitleEl = document.getElementById('checklistModalSubtitle');
+
+                if (titleEl) titleEl.textContent = `📋 ${data.legal_name} — Workflow Checklist`;
+                if (subtitleEl) {
+                    const labelText = activeWorkflowTab === 'tax' ? 'Tax Year' : 'Period Cycle';
+                    const modeLabel = data.is_in_process ? `🔄 In Process (${data.in_process_label})` : `📁 Historical Archive (${data.period})`;
+                    subtitleEl.textContent = `${labelText}: ${modeLabel} | Last Updated: ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'Just now'}`;
+                }
+
+                // Populate period select options dynamically
+                populateChecklistPeriodDropdown(data);
+
+                // Hide/show Reopen button if viewing historical archive
+                const reopenBtn = document.getElementById('btnReopenChecklist');
+                if (reopenBtn) {
+                    reopenBtn.style.display = (!data.is_in_process) ? 'inline-block' : 'none';
+                }
+
+                renderChecklistUI(data);
+            } catch (err) {
+                alert(`❌ Checklist Error: ${err.message}`);
+            }
+        }
+
+        function renderChecklistUI(data) {
+            window.lastChecklistData = data;
+            const progressBarEl = document.getElementById('checklistProgressBar');
+            const progressTextEl = document.getElementById('checklistProgressText');
+
+            if (activeWorkflowTab === 'tax') {
+                const taxData = data.tax || {};
+                const steps = taxData.steps || {};
+                if (progressBarEl) progressBarEl.style.width = `${taxData.progress_percent || 0}%`;
+                if (progressTextEl) progressTextEl.textContent = `${taxData.completed_count || 0} of 8 Completed (${taxData.progress_percent || 0}%)`;
+
+                setCheckstepState('step_tax_docs_requested', steps.tax_docs_requested);
+                setCheckstepState('step_tax_docs_received', steps.tax_docs_received);
+                setCheckstepState('step_tax_organizer', steps.tax_organizer);
+                setCheckstepState('step_tax_preparation', steps.tax_preparation);
+                setCheckstepState('step_tax_review', steps.tax_review);
+                setCheckstepState('step_tax_client_signature', steps.tax_client_signature);
+                setCheckstepState('step_tax_efile', steps.tax_efile);
+                setCheckstepState('step_tax_accepted', steps.tax_accepted);
+
+                const taxNotesInput = document.getElementById('checklistTaxNotesInput');
+                if (taxNotesInput) taxNotesInput.value = data.tax_notes || '';
+            } else {
+                const bkData = data.bookkeeping || data;
+                const steps = bkData.steps || {};
+                if (progressBarEl) progressBarEl.style.width = `${bkData.progress_percent || 0}%`;
+                if (progressTextEl) progressTextEl.textContent = `${bkData.completed_count || 0} of 4 Completed (${bkData.progress_percent || 0}%)`;
+
+                setCheckstepState('step_bank_statement_received', steps.bank_statement_received);
+                setCheckstepState('step_check_images_received', steps.check_images_received);
+                setCheckstepState('step_extraction_ai_categorization_done', steps.extraction_ai_categorization_done);
+                setCheckstepState('step_accountant_reviewed', steps.accountant_reviewed);
+
+                const notesInput = document.getElementById('checklistNotesInput');
+                if (notesInput) notesInput.value = data.notes || '';
+            }
+        }
+
+        function populateChecklistPeriodDropdown(data) {
+            const select = document.getElementById('checklistPeriodSelect');
+            const labelEl = document.getElementById('checklistPeriodLabel');
+            if (!select) return;
+
+            let optionsHtml = '';
+            const inProcessLabel = (data && data.in_process_label) ? data.in_process_label : 'Current Period';
+            const inProcessSlug = (data && data.in_process_period) ? data.in_process_period : 'in_process';
+            const historical = (data && data.historical_periods) ? data.historical_periods : [];
+
+            if (activeWorkflowTab === 'tax') {
+                if (labelEl) labelEl.textContent = 'TAX YEAR:';
+                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
+                if (historical.length > 0) {
+                    optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Years ──</option>`;
+                    historical.forEach(hp => {
+                        const slug = typeof hp === 'object' ? hp.slug : hp;
+                        const label = typeof hp === 'object' ? hp.label : `Tax Year ${hp}`;
+                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                    });
+                }
+            } else {
+                if (labelEl) labelEl.textContent = 'PERIOD CYCLE:';
+                optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
+                if (historical.length > 0) {
+                    optionsHtml += `<option disabled style="color: #64748b; background: #0f172a;">── Historical Completed Periods ──</option>`;
+                    historical.forEach(hp => {
+                        const slug = typeof hp === 'object' ? hp.slug : hp;
+                        const label = typeof hp === 'object' ? hp.label : `Period ${hp}`;
+                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                    });
+                }
+            }
+
+            select.innerHTML = optionsHtml;
+            if (data && data.period) {
+                select.value = data.period;
+            }
+        }
+
+        function setCheckstepState(elemId, isChecked) {
+            const chk = document.getElementById(elemId);
+            const card = document.getElementById(`${elemId}_card`);
+            if (chk) chk.checked = !!isChecked;
+            if (card) {
+                if (isChecked) {
+                    card.style.background = 'rgba(0, 230, 118, 0.08)';
+                    card.style.borderColor = 'rgba(0, 230, 118, 0.4)';
+                } else {
+                    card.style.background = 'rgba(255, 255, 255, 0.02)';
+                    card.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }
+            }
+        }
+
+        async function toggleChecklistStep(stepKey, isChecked) {
+            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            try {
+                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        period: currentChecklistPeriod,
+                        step_key: stepKey,
+                        value: isChecked,
+                        workflow_mode: activeWorkflowTab
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to update checklist step');
+
+                renderChecklistUI(data);
+
+                if (typeof fetchPendingWorkload === 'function') {
+                    fetchPendingWorkload();
+                }
+
+                if (data.just_archived) {
+                    alert(data.archived_message || '🎉 Workflow Completed & Archived!');
+                    await loadCustomerChecklist(currentChecklistCustomerId, 'in_process');
+                }
+            } catch (err) {
+                alert(`❌ Step Toggle Error: ${err.message}`);
+            }
+        }
+
+        async function reopenChecklistPeriod() {
+            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            if (!await showCustomConfirm('Re-open this period as In Process to make corrections?')) return;
+            try {
+                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/reopen`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period: currentChecklistPeriod, workflow_mode: activeWorkflowTab })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to reopen period');
+
+                alert('↩️ Period re-opened as In Process!');
+                await loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
+            } catch (err) {
+                alert(`❌ Reopen Error: ${err.message}`);
+            }
+        }
+
+        async function saveChecklistNotes(isTax = false) {
+            if (!currentChecklistCustomerId || !currentChecklistPeriod) return;
+            const inputId = isTax ? 'checklistTaxNotesInput' : 'checklistNotesInput';
+            const notesVal = document.getElementById(inputId)?.value || '';
+            const payload = { period: currentChecklistPeriod };
+            if (isTax) {
+                payload.tax_notes = notesVal;
+            } else {
+                payload.notes = notesVal;
+            }
+
+            try {
+                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/checklist/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to save notes');
+                alert('✅ Checklist notes saved successfully!');
+            } catch (err) {
+                alert(`❌ Save Notes Error: ${err.message}`);
+            }
+        }
+
+        // Close modals when clicking backdrop
+        ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal'].forEach(id => {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        if (id === 'coaModal') closeCoaModal();
+                        if (id === 'mappingsModal') closeMappingsModal();
+                        if (id === 'historyModal') closeHistoryModal();
+                        if (id === 'supportModal') closeSupportModal();
+                        if (id === 'customerModal') closeCustomerModal();
+                        if (id === 'customerStorageModal') closeCustomerStorageModal();
+                        if (id === 'pdfViewerModal') closePdfViewerModal();
+                        if (id === 'customerChecklistModal') closeCustomerChecklistModal();
+                    }
+                });
+            }
+        });
+
+        // --- Move customerStorageModal, pdfViewerModal & customerChecklistModal to body root ---
+        (function() {
+            const storageModalHtml = `
+<div id="customerStorageModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.88); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: #121624; border: 1px solid rgba(255,255,255,0.12); border-radius: 20px; width: 100%; max-width: 920px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+            <div>
+                <h3 id="storageModalTitle" style="font-size: 1.2rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; font-family: 'Outfit', sans-serif;">📂 Customer Storage Manager</h3>
+                <p id="storageModalSubtitle" style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px; font-family: monospace;"></p>
+            </div>
+            <button onclick="closeCustomerStorageModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+        </div>
+        <div style="padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div id="storageBreadcrumbs" style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-family: monospace; color: #cbd5e1; flex-wrap: wrap;"></div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <input type="file" id="storageFileInput" multiple style="display: none;" onchange="handleStorageFileUpload(event)">
+                <button onclick="document.getElementById('storageFileInput').click()" style="padding: 7px 16px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">📤 Upload Files</button>
+                <button onclick="createStorageFolder()" style="padding: 7px 14px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Create a new subfolder in the current directory">📁 New Folder</button>
+                <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
+                <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
+            </div>
+        </div>
+        <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
+            <input type="text" id="storageFileSearchInput" placeholder="🔍 Search current folder..." oninput="filterStorageItems()" style="width: 100%; padding: 8px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-size: 0.82rem; outline: none;">
+        </div>
+        <div style="flex: 1; overflow-y: auto; padding: 16px 24px; min-height: 250px;">
+            <div id="storageLoadingSpinner" style="text-align: center; padding: 50px; color: #94a3b8; display: none;"><div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Loading customer files...</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #94a3b8; font-size: 0.72rem; text-transform: uppercase;">
+                        <th style="padding: 10px 12px;">Name</th>
+                        <th style="padding: 10px 12px; width: 120px;">Size</th>
+                        <th style="padding: 10px 12px; width: 180px;">Last Modified</th>
+                        <th style="padding: 10px 12px; width: 170px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="storageFilesTbody"></tbody>
+            </table>
+        </div>
+        <div style="padding: 12px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #64748b;">
+            <span id="storageFileStats">0 items</span>
+            <span>Storage Container: <strong style="color: #38bdf8;">datalazocrm</strong></span>
+        </div>
+    </div>
+</div>`;
+
+            const pdfViewerModalHtml = `
+<div id="pdfViewerModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.92); z-index: 2147483648; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; width: 100%; max-width: 1100px; height: 92vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9); overflow: hidden;">
+        <div style="padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03);">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <span style="font-size: 1.3rem;">📄</span>
+                <h3 id="pdfViewerTitle" style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; font-family: 'Outfit', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0;">PDF Document Viewer</h3>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <a id="pdfViewerExternalBtn" href="#" target="_blank" style="padding: 5px 12px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-decoration: none;" title="Open in full browser tab">↗ New Tab</a>
+                <a id="pdfViewerDownloadBtn" href="#" download style="padding: 5px 12px; background: rgba(0,230,118,0.15); border: 1px solid rgba(0,230,118,0.35); color: #00e676; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-decoration: none;" title="Download PDF file">📥 Download</a>
+                <button onclick="closePdfViewerModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; width: 32px; height: 32px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Close Preview">✕</button>
+            </div>
+        </div>
+        <div style="flex: 1; position: relative; background: #020617; display: flex; align-items: center; justify-content: center;">
+            <iframe id="pdfViewerIframe" src="" style="width: 100%; height: 100%; border: none; background: #020617;"></iframe>
+        </div>
+    </div>
+</div>`;
+
+            const customerChecklistModalHtml = `
+<div id="customerChecklistModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.88); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: #121624; border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; width: 100%; max-width: 820px; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9); overflow: hidden;">
+        <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+            <div>
+                <h3 id="checklistModalTitle" style="font-size: 1.2rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; font-family: 'Outfit', sans-serif;">📋 Customer Workflow Checklist</h3>
+                <p id="checklistModalSubtitle" style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px; font-family: monospace;"></p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="openSendCustomerEmailModal(event, currentChecklistCustomerId)" style="padding: 6px 14px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);" title="Send Email Message to Customer">📧 Send Email</button>
+                <button onclick="closeCustomerChecklistModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+        </div>
+
+        <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); display: flex; gap: 10px; align-items: center;">
+            <button id="tabBkWorkflow" onclick="switchWorkflowTab('bookkeeping')" style="padding: 7px 16px; background: rgba(56, 189, 248, 0.25); border: 1px solid rgba(56, 189, 248, 0.5); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px;">📊 Bookkeeping Workflow (4 Steps)</button>
+            <button id="tabTaxWorkflow" onclick="switchWorkflowTab('tax')" style="padding: 7px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #94a3b8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px;">📑 Tax Preparation Workflow (8 Steps)</button>
+        </div>
+        
+        <div style="padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label id="checklistPeriodLabel" style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; font-family: monospace;">PERIOD CYCLE:</label>
+                <select id="checklistPeriodSelect" onchange="loadCustomerChecklist(null, this.value)" style="padding: 6px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #38bdf8; font-weight: 700; font-size: 0.82rem; outline: none; cursor: pointer;">
+                    <option value="in_process">🔄 In Process</option>
+                </select>
+                <button id="btnReopenChecklist" onclick="reopenChecklistPeriod()" style="display: none; padding: 5px 12px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; border-radius: 8px; font-size: 0.76rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Re-open this period as In Process to make corrections">↩️ Re-open Period</button>
+            </div>
+            <div style="flex: 1; max-width: 320px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-family: monospace;">
+                    <span>WORKFLOW PROGRESS</span>
+                    <strong id="checklistProgressText" style="color: #00e676;">0 Completed (0%)</strong>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+                    <div id="checklistProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00e676, #38bdf8); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="flex: 1; overflow-y: auto; padding: 20px 24px;">
+            <!-- Bookkeeping Section -->
+            <div id="checklistBkSection" style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- Step 1 -->
+                <div id="step_bank_statement_received_card" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_bank_statement_received" onchange="toggleChecklistStep('bank_statement_received', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">1. Bank Statement Received</h4>
+                            <p style="font-size: 0.73rem; color: #94a3b8; margin: 2px 0 0 0;">Statement PDF uploaded to storage or loaded into bank extractor</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">Step 1</span>
+                </div>
+
+                <!-- Step 2 -->
+                <div id="step_check_images_received_card" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_check_images_received" onchange="toggleChecklistStep('check_images_received', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">2. Check Images Received</h4>
+                            <p style="font-size: 0.73rem; color: #94a3b8; margin: 2px 0 0 0;">Check image files or check PDFs uploaded for the period</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(250,204,21,0.15); color: #facc15; border: 1px solid rgba(250,204,21,0.3);">Step 2</span>
+                </div>
+
+                <!-- Step 3 -->
+                <div id="step_extraction_ai_categorization_done_card" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_extraction_ai_categorization_done" onchange="toggleChecklistStep('extraction_ai_categorization_done', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">3. Statement Extraction & AI Categorization Completed</h4>
+                            <p style="font-size: 0.73rem; color: #94a3b8; margin: 2px 0 0 0;">OCR text extracted, transactions parsed, check data read, and AI GL accounts assigned</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">Step 3</span>
+                </div>
+
+                <!-- Step 4 -->
+                <div id="step_accountant_reviewed_card" style="padding: 14px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_accountant_reviewed" onchange="toggleChecklistStep('accountant_reviewed', this.checked)" style="width: 18px; height: 18px; accent-color: #00e676; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">4. Accountant Reviewed & Reconciled</h4>
+                            <p style="font-size: 0.73rem; color: #94a3b8; margin: 2px 0 0 0;">Final accountant review completed and ready for export to QBO/Accounting software</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(0,230,118,0.15); color: #00e676; border: 1px solid rgba(0,230,118,0.3);">Step 4</span>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">Bookkeeping Notes / Review Comments:</label>
+                    <textarea id="checklistNotesInput" rows="3" placeholder="Add optional reviewer notes or accounting comments for bookkeeping..." style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; font-size: 0.8rem; outline: none; resize: vertical;"></textarea>
+                    <button onclick="saveChecklistNotes(false)" style="margin-top: 8px; padding: 6px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; cursor: pointer;">💾 Save Bookkeeping Notes</button>
+                </div>
+            </div>
+
+            <!-- Tax Section -->
+            <div id="checklistTaxSection" style="display: none; flex-direction: column; gap: 12px;">
+                <!-- Tax Step 1 -->
+                <div id="step_tax_docs_requested_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_docs_requested" onchange="toggleChecklistStep('tax_docs_requested', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">1. Documents Requested</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Tax document checklist and request email sent to client</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);">Step 1</span>
+                </div>
+
+                <!-- Tax Step 2 -->
+                <div id="step_tax_docs_received_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_docs_received" onchange="toggleChecklistStep('tax_docs_received', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">2. Documents Received</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Tax documents (W-2, 1099s, K-1s, receipts) received and uploaded</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">Step 2</span>
+                </div>
+
+                <!-- Tax Step 3 -->
+                <div id="step_tax_organizer_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_organizer" onchange="toggleChecklistStep('tax_organizer', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">3. Tax Organizer</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Tax organizer questionnaire filled out and verified</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">Step 3</span>
+                </div>
+
+                <!-- Tax Step 4 -->
+                <div id="step_tax_preparation_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_preparation" onchange="toggleChecklistStep('tax_preparation', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">4. Preparation</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Tax return preparation in progress in tax software</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">Step 4</span>
+                </div>
+
+                <!-- Tax Step 5 -->
+                <div id="step_tax_review_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_review" onchange="toggleChecklistStep('tax_review', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">5. Review</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Senior CPA / Reviewer quality check and approval completed</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(250,204,21,0.15); color: #facc15; border: 1px solid rgba(250,204,21,0.3);">Step 5</span>
+                </div>
+
+                <!-- Tax Step 6 -->
+                <div id="step_tax_client_signature_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_client_signature" onchange="toggleChecklistStep('tax_client_signature', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">6. Client Signature</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Form 8879 authorization signed by taxpayer / client</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">Step 6</span>
+                </div>
+
+                <!-- Tax Step 7 -->
+                <div id="step_tax_efile_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_efile" onchange="toggleChecklistStep('tax_efile', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">7. E-file</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">Tax return transmitted / e-filed with IRS and State taxing agencies</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">Step 7</span>
+                </div>
+
+                <!-- Tax Step 8 -->
+                <div id="step_tax_accepted_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <input type="checkbox" id="step_tax_accepted" onchange="toggleChecklistStep('tax_accepted', this.checked)" style="width: 18px; height: 18px; accent-color: #f87171; cursor: pointer;">
+                        <div>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin: 0;">8. Accepted</h4>
+                            <p style="font-size: 0.72rem; color: #94a3b8; margin: 2px 0 0 0;">IRS and State e-file acknowledgment received and accepted</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; background: rgba(0,230,118,0.15); color: #00e676; border: 1px solid rgba(0,230,118,0.3);">Step 8</span>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">Tax Preparation Notes / Comments:</label>
+                    <textarea id="checklistTaxNotesInput" rows="3" placeholder="Add optional preparer/reviewer notes or tax return comments..." style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; font-size: 0.8rem; outline: none; resize: vertical;"></textarea>
+                    <button onclick="saveChecklistNotes(true)" style="margin-top: 8px; padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.35); color: #f87171; font-weight: 700; border-radius: 8px; font-size: 0.76rem; cursor: pointer;">💾 Save Tax Notes</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #64748b;">
+            <span>CRM Bookkeeping & Tax Workflow System</span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="openSendCustomerEmailModal(event, currentChecklistCustomerId)" style="padding: 6px 16px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Send Email Message to Customer">📧 Send Email</button>
+                <button onclick="closeCustomerChecklistModal()" style="padding: 6px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    </div>
+</div>`;
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = storageModalHtml + pdfViewerModalHtml + customerChecklistModalHtml;
+            while (tempDiv.firstElementChild) {
+                const el = tempDiv.firstElementChild;
+                document.body.appendChild(el);
+                el.addEventListener('click', (e) => {
+                    if (e.target === el) {
+                        if (el.id === 'customerStorageModal') closeCustomerStorageModal();
+                        if (el.id === 'pdfViewerModal') closePdfViewerModal();
+                        if (el.id === 'customerChecklistModal') closeCustomerChecklistModal();
+                    }
+                });
+            }
+        })();
+        // --- Move customerStorageModal, pdfViewerModal, customerChecklistModal, sendCustomerEmailModal & customerCommsHistoryModal to body root ---
+        (function() {
+            const sendEmailModalHtml = `
+<div id="sendCustomerEmailModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 20px; max-width: 650px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.6); gap: 16px; color: #fff; overflow: hidden;">
+        <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 id="sendEmailModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    📧 Send Email to Customer
+                </h3>
+                <p id="sendEmailModalSubtitle" style="font-size: 0.78rem; color: #94a3b8; margin: 4px 0 0 0; font-family: monospace;">Recipient: ...</p>
+            </div>
+            <button onclick="closeSendCustomerEmailModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+        </div>
+
+        <div style="padding: 0 24px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">To (Customer Email):</label>
+                    <input type="email" id="emailFormTo" required readonly style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #38bdf8; font-weight: 700;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Reply-To (Your Inbox):</label>
+                    <input type="email" id="emailFormReplyTo" required style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #facc15; font-weight: 700;">
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Quick Message Template:</label>
+                <select id="emailFormTemplateSelect" onchange="applyEmailTemplate(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #c084fc; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="custom">💬 Custom Message</option>
+                    <option value="tax_docs">📑 Tax Organizer & Document Request</option>
+                    <option value="bk_stmt">📊 Monthly Bank Statement Request</option>
+                    <option value="sign_8879">✍️ Form 8879 E-Signature Required</option>
+                </select>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Subject Line *:</label>
+                <input type="text" id="emailFormSubject" required placeholder="e.g. Document Request for April 2026" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #fff; font-weight: 600;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Message Body *:</label>
+                <textarea id="emailFormMessage" rows="6" required placeholder="Write your message here..." style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fff; resize: vertical; outline: none; font-family: inherit;"></textarea>
+            </div>
+        </div>
+
+        <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center;">
+            <button type="button" onclick="openCustomerCommsHistoryModal(currentEmailCustomerId)" style="padding: 8px 16px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">💬 View Email History</button>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="closeSendCustomerEmailModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Cancel</button>
+                <button type="button" id="sendEmailSubmitBtn" onclick="submitSendCustomerEmail()" style="padding: 8px 24px; background: linear-gradient(135deg, #06b6d4, #2563eb); color: #fff; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 15px rgba(6, 182, 212, 0.35);">🚀 Send Email</button>
+            </div>
+        </div>
+    </div>
+</div>`;
+
+            const commsHistoryModalHtml = `
+<div id="customerCommsHistoryModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0b1324; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 20px; max-width: 750px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.6); gap: 16px; color: #fff; overflow: hidden;">
+        <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 id="commsHistoryModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    💬 Customer Communication History
+                </h3>
+                <p id="commsHistoryModalSubtitle" style="font-size: 0.78rem; color: #94a3b8; margin: 4px 0 0 0;">Email logs & received replies</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="button" onclick="toggleWebhookLogInspector(event)" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-weight: 700; font-size: 0.72rem; cursor: pointer;" title="Inspect raw webhook logs received by server from Resend">🔍 Webhook Inspector</button>
+                <button id="commsHistoryMarkAllReadBtn" onclick="markAllCommsReadForCurrentCustomer()" style="display: none; padding: 4px 10px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ade80; border-radius: 6px; font-weight: 700; font-size: 0.72rem; cursor: pointer;" title="Mark all messages as read for this customer">✓ Mark All Read</button>
+                <button onclick="closeCustomerCommsHistoryModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+            </div>
+        </div>
+
+        <div id="commsHistoryListBody" style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; min-height: 250px;">
+            <p style="text-align: center; color: #94a3b8;">Loading history...</p>
+        </div>
+
+        <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end;">
+            <button type="button" onclick="closeCustomerCommsHistoryModal()" style="padding: 6px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+        </div>
+    </div>
+</div>`;
+
+            const moveFileModalHtml = `
+<div id="moveFileModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483649; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 20px; max-width: 520px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.8); gap: 16px; color: #fff; overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.3rem;">🚚</span>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fbbf24; margin: 0;">Move File to Folder</h3>
+            </div>
+            <button onclick="closeMoveFileModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+        </div>
+
+        <div style="padding: 0 20px; display: flex; flex-direction: column; gap: 14px;">
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">File to Move:</label>
+                <div id="moveFileTargetName" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #38bdf8; font-weight: 700;">-</div>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Select Destination Folder:</label>
+                <select id="moveFileFolderSelect" onchange="handleMoveFolderSelectChange(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fbbf24; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="Inbox/">📥 Inbox (Received Attachments)</option>
+                    <option value="Tax Documents/">📂 Tax Documents (Main Folder)</option>
+                    <option value="Tax Documents/Tax Year 2026/">📁 Tax Documents / Tax Year 2026</option>
+                    <option value="Tax Documents/Tax Year 2025/">📁 Tax Documents / Tax Year 2025</option>
+                    <option value="Bank Statements/">📁 Bank Statements</option>
+                    <option value="Check Images/">📁 Check Images</option>
+                    <option value="custom">✏️ Enter Custom Folder Path...</option>
+                </select>
+            </div>
+
+            <div id="moveFileCustomGroup" style="display: none;">
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Custom Subfolder Path:</label>
+                <input type="text" id="moveFileCustomInput" placeholder="e.g. Tax Documents/Tax Year 2026/" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; font-weight: 600;">
+            </div>
+        </div>
+
+        <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeMoveFileModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Cancel</button>
+            <button type="button" id="submitMoveFileBtn" onclick="confirmSubmitMoveFile()" style="padding: 8px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);">🚚 Move File Now</button>
+        </div>
+    </div>
+</div>`;
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml;
+            while (tempDiv.firstElementChild) {
+                const el = tempDiv.firstElementChild;
+                document.body.appendChild(el);
+            }
+        })();
+    
+
+// --- SCRIPT 1 ---
+
+        (function initAiDrawer() {
+            function moveDrawerToBody() {
+                const drawer = document.getElementById('aiChatDrawer');
+                const btn = document.getElementById('aiChatTriggerBtn');
+                const modal = document.getElementById('knowledgeBaseExplorerModal');
+                if (drawer && drawer.parentNode !== document.body) {
+                    document.body.appendChild(drawer);
+                }
+                if (btn && btn.parentNode !== document.body) {
+                    document.body.appendChild(btn);
+                }
+                if (modal && modal.parentNode !== document.body) {
+                    document.body.appendChild(modal);
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', moveDrawerToBody);
+            } else {
+                moveDrawerToBody();
+            }
+        })();
+
+        window.openKnowledgeBaseModal = async function() {
+            let modal = document.getElementById('knowledgeBaseExplorerModal');
+            if (!modal) return;
+            if (modal.parentNode !== document.body) {
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            modal.style.zIndex = '2147483647';
+            await loadKnowledgeBaseTree();
+        };
+
+        window.closeKnowledgeBaseModal = function() {
+            let modal = document.getElementById('knowledgeBaseExplorerModal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.loadKnowledgeBaseTree = async function() {
+            const container = document.getElementById('kbTreeContainer');
+            if (!container) return;
+            container.innerHTML = '<div style="color:#94a3b8; font-size:0.8rem;">⏳ Loading Knowledge Base...</div>';
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch(`/api/knowledge/list?parent_name=${encodeURIComponent(parentName)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to load document list');
+
+                container.innerHTML = '';
+                let firstDocPath = '';
+
+                (data.categories || []).forEach(cat => {
+                    const catDiv = document.createElement('div');
+                    catDiv.style.marginBottom = '12px';
+
+                    const catTitle = document.createElement('div');
+                    catTitle.style.fontSize = '0.82rem';
+                    catTitle.style.fontWeight = '800';
+                    catTitle.style.color = '#fff';
+                    catTitle.style.marginBottom = '6px';
+                    catTitle.style.display = 'flex';
+                    catTitle.style.alignItems = 'center';
+                    catTitle.style.gap = '6px';
+                    catTitle.innerHTML = `<span>${cat.icon}</span> <span>${cat.category}</span>`;
+                    catDiv.appendChild(catTitle);
+
+                    const itemList = document.createElement('div');
+                    itemList.style.display = 'flex';
+                    itemList.style.flexDirection = 'column';
+                    itemList.style.gap = '4px';
+                    itemList.style.paddingLeft = '8px';
+
+                    (cat.items || []).forEach(item => {
+                        if (!firstDocPath) firstDocPath = item.rel_path;
+                        const itemBtn = document.createElement('button');
+                        itemBtn.style.textAlign = 'left';
+                        itemBtn.style.background = 'rgba(255,255,255,0.03)';
+                        itemBtn.style.border = '1px solid rgba(255,255,255,0.08)';
+                        itemBtn.style.color = '#cbd5e1';
+                        itemBtn.style.fontSize = '0.78rem';
+                        itemBtn.style.fontWeight = '600';
+                        itemBtn.style.padding = '6px 10px';
+                        itemBtn.style.borderRadius = '6px';
+                        itemBtn.style.cursor = 'pointer';
+                        itemBtn.style.transition = 'all 0.2s';
+                        itemBtn.innerText = `📄 ${item.title}`;
+                        itemBtn.onclick = () => loadKnowledgeDocument(item.rel_path, item.title, cat.category);
+                        itemList.appendChild(itemBtn);
+                    });
+
+                    catDiv.appendChild(itemList);
+                    container.appendChild(catDiv);
+                });
+
+                if (firstDocPath) {
+                    loadKnowledgeDocument(firstDocPath, 'Company Overview & Portal Guide', 'Knowledge Base');
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="color:#f43f5e; font-size:0.8rem;">❌ Error: ${err.message}</div>`;
+            }
+        };
+
+        let CURRENT_KB_DOC_PATH = '';
+        let CURRENT_KB_DOC_TITLE = '';
+        let CURRENT_KB_DOC_CATEGORY = '';
+        let CURRENT_KB_DOC_RAW = '';
+
+        window.enableKbDocEditor = function() {
+            if (!CURRENT_KB_DOC_PATH) {
+                alert('Please select an article from the sidebar to edit.');
+                return;
+            }
+            const viewer = document.getElementById('kbDocViewerContent');
+            const editor = document.getElementById('kbDocEditorContent');
+            const textarea = document.getElementById('kbDocEditorTextarea');
+            if (viewer && editor && textarea) {
+                textarea.value = CURRENT_KB_DOC_RAW;
+                viewer.style.display = 'none';
+                editor.style.display = 'flex';
+            }
+        };
+
+        window.disableKbDocEditor = function() {
+            const viewer = document.getElementById('kbDocViewerContent');
+            const editor = document.getElementById('kbDocEditorContent');
+            if (viewer && editor) {
+                editor.style.display = 'none';
+                viewer.style.display = 'block';
+            }
+        };
+
+        window.saveKbArticleChanges = async function() {
+            if (!CURRENT_KB_DOC_PATH) return;
+            const textarea = document.getElementById('kbDocEditorTextarea');
+            if (!textarea) return;
+            const newContent = textarea.value;
+
+            try {
+                const res = await fetch('/api/knowledge/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_KB_DOC_PATH, content: newContent })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to save changes');
+                
+                CURRENT_KB_DOC_RAW = newContent;
+                const viewer = document.getElementById('kbDocViewerContent');
+                if (viewer) {
+                    viewer.innerHTML = renderAiMarkdown(newContent);
+                }
+                disableKbDocEditor();
+                alert('✨ Article saved successfully!');
+            } catch (err) {
+                alert('❌ Error saving article: ' + err.message);
+            }
+        };
+
+        window.confirmDeleteKbArticle = async function() {
+            if (!CURRENT_KB_DOC_PATH) {
+                alert('Please select an article from the sidebar to delete.');
+                return;
+            }
+            if (!confirm(`Are you sure you want to delete "${CURRENT_KB_DOC_TITLE}"?`)) return;
+
+            try {
+                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_KB_DOC_PATH)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete article');
+                
+                alert('🗑️ Article deleted successfully!');
+                CURRENT_KB_DOC_PATH = '';
+                CURRENT_KB_DOC_RAW = '';
+                document.getElementById('kbDocTitle').innerText = 'Select a Document';
+                document.getElementById('kbDocViewerContent').innerHTML = 'Please select a document from the left sidebar.';
+                disableKbDocEditor();
+                await loadKnowledgeBaseTree();
+            } catch (err) {
+                alert('❌ Error deleting article: ' + err.message);
+            }
+        };
+
+        window.openCreateKbArticleModal = function() {
+            let modal = document.getElementById('createKbArticleModal');
+            if (!modal) return;
+            if (modal.parentNode !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            const catSelect = document.getElementById('createKbCategory');
+            if (catSelect) {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const isVrt = !parentName || parentName.toLowerCase().includes('vrt');
+                
+                catSelect.innerHTML = isVrt ? `
+                    <option value="vrt_services" style="background: #0f172a;">🏢 VRT Services Knowledge</option>
+                ` : `
+                    <option value="datalazo_llc" style="background: #0f172a;">💻 Datalazo LLC Knowledge</option>
+                `;
+            }
+
+            modal.style.display = 'flex';
+            modal.style.zIndex = '2147483647';
+        };
+
+        window.closeCreateKbArticleModal = function() {
+            let modal = document.getElementById('createKbArticleModal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.submitCreateKbArticle = async function() {
+            const catSelect = document.getElementById('createKbCategory');
+            const titleInput = document.getElementById('createKbTitle');
+            const contentInput = document.getElementById('createKbContent');
+
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            const catSlug = catSelect ? catSelect.value : 'vrt_services';
+            const title = titleInput ? titleInput.value.trim() : '';
+            const content = contentInput ? contentInput.value.trim() : '';
+
+            if (!title) {
+                alert('Please enter an article title.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/knowledge/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_slug: catSlug, title: title, content: content, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to create article');
+
+                alert('🎉 Article created successfully!');
+                closeCreateKbArticleModal();
+                if (titleInput) titleInput.value = '';
+                if (contentInput) contentInput.value = '';
+                await loadKnowledgeBaseTree();
+                if (data.path) {
+                    loadKnowledgeDocument(data.path, title, catSlug);
+                }
+            } catch (err) {
+                alert('❌ Error creating article: ' + err.message);
+            }
+        };
+
+        window.loadKnowledgeDocument = async function(relPath, title, category) {
+            CURRENT_KB_DOC_PATH = relPath;
+            CURRENT_KB_DOC_TITLE = title;
+            CURRENT_KB_DOC_CATEGORY = category;
+
+            const titleEl = document.getElementById('kbDocTitle');
+            const badgeEl = document.getElementById('kbDocBadge');
+            const contentEl = document.getElementById('kbDocViewerContent');
+
+            if (titleEl) titleEl.innerText = title;
+            if (badgeEl) badgeEl.innerText = category;
+            if (contentEl) contentEl.innerHTML = '<div style="color:#94a3b8;">⏳ Loading document content...</div>';
+            disableKbDocEditor();
+
+            try {
+                const res = await fetch(`/api/knowledge/doc?path=${encodeURIComponent(relPath)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to load document');
+
+                CURRENT_KB_DOC_RAW = data.content || '';
+                if (contentEl) {
+                    contentEl.innerHTML = renderAiMarkdown(data.content);
+                }
+            } catch (err) {
+                if (contentEl) {
+                    contentEl.innerHTML = `<div style="color:#f43f5e;">❌ Failed to load document: ${err.message}</div>`;
+                }
+            }
+        };
+
+        window.submitKbModalChatMessage = async function() {
+            const input = document.getElementById('kbModalInput');
+            if (!input) return;
+            const msg = input.value.trim();
+            if (!msg) return;
+            input.value = '';
+
+            const chatList = document.getElementById('kbModalChatMessageList');
+            
+            const userDiv = document.createElement('div');
+            userDiv.style.alignSelf = 'flex-end';
+            userDiv.style.maxWidth = '88%';
+            userDiv.style.background = 'linear-gradient(135deg, #7f00ff, #a855f7)';
+            userDiv.style.color = '#fff';
+            userDiv.style.borderRadius = '12px';
+            userDiv.style.padding = '8px 12px';
+            userDiv.style.fontSize = '0.8rem';
+            userDiv.style.fontWeight = '600';
+            userDiv.textContent = msg;
+            chatList.appendChild(userDiv);
+
+            const aiDiv = document.createElement('div');
+            aiDiv.style.alignSelf = 'flex-start';
+            aiDiv.style.maxWidth = '90%';
+            aiDiv.style.background = 'rgba(30, 41, 59, 0.7)';
+            aiDiv.style.border = '1px solid rgba(0, 242, 254, 0.3)';
+            aiDiv.style.borderRadius = '12px';
+            aiDiv.style.padding = '10px 12px';
+            aiDiv.style.fontSize = '0.8rem';
+            aiDiv.style.color = '#cbd5e1';
+            aiDiv.innerHTML = '⏳ <em>Consulting Knowledge Base...</em>';
+            chatList.appendChild(aiDiv);
+            chatList.scrollTop = chatList.scrollHeight;
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to process response');
+                
+                aiDiv.innerHTML = renderAiMarkdown(data.reply);
+            } catch (err) {
+                aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
+            }
+            chatList.scrollTop = chatList.scrollHeight;
+        };
+
+        window.handleKbModalInputKeyDown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitKbModalChatMessage();
+            }
+        };
+
+        window.toggleAiChatDrawer = function() {
+            const drawer = document.getElementById('aiChatDrawer');
+            if (!drawer) return;
+            if (drawer.parentNode !== document.body) {
+                document.body.appendChild(drawer);
+            }
+            const currDisplay = window.getComputedStyle(drawer).display;
+            if (currDisplay === 'none') {
+                drawer.style.display = 'flex';
+                drawer.style.zIndex = '2147483647';
+                setTimeout(() => {
+                    const input = document.getElementById('aiChatInput');
+                    if (input) input.focus();
+                }, 50);
+            } else {
+                drawer.style.display = 'none';
+            }
+        };
+
+        window.renderAiMarkdown = function(text) {
+            if (!text) return '';
+            let html = String(text)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/### (.*?)\n/g, '<h5 style="color:#00f2fe; margin:8px 0 4px 0; font-size:0.9rem;">$1</h5>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.*?)`/g, '<code style="background:rgba(0,242,254,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:0.8rem;">$1</code>')
+                .replace(/^- (.*?)$/gm, '<li style="margin-left:14px; margin-bottom:2px;">$1</li>')
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+            return html;
+        };
+
+        window.submitAiChatMessage = async function() {
+            const input = document.getElementById('aiChatInput');
+            if (!input) return;
+            const msg = input.value.trim();
+            if (!msg) return;
+            input.value = '';
+
+            const chatList = document.getElementById('aiChatMessageList');
+            
+            // Add User Message Bubble
+            const userDiv = document.createElement('div');
+            userDiv.style.alignSelf = 'flex-end';
+            userDiv.style.maxWidth = '85%';
+            userDiv.style.background = 'linear-gradient(135deg, #7f00ff, #a855f7)';
+            userDiv.style.color = '#fff';
+            userDiv.style.borderRadius = '14px';
+            userDiv.style.padding = '10px 14px';
+            userDiv.style.fontSize = '0.84rem';
+            userDiv.style.fontWeight = '600';
+            userDiv.textContent = msg;
+            chatList.appendChild(userDiv);
+
+            // Add Loading AI Bubble
+            const aiDiv = document.createElement('div');
+            aiDiv.style.alignSelf = 'flex-start';
+            aiDiv.style.maxWidth = '90%';
+            aiDiv.style.background = 'rgba(30, 41, 59, 0.7)';
+            aiDiv.style.border = '1px solid rgba(0, 242, 254, 0.3)';
+            aiDiv.style.borderRadius = '14px';
+            aiDiv.style.padding = '12px 14px';
+            aiDiv.style.fontSize = '0.84rem';
+            aiDiv.style.color = '#cbd5e1';
+            aiDiv.innerHTML = '⏳ <em>Consulting AI Knowledge Base...</em>';
+            chatList.appendChild(aiDiv);
+            chatList.scrollTop = chatList.scrollHeight;
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to process response');
+                
+                aiDiv.innerHTML = renderAiMarkdown(data.reply);
+            } catch (err) {
+                aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
+            }
+            chatList.scrollTop = chatList.scrollHeight;
+        };
+
+        window.sendAiQuickChip = function(text) {
+            const input = document.getElementById('aiChatInput');
+            if (input) {
+                input.value = text;
+                submitAiChatMessage();
+            }
+        };
+
+        // ── Dedicated Knowledge Base Page Script Handlers ──
+        let CURRENT_PAGE_KB_PATH = "";
+
+        window.loadPageKbDocs = async function() {
+            const listEl = document.getElementById('pageKbFileList');
+            if (!listEl) return;
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch(`/api/knowledge/list?parent_name=${encodeURIComponent(parentName)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to fetch documentation list');
+                
+                const docs = data.docs || [];
+                const countEl = document.getElementById('pageKbDocCount');
+                if (countEl) countEl.innerText = `${docs.length} files`;
+
+                if (docs.length === 0) {
+                    listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No documentation files found.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = docs.map(d => `
+                    <div onclick="selectPageKbDoc('${d.path.replace(/'/g, "\\'")}', '${d.title.replace(/'/g, "\\'")}')" style="padding: 10px 14px; background: ${CURRENT_PAGE_KB_PATH === d.path ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${CURRENT_PAGE_KB_PATH === d.path ? '#38bdf8' : 'rgba(255,255,255,0.08)'}; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="overflow: hidden;">
+                            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${d.title}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">${d.tenant_slug}</div>
+                        </div>
+                        <span style="font-size: 0.8rem;">📄</span>
+                    </div>
+                `).join('');
+
+                if (!CURRENT_PAGE_KB_PATH && docs.length > 0) {
+                    selectPageKbDoc(docs[0].path, docs[0].title);
+                }
+            } catch (err) {
+                listEl.innerHTML = `<div style="padding: 16px; color: #f87171; font-size: 0.82rem;">Failed to load documentation: ${err.message}</div>`;
+            }
+        };
+
+        window.selectPageKbDoc = async function(path, title) {
+            CURRENT_PAGE_KB_PATH = path;
+            document.getElementById('pageKbCurrentTitle').innerText = title || path.split('/').pop();
+            document.getElementById('pageKbCurrentPath').innerText = path;
+            
+            const editor = document.getElementById('pageKbContentEditor');
+            const saveBtn = document.getElementById('pageKbSaveBtn');
+            const deleteBtn = document.getElementById('pageKbDeleteBtn');
+            
+            editor.value = "Loading article content...";
+            if (saveBtn) saveBtn.style.display = 'inline-block';
+            if (deleteBtn) deleteBtn.style.display = 'inline-block';
+
+            try {
+                const res = await fetch(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to load article content');
+                editor.value = data.content;
+            } catch (err) {
+                editor.value = `Error loading document: ${err.message}`;
+            }
+            loadPageKbDocs();
+        };
+
+        window.savePageKbDoc = async function() {
+            if (!CURRENT_PAGE_KB_PATH) return alert('No article selected to save.');
+            const content = document.getElementById('pageKbContentEditor').value;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch('/api/knowledge/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_PAGE_KB_PATH, content: content, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to save document');
+                alert('✓ Knowledge base article saved successfully!');
+            } catch (err) {
+                alert('❌ Error saving article: ' + err.message);
+            }
+        };
+
+        window.deletePageKbDoc = async function() {
+            if (!CURRENT_PAGE_KB_PATH) return;
+            if (!confirm(`Are you sure you want to delete article '${CURRENT_PAGE_KB_PATH}'?`)) return;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_PAGE_KB_PATH)}&parent_name=${encodeURIComponent(parentName)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+                alert('✓ Article deleted successfully.');
+                CURRENT_PAGE_KB_PATH = "";
+                document.getElementById('pageKbContentEditor').value = "";
+                document.getElementById('pageKbCurrentTitle').innerText = "Select an article to view";
+                document.getElementById('pageKbCurrentPath').innerText = "knowledge_base/";
+                document.getElementById('pageKbSaveBtn').style.display = 'none';
+                document.getElementById('pageKbDeleteBtn').style.display = 'none';
+                loadPageKbDocs();
+            } catch (err) {
+                alert('❌ Error deleting article: ' + err.message);
+            }
+        };
+
+        window.togglePageKbCreateForm = function() {
+            const form = document.getElementById('pageKbCreateForm');
+            if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+        };
+
+        window.saveNewPageKbDoc = async function(e) {
+            e.preventDefault();
+            const filename = document.getElementById('pageKbCreateFilename').value.trim();
+            const content = document.getElementById('pageKbCreateContent').value;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch('/api/knowledge/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename, content: content, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to create article');
+                alert('✓ Article created successfully!');
+                togglePageKbCreateForm();
+                document.getElementById('pageKbCreateFilename').value = "";
+                document.getElementById('pageKbCreateContent').value = "";
+                selectPageKbDoc(data.path, filename);
+            } catch (err) {
+                alert('❌ Error creating article: ' + err.message);
+            }
+        };
+
+        window.sendPageKbAiQuery = async function() {
+            const input = document.getElementById('pageKbAiQueryInput');
+            const chatBox = document.getElementById('pageKbAiChatBox');
+            if (!input || !chatBox) return;
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const userDiv = document.createElement('div');
+            userDiv.style.background = 'rgba(56, 189, 248, 0.15)';
+            userDiv.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+            userDiv.style.borderRadius = '10px';
+            userDiv.style.padding = '8px 12px';
+            userDiv.style.color = '#fff';
+            userDiv.style.alignSelf = 'flex-end';
+            userDiv.style.maxWidth = '85%';
+            userDiv.innerText = msg;
+            chatBox.appendChild(userDiv);
+
+            input.value = "";
+
+            const aiDiv = document.createElement('div');
+            aiDiv.style.background = 'rgba(255,255,255,0.04)';
+            aiDiv.style.border = '1px solid rgba(255,255,255,0.08)';
+            aiDiv.style.borderRadius = '10px';
+            aiDiv.style.padding = '10px 12px';
+            aiDiv.style.color = '#cbd5e1';
+            aiDiv.style.lineHeight = '1.5';
+            aiDiv.innerHTML = '⏳ <em>Searching knowledge base...</em>';
+            chatBox.appendChild(aiDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to process AI query');
+                aiDiv.innerHTML = renderAiMarkdown(data.reply);
+            } catch (err) {
+                aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        window.handlePageKbFileUpload = async function(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            const file = files[0];
+
+            const formData = new FormData();
+            formData.append('file', file);
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            formData.append('parent_name', parentName);
+
+            const uploadBtn = e.target.nextElementSibling;
+            const originalText = uploadBtn ? uploadBtn.innerText : '📄 Upload PDF / Word';
+            if (uploadBtn) uploadBtn.innerText = '⏳ Extracting...';
+
+            try {
+                const res = await fetch('/api/knowledge/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+                alert(`✓ ${data.message}`);
+                await loadPageKbDocs();
+                selectPageKbDoc(data.path, data.title);
+            } catch (err) {
+                alert('❌ Error uploading document: ' + err.message);
+            } finally {
+                if (uploadBtn) uploadBtn.innerText = originalText;
+                e.target.value = '';
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.getElementById('pageKbFileList')) {
+                loadPageKbDocs();
+            }
+        });
+    
