@@ -1089,6 +1089,13 @@
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Notes & Comments</label>
                         <textarea id="customerPageFormNotes" rows="3" placeholder="Additional customer details..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; resize: vertical;"></textarea>
                     </div>
+                    <div id="customerPageFormPresetScheduleContainer" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                        <input type="checkbox" id="customerPageFormPresetSchedule" checked style="width: 18px; height: 18px; accent-color: #e100ff; cursor: pointer;">
+                        <div>
+                            <label for="customerPageFormPresetSchedule" style="font-size: 0.84rem; font-weight: 700; color: #f1f5f9; cursor: pointer;">Auto-Generate Preset Compliance Schedule</label>
+                            <div style="font-size: 0.73rem; color: #94a3b8;">Automatically create standard compliance calendar events & billing tasks upon saving.</div>
+                        </div>
+                    </div>
                     <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 12px;">
                         <button type="button" onclick="toggleCustomerPageForm()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); color: #fff; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer;">Cancel</button>
                         <button type="submit" id="customerPageFormSubmitBtn" style="padding: 10px 28px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225,0,255,0.35);">Save Customer</button>
@@ -2116,6 +2123,13 @@
                 <div style="grid-column: 1 / -1;">
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Notes & Comments</label>
                     <textarea id="customerFormNotes" rows="2" placeholder="Additional customer details or notes..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff; resize: vertical;"></textarea>
+                </div>
+                <div id="customerFormPresetScheduleContainer" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                    <input type="checkbox" id="customerFormPresetSchedule" checked style="width: 18px; height: 18px; accent-color: #e100ff; cursor: pointer;">
+                    <div>
+                        <label for="customerFormPresetSchedule" style="font-size: 0.82rem; font-weight: 700; color: #f1f5f9; cursor: pointer;">Auto-Generate Preset Compliance Schedule</label>
+                        <div style="font-size: 0.72rem; color: #94a3b8;">Automatically create standard compliance calendar events & billing tasks upon saving.</div>
+                    </div>
                 </div>
                 <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px;">
                     <button type="button" onclick="toggleCustomerForm()" style="padding: 8px 16px; background: rgba(255,255,255,0.06); color: #fff; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer;">Cancel</button>
@@ -4659,6 +4673,10 @@
                 setVal('customerFormEmail', '');
                 setVal('customerFormWebsite', '');
                 setVal('customerFormNotes', '');
+                const schedCb = document.getElementById('customerFormPresetSchedule');
+                if (schedCb) schedCb.checked = true;
+                const schedCont = document.getElementById('customerFormPresetScheduleContainer');
+                if (schedCont) schedCont.style.display = 'flex';
                 setLegalNameReadOnly('customerForm', false);
                 const subBtn = document.getElementById('customerFormSubmitBtn');
                 if (subBtn) subBtn.textContent = 'Save Customer';
@@ -4687,6 +4705,10 @@
                 setVal('customerPageFormEmail', '');
                 setVal('customerPageFormWebsite', '');
                 setVal('customerPageFormNotes', '');
+                const schedCb = document.getElementById('customerPageFormPresetSchedule');
+                if (schedCb) schedCb.checked = true;
+                const schedCont = document.getElementById('customerPageFormPresetScheduleContainer');
+                if (schedCont) schedCont.style.display = 'flex';
                 setLegalNameReadOnly('customerPageForm', false);
                 const subBtn = document.getElementById('customerPageFormSubmitBtn');
                 if (subBtn) subBtn.textContent = 'Save Customer';
@@ -4717,6 +4739,8 @@
                 setVal('Email', rec.email || '');
                 setVal('Website', rec.website || '');
                 setVal('Notes', rec.notes || '');
+                const schedCont = document.getElementById(`${prefix}PresetScheduleContainer`);
+                if (schedCont) schedCont.style.display = 'none';
                 setLegalNameReadOnly(prefix, true);
                 const subBtn = document.getElementById(`${prefix}SubmitBtn`);
                 if (subBtn) subBtn.textContent = 'Update Customer';
@@ -4732,6 +4756,7 @@
             const prefix = isPage ? 'customerPageForm' : 'customerForm';
             const getVal = (idKey) => (document.getElementById(`${prefix}${idKey}`)?.value || '').trim();
             const id = document.getElementById(`${prefix}Id`)?.value || '';
+            const presetCb = document.getElementById(`${prefix}PresetSchedule`);
             const payload = {
                 custumer_number: getVal('Number'),
                 customer_type: getVal('Type') || 'Business',
@@ -4744,7 +4769,8 @@
                 email: getVal('Email'),
                 website: getVal('Website'),
                 notes: getVal('Notes'),
-                parent_name: CURRENT_PARENT_NAME
+                parent_name: CURRENT_PARENT_NAME,
+                create_preset_schedule: presetCb ? presetCb.checked : true
             };
 
             try {

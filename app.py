@@ -3296,6 +3296,8 @@ async def create_customer(request: Request):
     website = (data.get("website") or "").strip() or None
     notes = (data.get("notes") or "").strip() or None
     parent_name = (data.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
+    create_preset_schedule_raw = data.get("create_preset_schedule")
+    create_preset_schedule = True if create_preset_schedule_raw is None else bool(create_preset_schedule_raw)
 
     if not custumer_number:
         raise HTTPException(status_code=400, detail="Customer Number is required")
@@ -3323,12 +3325,15 @@ async def create_customer(request: Request):
             except Exception as map_err:
                 print(f"Warning: Auto parent-client mapping failed for customer '{legal_name}': {map_err}")
 
-            # Auto-generate preset schedule for new customer
-            try:
-                preset_count = generate_preset_compliance_events_for_customer(cur, new_record["id"], customer_type, assigned_user_id)
-                print(f"Auto-generated {preset_count} preset compliance schedule events for new customer #{new_record['id']} ({legal_name})")
-            except Exception as sched_err:
-                print(f"Warning: Auto preset schedule generation failed for customer '{legal_name}': {sched_err}")
+            # Auto-generate preset schedule for new customer (if requested)
+            if create_preset_schedule:
+                try:
+                    preset_count = generate_preset_compliance_events_for_customer(cur, new_record["id"], customer_type, assigned_user_id)
+                    print(f"Auto-generated {preset_count} preset compliance schedule events for new customer #{new_record['id']} ({legal_name})")
+                except Exception as sched_err:
+                    print(f"Warning: Auto preset schedule generation failed for customer '{legal_name}': {sched_err}")
+            else:
+                print(f"Skipped auto preset schedule generation for new customer #{new_record['id']} ({legal_name}) per request.")
 
             conn.commit()
 
