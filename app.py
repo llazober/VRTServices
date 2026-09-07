@@ -993,6 +993,100 @@ def init_compliance_tables():
         if conn:
             conn.close()
 
+def init_knowledge_articles_table():
+    import rag_engine
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge_articles (
+                    id          SERIAL PRIMARY KEY,
+                    tenant_slug VARCHAR(100) NOT NULL,
+                    rel_path    VARCHAR(255) NOT NULL UNIQUE,
+                    filename    VARCHAR(255) NOT NULL,
+                    title       VARCHAR(255) NOT NULL,
+                    content     TEXT NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+
+            # 1. Seed database from disk if seed files exist on disk but not in DB
+            kb_base = rag_engine.KB_DIR
+            if os.path.exists(kb_base):
+                for slug in os.listdir(kb_base):
+                    slug_dir = os.path.join(kb_base, slug)
+                    if os.path.isdir(slug_dir):
+                        for fname in os.listdir(slug_dir):
+                            if fname.endswith(".md") or fname.endswith(".txt"):
+                                rel_p = f"{slug}/{fname}"
+                                fpath = os.path.join(slug_dir, fname)
+                                try:
+                                    with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                                        fcontent = f.read()
+                                    title = fname.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+                                    cur.execute("""
+                                        INSERT INTO knowledge_articles (tenant_slug, rel_path, filename, title, content)
+                                        VALUES (%s, %s, %s, %s, %s)
+                                        ON CONFLICT (rel_path) DO NOTHING;
+                                    """, (slug, rel_p, fname, title, fcontent))
+                                except Exception as e_seed:
+                                    print(f"[KB SEED ERROR] {rel_p}: {e_seed}")
+                conn.commit()
+
+            # 2. Restore DB articles to disk (so articles created/edited by user survive container redeployment)
+            cur.execute("SELECT tenant_slug, rel_path, content FROM knowledge_articles;")
+            rows = cur.fetchall() or []
+            for row in rows:
+                r_path = row["rel_path"]
+                cnt = row["content"]
+                full_p = os.path.join(kb_base, r_path.replace("/", os.sep))
+                try:
+                    os.makedirs(os.path.dirname(full_p), exist_ok=True)
+                    with open(full_p, "w", encoding="utf-8") as f:
+                        f.write(cnt)
+                except Exception as e_restore:
+                    print(f"[KB RESTORE ERROR] {r_path}: {e_restore}")
+            print(f"Knowledge Base DB synced successfully ({len(rows)} articles active).")
+    except Exception as e:
+        print(f"Error initializing knowledge_articles table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def upsert_kb_doc_in_db(tenant_slug: str, rel_path: str, filename: str, title: str, content: str):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO knowledge_articles (tenant_slug, rel_path, filename, title, content, updated_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (rel_path) 
+                DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP;
+            """, (tenant_slug, rel_path, filename, title, content))
+            conn.commit()
+    except Exception as e:
+        print(f"[KB DB UPSERT ERROR] {rel_path}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def delete_kb_doc_from_db(rel_path: str, tenant_slug: str):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM knowledge_articles WHERE rel_path = %s AND tenant_slug = %s;", (rel_path, tenant_slug))
+            conn.commit()
+    except Exception as e:
+        print(f"[KB DB DELETE ERROR] {rel_path}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 try:
     init_customer_table()
     ensure_catchall_customer()
@@ -1004,6 +1098,7 @@ try:
     init_billing_tables()
     init_tax_team_table()
     init_compliance_tables()
+    init_knowledge_articles_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -6911,6 +7006,10 @@ async def save_knowledge_doc(request: Request):
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
     
+    filename = os.path.basename(full_path)
+    title = filename.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+    upsert_kb_doc_in_db(tenant_slug, rel_path, filename, title, content)
+    
     return {"success": True, "message": "Article saved successfully.", "path": rel_path}
 
 @app.post("/api/knowledge/create")
@@ -6942,6 +7041,7 @@ async def create_knowledge_doc(request: Request):
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
         
+    upsert_kb_doc_in_db(tenant_slug, rel_path, filename, title, content)
     return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
 
 @app.delete("/api/knowledge/delete")
@@ -6958,9 +7058,9 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
     full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
     if os.path.exists(full_path):
         os.remove(full_path)
-        return {"success": True, "message": "Article deleted successfully."}
-    else:
-        raise HTTPException(status_code=404, detail="File not found.")
+    
+    delete_kb_doc_from_db(path, tenant_slug)
+    return {"success": True, "message": "Article deleted successfully."}
 
 @app.post("/api/knowledge/upload")
 async def upload_knowledge_doc(
@@ -7021,6 +7121,8 @@ async def upload_knowledge_doc(
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(final_markdown)
+
+    upsert_kb_doc_in_db(tenant_slug, rel_path, md_filename, clean_title, final_markdown)
 
     return {
         "success": True,
