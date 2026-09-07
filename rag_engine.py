@@ -214,6 +214,22 @@ def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Option
         "progress_percent": overall_percent
     }
 
+def is_spanish_query(text: str) -> bool:
+    """Detect if query is in Spanish or explicitly requests Spanish language."""
+    if not text:
+        return False
+    t_lower = text.lower()
+    spanish_keywords = [
+        "hola", "buenos dias", "buenas tardes", "buenas noches", "español", "espanol",
+        "impuesto", "impuestos", "declaracion", "contabilidad", "cliente", "gracias",
+        "ayuda", "estado", "tramite", "como", "que", "donde", "cuando", "por que",
+        "favor", "respuesta", "informacion", "base de datos", "revisar", "spanish"
+    ]
+    if any(char in text for char in ['¿', '¡', 'ñ', 'á', 'é', 'í', 'ó', 'ú']):
+        return True
+    words = re.findall(r'\b\w+\b', t_lower)
+    return any(w in spanish_keywords for w in words)
+
 def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optional[Dict] = None, passages: List[Dict] = None, customer_ref_not_found: bool = False, searched_ref: str = None) -> str:
     """Synthesize final Chatbot response using Gemini, OpenAI, or Fallback Synthesizer."""
     gemini_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
@@ -222,7 +238,11 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
 
     company_name = "VRT Services" if get_tenant_slug(parent_name) == "vrt_services" else "Datalazo LLC"
     clean_query = (user_query or "").strip()
-    is_greeting = clean_query.lower() in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "help", "who are you"]
+    is_spanish = is_spanish_query(clean_query)
+    is_greeting = clean_query.lower() in [
+        "hi", "hello", "hey", "good morning", "good afternoon", "good evening", "help", "who are you",
+        "hola", "buenos dias", "buenas tardes", "buenas noches", "ayuda"
+    ]
 
     # Context Construction
     context_str = f"Target Company: {company_name}\n"
@@ -252,15 +272,25 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
     elif not status_info and not customer_ref_not_found:
         context_str += f"\n--- KNOWLEDGE BASE PASSAGES ---\nNo relevant knowledge base articles or documents were found in the database for the user query: \"{clean_query}\".\n"
 
+    lang_instruction = (
+        "CRITICAL LANGUAGE INSTRUCTION: The user query is in SPANISH (or requests Spanish). "
+        "You MUST provide your entire response in clear, fluent, professional Spanish. "
+        "If no information is found in the knowledge base, state explicitly in Spanish: "
+        f"'Lo siento, pero no tengo información sobre **{clean_query}** en nuestra Base de Conocimientos.'"
+        if is_spanish else
+        "LANGUAGE INSTRUCTION: Match the user's language. If the user asks in Spanish, respond in professional Spanish. "
+        "If no information is found in the knowledge base, state explicitly: "
+        f"'I am sorry, but I do not have information about **{clean_query}** in our Knowledge Base.'"
+    )
+
     system_prompt = (
         f"You are the official AI Knowledge Assistant for {company_name}. "
         "Your goal is to provide concise, friendly, accurate, and professional help to clients and visitors. "
         "Always use clean Markdown formatting (bolding, bullet points, checklists). "
         "STRICT GROUNDING REQUIREMENT: You MUST answer user questions using ONLY information found in the provided Knowledge Base Passages or Customer Task Status context. "
-        "If the user is asking an informational question and the provided context does NOT contain relevant information, or if no knowledge base articles were found for the topic, you MUST state clearly and explicitly: "
-        f"'I am sorry, but I do not have information about **{clean_query}** in our Knowledge Base.' "
         "Do NOT invent information, speculate, make assumptions, or provide details about unrelated topics. "
-        "If the user is sending a simple greeting (e.g. 'hello', 'hi'), greet them warmly and invite them to ask about documented company policies or check their customer status with their reference code. "
+        f"{lang_instruction} "
+        "If the user is sending a simple greeting (e.g. 'hello', 'hola'), greet them warmly and invite them to ask about documented company policies or check their customer status with their reference code. "
         "If answering a customer task status query, clearly specify the Bookkeeping Period (e.g. July 2026) and Tax Preparation Year (e.g. Tax Year 2025), along with their progress and pending actions. "
         "If a customer reference code was searched but NOT found in the database, explicitly state that the customer reference code does not exist in our records and ask them to verify their reference code (e.g., CUST-1001) or contact support. "
         "If giving general tax information based on knowledge base context, add a brief note that information is for guidance and formal advice is finalized upon review."
@@ -331,37 +361,71 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
     # 3. Fallback Formatter (Zero API key / offline mode)
     res_lines = []
     if status_info:
-        res_lines.append(f"### 📋 Task Progress Report — {status_info['legal_name']}")
-        res_lines.append(f"**Reference Number:** `{status_info['customer_number']}`\n")
-        
-        if not status_info.get("is_individual"):
-            res_lines.append(f"📊 **Bookkeeping Cycle ({status_info['bk_period_label']}):** `{status_info['bk_percent']}% Completed` ({status_info['bk_completed']}/4 steps)")
-            for item in status_info["bk_checklist"]:
-                icon = "✅" if item["is_completed"] else "⏳"
-                res_lines.append(f"- {icon} **{item['item_label']}** (`Bookkeeping`)")
-            res_lines.append("")
+        if is_spanish:
+            res_lines.append(f"### 📋 Reporte de Estado de Tareas — {status_info['legal_name']}")
+            res_lines.append(f"**Número de Referencia:** `{status_info['customer_number']}`\n")
+            if not status_info.get("is_individual"):
+                res_lines.append(f"📊 **Ciclo de Contabilidad ({status_info['bk_period_label']}):** `{status_info['bk_percent']}% Completado` ({status_info['bk_completed']}/4 pasos)")
+                for item in status_info["bk_checklist"]:
+                    icon = "✅" if item["is_completed"] else "⏳"
+                    res_lines.append(f"- {icon} **{item['item_label']}** (`Contabilidad`)")
+                res_lines.append("")
 
-        res_lines.append(f"📑 **Tax Preparation ({status_info['tax_period_label']}):** `{status_info['tax_percent']}% Completed` ({status_info['tax_completed']}/8 steps)")
-        for item in status_info["tax_checklist"]:
-            icon = "✅" if item["is_completed"] else "⏳"
-            res_lines.append(f"- {icon} **{item['item_label']}** (`Tax Return`)")
+            res_lines.append(f"📑 **Preparación de Impuestos ({status_info['tax_period_label']}):** `{status_info['tax_percent']}% Completado` ({status_info['tax_completed']}/8 pasos)")
+            for item in status_info["tax_checklist"]:
+                icon = "✅" if item["is_completed"] else "⏳"
+                res_lines.append(f"- {icon} **{item['item_label']}** (`Declaración de Impuestos`)")
+            res_lines.append("\n*Para enviar archivos adicionales o realizar consultas, responda directamente a sus correos del portal.*")
+        else:
+            res_lines.append(f"### 📋 Task Progress Report — {status_info['legal_name']}")
+            res_lines.append(f"**Reference Number:** `{status_info['customer_number']}`\n")
             
-        res_lines.append("\n*To send additional files or inquire further, reply directly to your portal emails or upload via customer storage.*")
+            if not status_info.get("is_individual"):
+                res_lines.append(f"📊 **Bookkeeping Cycle ({status_info['bk_period_label']}):** `{status_info['bk_percent']}% Completed` ({status_info['bk_completed']}/4 steps)")
+                for item in status_info["bk_checklist"]:
+                    icon = "✅" if item["is_completed"] else "⏳"
+                    res_lines.append(f"- {icon} **{item['item_label']}** (`Bookkeeping`)")
+                res_lines.append("")
+
+            res_lines.append(f"📑 **Tax Preparation ({status_info['tax_period_label']}):** `{status_info['tax_percent']}% Completed` ({status_info['tax_completed']}/8 steps)")
+            for item in status_info["tax_checklist"]:
+                icon = "✅" if item["is_completed"] else "⏳"
+                res_lines.append(f"- {icon} **{item['item_label']}** (`Tax Return`)")
+                
+            res_lines.append("\n*To send additional files or inquire further, reply directly to your portal emails or upload via customer storage.*")
     elif customer_ref_not_found and searched_ref:
-        res_lines.append(f"⚠️ **Customer Reference Code Not Found**\n")
-        res_lines.append(f"We could not find any active customer record matching reference code **`{searched_ref}`** for **{company_name}**.\n")
-        res_lines.append("Please verify your reference number (e.g. `CUST-1001`) and try again, or contact our support team if you need further assistance.")
+        if is_spanish:
+            res_lines.append(f"⚠️ **Código de Referencia de Cliente No Encontrado**\n")
+            res_lines.append(f"No pudimos encontrar ningún registro de cliente activo que coincida con el código **`{searched_ref}`** para **{company_name}**.\n")
+            res_lines.append("Por favor verifique su número de referencia (ej. `CUST-1001`) e intente nuevamente, o contacte a soporte.")
+        else:
+            res_lines.append(f"⚠️ **Customer Reference Code Not Found**\n")
+            res_lines.append(f"We could not find any active customer record matching reference code **`{searched_ref}`** for **{company_name}**.\n")
+            res_lines.append("Please verify your reference number (e.g. `CUST-1001`) and try again, or contact our support team if you need further assistance.")
     elif passages:
-        res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
+        if is_spanish:
+            res_lines.append(f"### ℹ️ Respuesta de Conocimiento de {company_name}\n")
+        else:
+            res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
         passage_texts = [p["content"].strip() for p in passages]
         res_lines.append("\n\n---\n\n".join(passage_texts))
     elif is_greeting:
-        res_lines.append(f"Hello! Welcome to **{company_name}** Assistant.\n")
-        res_lines.append("How can I assist you today?")
-        res_lines.append("- Ask a tax or filing question (e.g. *IRS Form 8879 rules* or *business mileage deduction*).")
-        res_lines.append("- Consult your customer task progress by typing your reference code (e.g. `CUST-1001`).")
+        if is_spanish:
+            res_lines.append(f"¡Hola! Bienvenido al Asistente de **{company_name}**.\n")
+            res_lines.append("¿Cómo puedo ayudarte hoy?")
+            res_lines.append("- Haz una pregunta sobre servicios fiscales o políticas (ej. *reglas Formulario IRS 8879* o *deducciones*).")
+            res_lines.append("- Consulta el estado de tus tareas ingresando tu código de referencia (ej. `CUST-1001`).")
+        else:
+            res_lines.append(f"Hello! Welcome to **{company_name}** Assistant.\n")
+            res_lines.append("How can I assist you today?")
+            res_lines.append("- Ask a tax or filing question (e.g. *IRS Form 8879 rules* or *business mileage deduction*).")
+            res_lines.append("- Consult your customer task progress by typing your reference code (e.g. `CUST-1001`).")
     else:
-        res_lines.append(f"I am sorry, but I do not have information about **\"{clean_query}\"** in our Knowledge Base.\n")
-        res_lines.append("Please try asking about our documented company policies, tax services, or check your customer task progress by typing your reference code (e.g. `CUST-1001`).")
+        if is_spanish:
+            res_lines.append(f"Lo siento, pero no tengo información sobre **\"{clean_query}\"** en nuestra Base de Conocimientos.\n")
+            res_lines.append("Por favor intenta preguntar sobre nuestras políticas de empresa, servicios fiscales o consulta tu progreso usando tu código de referencia (ej. `CUST-1001`).")
+        else:
+            res_lines.append(f"I am sorry, but I do not have information about **\"{clean_query}\"** in our Knowledge Base.\n")
+            res_lines.append("Please try asking about our documented company policies, tax services, or check your customer task progress by typing your reference code (e.g. `CUST-1001`).")
 
     return "\n".join(res_lines)
