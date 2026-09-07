@@ -7077,48 +7077,62 @@ async def create_knowledge_doc(request: Request):
 
 @app.api_route("/api/knowledge/delete", methods=["DELETE", "POST", "GET"])
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
+    doc_id = None
     if not path:
         path = request.query_params.get("path", "")
-    if not path and request.method == "POST":
+    if request.method == "POST":
         try:
             body = await request.json()
-            path = body.get("path", "")
+            path = path or body.get("path", "")
+            doc_id = body.get("doc_id")  # prefer id-based deletion
         except Exception:
             pass
 
-    if not path:
-        raise HTTPException(status_code=400, detail="Invalid document path provided.")
+    if not path and not doc_id:
+        raise HTTPException(status_code=400, detail="Invalid document path or id provided.")
     
-    clean_rel_path = path.replace("\\", "/").strip("/")
-    raw_filename = os.path.basename(clean_rel_path)
+    clean_rel_path = (path or "").replace("\\", "/").strip("/")
+    raw_filename = os.path.basename(clean_rel_path) if clean_rel_path else ""
     base_name = raw_filename[:-3] if raw_filename.lower().endswith(".md") else (raw_filename[:-4] if raw_filename.lower().endswith(".txt") else raw_filename)
-    slugified_base = re.sub(r'[^a-zA-Z0-9_-]', '_', base_name.lower()).strip('_')
+    slugified_base = re.sub(r'[^a-zA-Z0-9_-]', '_', base_name.lower()).strip('_') if base_name else ""
 
     deleted_rows = 0
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("""
-                DELETE FROM document 
-                WHERE LOWER(rel_path) = LOWER(%s) 
-                   OR LOWER(filename) = LOWER(%s)
-                   OR LOWER(title) = LOWER(%s)
-                   OR id::text = %s
-                   OR rel_path ILIKE %s;
-            """, (clean_rel_path, raw_filename, base_name, path, f"%{slugified_base}%"))
-            deleted_rows = cur.rowcount
+            if doc_id:
+                # Preferred: delete by primary key
+                cur.execute("DELETE FROM document WHERE id = %s;", (int(doc_id),))
+                deleted_rows = cur.rowcount
+                print(f"[KB DELETE BY ID] id={doc_id} → {deleted_rows} rows deleted")
+            else:
+                # Fallback: fuzzy match by path / filename / title
+                cur.execute("""
+                    DELETE FROM document 
+                    WHERE LOWER(rel_path) = LOWER(%s) 
+                       OR LOWER(filename)  = LOWER(%s)
+                       OR LOWER(title)     = LOWER(%s)
+                       OR rel_path ILIKE %s;
+                """, (clean_rel_path, raw_filename, base_name, f"%{slugified_base}%"))
+                deleted_rows = cur.rowcount
+                print(f"[KB DELETE BY PATH] path={clean_rel_path} → {deleted_rows} rows deleted")
             conn.commit()
-            print(f"[KB DELETE DB SUCCESS] Deleted {deleted_rows} rows from document table.")
     except Exception as e:
-        print(f"[KB DELETE ERROR] {clean_rel_path}: {e}")
+        if conn:
+            conn.rollback()
+        print(f"[KB DELETE ERROR] path={clean_rel_path} id={doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error while deleting: {str(e)}")
     finally:
         if conn:
             conn.close()
 
+    if deleted_rows == 0:
+        raise HTTPException(status_code=404, detail=f"Document not found or already deleted.")
+
     return {
         "success": True, 
-        "message": f"Article '{base_name}' deleted successfully.",
+        "message": f"Article '{base_name or doc_id}' deleted successfully.",
         "db_rows_deleted": deleted_rows
     }
 
