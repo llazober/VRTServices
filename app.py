@@ -7098,24 +7098,39 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
         raise HTTPException(status_code=400, detail="Invalid file path provided.")
     
     clean_rel_path = path.replace("\\", "/").strip("/")
-    filename = clean_rel_path.split("/")[-1]
+    raw_filename = os.path.basename(clean_rel_path)
     
+    base_name = raw_filename[:-3] if raw_filename.lower().endswith(".md") else (raw_filename[:-4] if raw_filename.lower().endswith(".txt") else raw_filename)
+    slugified_base = re.sub(r'[^a-zA-Z0-9_-]', '_', base_name.lower()).strip('_')
+    
+    target_patterns = {
+        raw_filename.lower(),
+        f"{raw_filename.lower()}.md",
+        f"{base_name.lower()}.md",
+        f"{slugified_base}.md",
+        f"{slugified_base}.txt"
+    }
+
     # 1. Case-insensitive physical file deletion across knowledge base directory
     kb_base = os.path.normpath(rag_engine.KB_DIR)
     deleted_files = 0
     if os.path.exists(kb_base):
         for root, _, files in os.walk(kb_base):
             for f in files:
-                if f.lower() == filename.lower() or f.lower() == (filename + ".md").lower():
+                f_low = f.lower()
+                f_base = f_low[:-3] if f_low.endswith(".md") else (f_low[:-4] if f_low.endswith(".txt") else f_low)
+                f_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', f_base).strip('_')
+                
+                if f_low in target_patterns or f_slug in target_patterns or f_slug == slugified_base:
                     target_file = os.path.join(root, f)
                     try:
                         os.remove(target_file)
                         deleted_files += 1
-                        print(f"[KB DELETE DISK] Removed file: {target_file}")
+                        print(f"[KB DELETE DISK SUCCESS] Removed file: {target_file}")
                     except Exception as e:
                         print(f"[KB DELETE DISK ERROR] {target_file}: {e}")
 
-    # 2. Case-insensitive database record deletion from knowledge_articles
+    # 2. Database record deletion from knowledge_articles
     deleted_db_rows = 0
     conn = None
     try:
@@ -7124,13 +7139,14 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
             cur.execute("""
                 DELETE FROM knowledge_articles 
                 WHERE LOWER(rel_path) = LOWER(%s) 
-                   OR LOWER(filename) = LOWER(%s) 
-                   OR rel_path ILIKE %s
-                   OR filename ILIKE %s;
-            """, (clean_rel_path, filename, f"%{filename}%", f"%{filename.split('.')[0]}%"))
+                   OR LOWER(filename) = LOWER(%s)
+                   OR LOWER(title) = LOWER(%s)
+                   OR LOWER(filename) LIKE LOWER(%s)
+                   OR rel_path ILIKE %s;
+            """, (clean_rel_path, raw_filename, base_name, f"%{slugified_base}%", f"%{slugified_base}%"))
             deleted_db_rows = cur.rowcount
             conn.commit()
-            print(f"[KB DELETE DB] Deleted {deleted_db_rows} rows from knowledge_articles for {filename}.")
+            print(f"[KB DELETE DB SUCCESS] Deleted {deleted_db_rows} rows from knowledge_articles for {raw_filename}.")
     except Exception as e:
         print(f"[KB DB DELETE ERROR] {clean_rel_path}: {e}")
     finally:
@@ -7139,7 +7155,7 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
 
     return {
         "success": True, 
-        "message": f"Article '{filename}' deleted successfully.",
+        "message": f"Article '{base_name}' deleted successfully.",
         "disk_deleted": deleted_files,
         "db_rows_deleted": deleted_db_rows
     }
