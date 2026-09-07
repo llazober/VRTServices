@@ -1121,90 +1121,52 @@
                         </tbody>
                     </table>
             {% elif active_tab == 'knowledge' %}
-            <!-- ── DEDICATED KNOWLEDGE BASE VIEW ─────────────────── -->
-            <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+            <!-- ── DEDICATED KNOWLEDGE BASE VIEW (DATALAZO STYLE) ─────────────────── -->
+            <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 28px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+                <!-- Top Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
                     <div>
-                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 6px;">
-                            📚 Knowledge Base <span style="color: #38bdf8;">& AI Assistant</span>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #fff; margin-bottom: 6px; letter-spacing: -0.5px;">
+                            Knowledge Base
                         </h2>
                         <p style="color: var(--text-muted); font-size: 0.95rem;">
-                            Browse markdown documentation articles, edit company policies, and ask the AI Assistant questions.
+                            Upload manuals, price lists, and documentation to train your AI agents.
                         </p>
                     </div>
-                    <div style="display: flex; gap: 12px; align-items: center;">
+                    <div>
                         <input type="file" id="pageKbUploadInput" accept=".pdf,.docx,.doc,.txt,.md" style="display: none;" onchange="handlePageKbFileUpload(event)">
-                        <button onclick="document.getElementById('pageKbUploadInput').click()" style="padding: 10px 18px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; border-radius: 12px; cursor: pointer; transition: all 0.2s ease;">
-                            📄 Upload PDF / Word
-                        </button>
-                        <button onclick="togglePageKbCreateForm()" style="padding: 10px 20px; background: linear-gradient(135deg, #00f2fe, #4facfe); color: #000; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 0 15px rgba(0, 242, 254, 0.35); transition: all 0.2s ease;">
-                            ➕ New Article
+                        <button onclick="document.getElementById('pageKbUploadInput').click()" style="padding: 12px 24px; background: #06b6d4; color: #000; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 0 20px rgba(6, 182, 212, 0.35); transition: all 0.2s ease;">
+                            + Upload Document
                         </button>
                     </div>
                 </div>
 
-                <!-- Create New Article Form (Hidden by default) -->
-                <form id="pageKbCreateForm" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 16px; padding: 20px; flex-direction: column; gap: 16px;" onsubmit="saveNewPageKbDoc(event)">
-                    <h4 style="color: #fff; font-size: 1rem; font-weight: 800; margin: 0;">➕ Create New Documentation Article</h4>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Article Filename (e.g. tax_filing_guide.md) *</label>
-                        <input type="text" id="pageKbCreateFilename" required placeholder="tax_filing_guide.md" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #fff; outline: none;">
+                <!-- Drag & Drop Upload Zone -->
+                <div id="pageKbDropZone" 
+                     onclick="document.getElementById('pageKbUploadInput').click()"
+                     ondragover="handlePageKbDragOver(event)" 
+                     ondragleave="handlePageKbDragLeave(event)" 
+                     ondrop="handlePageKbDrop(event)"
+                     style="border: 2px dashed rgba(255, 255, 255, 0.15); border-radius: 18px; padding: 48px 24px; text-align: center; background: rgba(255, 255, 255, 0.015); cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+                    <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.25); display: flex; align-items: center; justify-content: center; color: #06b6d4; font-size: 1.4rem;">
+                        ☁️
                     </div>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Article Content (Markdown) *</label>
-                        <textarea id="pageKbCreateContent" rows="8" required placeholder="# Article Title&#10;&#10;Write knowledge base content here using Markdown formatting..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.88rem; font-family: monospace; outline: none; resize: vertical; line-height: 1.5;"></textarea>
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #fff;">
+                        Drag & drop files here
                     </div>
-                    <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                        <button type="button" onclick="togglePageKbCreateForm()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); color: #fff; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer;">Cancel</button>
-                        <button type="submit" style="padding: 10px 28px; background: linear-gradient(135deg, #00f2fe, #4facfe); color: #000; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer;">Create Article</button>
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">
+                        PDF, TXT, or DOCX (Max 10MB per file)
                     </div>
-                </form>
+                </div>
 
-                <!-- Page Layout Grid: Left File Explorer, Center Editor/Viewer, Right AI Assistant -->
-                <div style="display: grid; grid-template-columns: 280px 1fr 340px; gap: 20px; min-height: 600px;">
-                    <!-- Left Column: Document File List -->
-                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-                        <h4 style="color: #fff; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; margin: 0;">
-                            <span>📁 Documentation</span>
-                            <span id="pageKbDocCount" style="font-size: 0.75rem; background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 8px; border-radius: 10px;">0 files</span>
-                        </h4>
-                        <div id="pageKbFileList" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 520px;">
-                            <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">Loading documentation files...</div>
-                        </div>
-                    </div>
-
-                    <!-- Center Column: Editor & Viewer -->
-                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 16px;">
-                            <div>
-                                <h3 id="pageKbCurrentTitle" style="color: #fff; font-size: 1.1rem; font-weight: 800; margin: 0;">Select an article to view</h3>
-                                <span id="pageKbCurrentPath" style="font-size: 0.78rem; color: var(--text-muted);">knowledge_base/</span>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button id="pageKbSaveBtn" onclick="savePageKbDoc()" style="padding: 8px 18px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">💾 Save Changes</button>
-                                <button id="pageKbDeleteBtn" onclick="deletePageKbDoc()" style="padding: 8px 14px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: #f87171; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">🗑️ Delete</button>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
-                            <textarea id="pageKbContentEditor" style="width: 100%; min-height: 480px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; color: #f1f5f9; font-family: monospace; font-size: 0.88rem; line-height: 1.6; outline: none; resize: vertical;" placeholder="Document content will appear here..."></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Interactive AI Assistant -->
-                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-                        <h4 style="color: #fff; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin: 0;">
-                            <span>✨ Ask AI Assistant</span>
-                        </h4>
-                        <div id="pageKbAiChatBox" style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; overflow-y: auto; max-height: 420px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 12px;">
-                            <div style="color: var(--text-muted); font-size: 0.82rem; line-height: 1.5; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px;">
-                                💡 Ask any question about company policies, tax filing procedures, Form 1040/1120 guidelines, or client reference codes.
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="pageKbAiQueryInput" placeholder="Ask AI a question..." style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 12px; color: #fff; font-size: 0.85rem; outline: none;" onkeypress="if(event.key==='Enter') sendPageKbAiQuery()">
-                            <button onclick="sendPageKbAiQuery()" style="padding: 8px 14px; background: #38bdf8; color: #000; border: none; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">Ask</button>
-                        </div>
+                <!-- Managed Documents Section -->
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">
+                        Managed Documents
+                    </h3>
+                    
+                    <div id="pageKbFileList" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">Loading documentation files...</div>
                     </div>
                 </div>
             </div>
@@ -7109,195 +7071,101 @@
                 if (!res.ok) throw new Error(data.detail || 'Failed to fetch documentation list');
                 
                 const docs = data.docs || [];
-                const countEl = document.getElementById('pageKbDocCount');
-                if (countEl) countEl.innerText = `${docs.length} files`;
 
                 if (docs.length === 0) {
-                    listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No documentation files found.</div>';
+                    listEl.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">No documents uploaded yet. Drag & drop files above or click "+ Upload Document" to get started.</div>';
                     return;
                 }
 
-                listEl.innerHTML = docs.map(d => `
-                    <div onclick="selectPageKbDoc('${d.path.replace(/'/g, "\\'")}', '${d.title.replace(/'/g, "\\'")}')" style="padding: 10px 14px; background: ${CURRENT_PAGE_KB_PATH === d.path ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${CURRENT_PAGE_KB_PATH === d.path ? '#38bdf8' : 'rgba(255,255,255,0.08)'}; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between;">
-                        <div style="overflow: hidden;">
-                            <div style="font-weight: 700; color: #fff; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${d.title}</div>
-                            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">${d.tenant_slug}</div>
-                        </div>
-                        <span style="font-size: 0.8rem;">📄</span>
-                    </div>
-                `).join('');
+                listEl.innerHTML = docs.map(d => {
+                    const ext = (d.filename || d.rel_path || '').split('.').pop().toUpperCase();
+                    const dateStr = d.updated_at ? new Date(d.updated_at).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US');
+                    const icon = ext === 'PDF' ? '📕' : (ext === 'DOCX' || ext === 'DOC' ? '📘' : '📄');
 
-                if (!CURRENT_PAGE_KB_PATH && docs.length > 0) {
-                    selectPageKbDoc(docs[0].path, docs[0].title);
-                }
+                    return `
+                        <div style="background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease;">
+                            <div style="display: flex; align-items: center; gap: 14px; overflow: hidden;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
+                                    ${icon}
+                                </div>
+                                <div style="overflow: hidden;">
+                                    <div style="font-family: 'Outfit', sans-serif; font-weight: 700; color: #fff; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">
+                                        ${d.filename || d.title}
+                                    </div>
+                                    <div style="font-size: 0.78rem; color: var(--text-muted);">
+                                        ${ext} • ${dateStr}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    READY
+                                </span>
+                                <button onclick="deleteKbDocumentById('${(d.rel_path || d.path || '').replace(/'/g, "\\'")}', '${(d.filename || d.title || '').replace(/'/g, "\\'")}')" title="Delete document" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.1rem; padding: 4px; transition: color 0.2s ease;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#94a3b8'">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             } catch (err) {
                 listEl.innerHTML = `<div style="padding: 16px; color: #f87171; font-size: 0.82rem;">Failed to load documentation: ${err.message}</div>`;
             }
         };
 
-        window.selectPageKbDoc = async function(path, title) {
-            CURRENT_PAGE_KB_PATH = path;
-            document.getElementById('pageKbCurrentTitle').innerText = title || path.split('/').pop();
-            document.getElementById('pageKbCurrentPath').innerText = path;
-            
-            const editor = document.getElementById('pageKbContentEditor');
-            const saveBtn = document.getElementById('pageKbSaveBtn');
-            const deleteBtn = document.getElementById('pageKbDeleteBtn');
-            
-            editor.value = "Loading article content...";
-            if (saveBtn) saveBtn.style.display = 'inline-block';
-            if (deleteBtn) deleteBtn.style.display = 'inline-block';
-
-            try {
-                const res = await fetch(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to load article content');
-                editor.value = data.content;
-            } catch (err) {
-                editor.value = `Error loading document: ${err.message}`;
-            }
-        };
-
-        window.savePageKbDoc = async function() {
-            if (!CURRENT_PAGE_KB_PATH) return alert('No article selected to save.');
-            const content = document.getElementById('pageKbContentEditor').value;
-            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
-            try {
-                const res = await fetch('/api/knowledge/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: CURRENT_PAGE_KB_PATH, content: content, parent_name: parentName })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to save document');
-                alert('✓ Knowledge base article saved successfully!');
-            } catch (err) {
-                alert('❌ Error saving article: ' + err.message);
-            }
-        };
-
-        window.deletePageKbDoc = async function() {
-            if (!CURRENT_PAGE_KB_PATH) {
-                alert('Please select an article to delete.');
-                return;
-            }
-            if (!confirm(`Are you sure you want to delete article '${CURRENT_PAGE_KB_PATH}'?`)) return;
-            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
-            try {
-                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_PAGE_KB_PATH)}&parent_name=${encodeURIComponent(parentName)}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: CURRENT_PAGE_KB_PATH, parent_name: parentName })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
-                alert('✓ Article deleted successfully.');
-                CURRENT_PAGE_KB_PATH = "";
-                const editor = document.getElementById('pageKbContentEditor');
-                if (editor) editor.value = "";
-                const titleEl = document.getElementById('pageKbCurrentTitle');
-                if (titleEl) titleEl.innerText = "Select an article to view";
-                const pathEl = document.getElementById('pageKbCurrentPath');
-                if (pathEl) pathEl.innerText = "knowledge_base/";
-                const saveBtn = document.getElementById('pageKbSaveBtn');
-                if (saveBtn) saveBtn.style.display = 'none';
-                const deleteBtn = document.getElementById('pageKbDeleteBtn');
-                if (deleteBtn) deleteBtn.style.display = 'none';
-                await loadPageKbDocs();
-            } catch (err) {
-                alert('❌ Error deleting article: ' + err.message);
-            }
-        };
-
-        window.togglePageKbCreateForm = function() {
-            const form = document.getElementById('pageKbCreateForm');
-            if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-        };
-
-        window.saveNewPageKbDoc = async function(e) {
+        window.handlePageKbDragOver = function(e) {
             e.preventDefault();
-            const filename = document.getElementById('pageKbCreateFilename').value.trim();
-            const content = document.getElementById('pageKbCreateContent').value;
-            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
-            try {
-                const res = await fetch('/api/knowledge/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: filename, title: filename, content: content, parent_name: parentName })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to create article');
-                alert('✓ Article created successfully!');
-                togglePageKbCreateForm();
-                document.getElementById('pageKbCreateFilename').value = "";
-                document.getElementById('pageKbCreateContent').value = "";
-                if (typeof loadPageKbDocs === 'function') await loadPageKbDocs();
-                selectPageKbDoc(data.path, filename);
-            } catch (err) {
-                alert('❌ Error creating article: ' + err.message);
+            e.stopPropagation();
+            const zone = document.getElementById('pageKbDropZone');
+            if (zone) {
+                zone.style.borderColor = '#06b6d4';
+                zone.style.background = 'rgba(6, 182, 212, 0.08)';
             }
         };
 
-        window.sendPageKbAiQuery = async function() {
-            const input = document.getElementById('pageKbAiQueryInput');
-            const chatBox = document.getElementById('pageKbAiChatBox');
-            if (!input || !chatBox) return;
-            const msg = input.value.trim();
-            if (!msg) return;
-
-            const userDiv = document.createElement('div');
-            userDiv.style.background = 'rgba(56, 189, 248, 0.15)';
-            userDiv.style.border = '1px solid rgba(56, 189, 248, 0.3)';
-            userDiv.style.borderRadius = '10px';
-            userDiv.style.padding = '8px 12px';
-            userDiv.style.color = '#fff';
-            userDiv.style.alignSelf = 'flex-end';
-            userDiv.style.maxWidth = '85%';
-            userDiv.innerText = msg;
-            chatBox.appendChild(userDiv);
-
-            input.value = "";
-
-            const aiDiv = document.createElement('div');
-            aiDiv.style.background = 'rgba(255,255,255,0.04)';
-            aiDiv.style.border = '1px solid rgba(255,255,255,0.08)';
-            aiDiv.style.borderRadius = '10px';
-            aiDiv.style.padding = '10px 12px';
-            aiDiv.style.color = '#cbd5e1';
-            aiDiv.style.lineHeight = '1.5';
-            aiDiv.innerHTML = '⏳ <em>Searching knowledge base...</em>';
-            chatBox.appendChild(aiDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-
-            try {
-                const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: msg, parent_name: parentName })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to process AI query');
-                aiDiv.innerHTML = renderAiMarkdown(data.reply);
-            } catch (err) {
-                aiDiv.innerHTML = `<span style="color:#f43f5e;">❌ Error: ${err.message}</span>`;
+        window.handlePageKbDragLeave = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const zone = document.getElementById('pageKbDropZone');
+            if (zone) {
+                zone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                zone.style.background = 'rgba(255, 255, 255, 0.015)';
             }
-            chatBox.scrollTop = chatBox.scrollHeight;
         };
 
-        window.handlePageKbFileUpload = async function(e) {
+        window.handlePageKbDrop = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePageKbDragLeave(e);
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                uploadKbFileObj(files[0]);
+            }
+        };
+
+        window.handlePageKbFileUpload = function(e) {
             const files = e.target.files;
-            if (!files || files.length === 0) return;
-            const file = files[0];
+            if (files && files.length > 0) {
+                uploadKbFileObj(files[0]);
+                e.target.value = '';
+            }
+        };
 
+        window.uploadKbFileObj = async function(file) {
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             const formData = new FormData();
             formData.append('file', file);
-            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             formData.append('parent_name', parentName);
 
-            const uploadBtn = e.target.nextElementSibling;
-            const originalText = uploadBtn ? uploadBtn.innerText : '📄 Upload PDF / Word';
-            if (uploadBtn) uploadBtn.innerText = '⏳ Extracting...';
+            const listEl = document.getElementById('pageKbFileList');
+            if (listEl) {
+                listEl.insertAdjacentHTML('afterbegin', `
+                    <div id="kbUploadingNotice" style="padding: 16px; text-align: center; color: #06b6d4; font-weight: 700; font-size: 0.9rem;">
+                        ⏳ Uploading and parsing '${file.name}' into Knowledge Base...
+                    </div>
+                `);
+            }
 
             try {
                 const res = await fetch('/api/knowledge/upload', {
@@ -7306,15 +7174,28 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Upload failed');
-
-                alert(`✓ ${data.message}`);
                 await loadPageKbDocs();
-                selectPageKbDoc(data.path, data.title);
             } catch (err) {
-                alert('❌ Error uploading document: ' + err.message);
-            } finally {
-                if (uploadBtn) uploadBtn.innerText = originalText;
-                e.target.value = '';
+                alert('❌ Error uploading file: ' + err.message);
+                const notice = document.getElementById('kbUploadingNotice');
+                if (notice) notice.remove();
+            }
+        };
+
+        window.deleteKbDocumentById = async function(path, title) {
+            if (!confirm(`Are you sure you want to delete '${title}'?`)) return;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(path)}&parent_name=${encodeURIComponent(parentName)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path, parent_name: parentName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+                await loadPageKbDocs();
+            } catch (err) {
+                alert('❌ Error deleting document: ' + err.message);
             }
         };
 
