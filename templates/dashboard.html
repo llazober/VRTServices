@@ -6914,14 +6914,122 @@
 
         window.renderAiMarkdown = function(text) {
             if (!text) return '';
-            let html = String(text)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/### (.*?)\n/g, '<h5 style="color:#00f2fe; margin:8px 0 4px 0; font-size:0.9rem;">$1</h5>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/`(.*?)`/g, '<code style="background:rgba(0,242,254,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:0.8rem;">$1</code>')
-                .replace(/^- (.*?)$/gm, '<li style="margin-left:14px; margin-bottom:2px;">$1</li>')
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\n/g, '<br>');
+            
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            let raw = String(text);
+
+            // 1. Code blocks (fenced ```)
+            const codeBlocks = [];
+            raw = raw.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+                codeBlocks.push('<pre style="background:#090d16; border:1px solid #1e293b; color:#e2e8f0; padding:10px 14px; border-radius:8px; font-family:monospace; font-size:0.78rem; overflow-x:auto; margin:8px 0;"><code>' + escapeHtml(code.trim()) + '</code></pre>');
+                return '___CODE_BLOCK_' + (codeBlocks.length - 1) + '___';
+            });
+
+            // 2. Escape HTML
+            let html = escapeHtml(raw);
+
+            // 3. Process Markdown Tables
+            const lines = html.split('\n');
+            let inTable = false;
+            let tableRows = [];
+            let processedLines = [];
+
+            function renderTable(rows) {
+                if (!rows || rows.length === 0) return '';
+                let tableHtml = '<div style="overflow-x:auto; margin:10px 0;"><table style="width:100%; border-collapse:collapse; background:rgba(15, 23, 42, 0.75); border:1px solid rgba(51, 65, 85, 0.8); border-radius:8px; font-size:0.8rem; overflow:hidden;">';
+                
+                let hasHeader = false;
+                let startIdx = 0;
+
+                if (rows.length >= 2 && rows[1].split('|').every(c => c.trim() === '' || /^[\s:\-]+$/.test(c.trim()))) {
+                    hasHeader = true;
+                }
+
+                if (hasHeader) {
+                    const headers = rows[0].split('|').slice(1, -1).map(c => c.trim());
+                    tableHtml += '<thead><tr style="background:rgba(30, 41, 59, 0.95); border-bottom:2px solid rgba(56, 189, 248, 0.4);">';
+                    headers.forEach(h => {
+                        tableHtml += '<th style="padding:8px 12px; text-align:left; color:#38bdf8; font-weight:600; border-right:1px solid rgba(51, 65, 85, 0.4);">' + h + '</th>';
+                    });
+                    tableHtml += '</tr></thead>';
+                    startIdx = 2;
+                }
+
+                tableHtml += '<tbody>';
+                let rowCount = 0;
+                for (let i = startIdx; i < rows.length; i++) {
+                    const rowStr = rows[i].trim();
+                    if (rowStr.startsWith('|') && rowStr.endsWith('|')) {
+                        const cells = rowStr.split('|').slice(1, -1).map(c => c.trim());
+                        const bg = (rowCount % 2 === 0) ? 'rgba(30, 41, 59, 0.35)' : 'transparent';
+                        tableHtml += '<tr style="background:' + bg + '; border-bottom:1px solid rgba(51, 65, 85, 0.4);">';
+                        cells.forEach(c => {
+                            tableHtml += '<td style="padding:6px 12px; color:#cbd5e1; border-right:1px solid rgba(51, 65, 85, 0.3);">' + c + '</td>';
+                        });
+                        tableHtml += '</tr>';
+                        rowCount++;
+                    }
+                }
+                tableHtml += '</tbody></table></div>';
+                return tableHtml;
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+                if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                    inTable = true;
+                    tableRows.push(trimmed);
+                } else {
+                    if (inTable) {
+                        processedLines.push(renderTable(tableRows));
+                        tableRows = [];
+                        inTable = false;
+                    }
+                    processedLines.push(line);
+                }
+            }
+            if (inTable) {
+                processedLines.push(renderTable(tableRows));
+            }
+
+            html = processedLines.join('\n');
+
+            // 4. Headers (#)
+            html = html.replace(/^#### (.*?)$/gm, '<h6 style="color:#e2e8f0; margin:10px 0 4px 0; font-size:0.85rem; font-weight:600;">$1</h6>');
+            html = html.replace(/^### (.*?)$/gm, '<h5 style="color:#38bdf8; margin:12px 0 4px 0; font-size:0.92rem; font-weight:600;">$1</h5>');
+            html = html.replace(/^## (.*?)$/gm, '<h4 style="color:#00f2fe; margin:14px 0 6px 0; font-size:1.0rem; font-weight:700;">$1</h4>');
+            html = html.replace(/^# (.*?)$/gm, '<h3 style="color:#a855f7; margin:16px 0 8px 0; font-size:1.12rem; font-weight:700;">$1</h3>');
+
+            // 5. Horizontal Rules
+            html = html.replace(/^(---|\*\*\*|___)$/gm, '<hr style="border:0; border-top:1px solid rgba(51, 65, 85, 0.7); margin:12px 0;">');
+
+            // 6. Inline Formatting
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            html = html.replace(/`(.*?)`/g, '<code style="background:rgba(0,242,254,0.12); color:#38bdf8; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:0.8rem;">$1</code>');
+
+            // 7. Lists
+            html = html.replace(/^[\-\*] (.*?)$/gm, '<li style="margin-left:16px; margin-bottom:3px; color:#cbd5e1;">$1</li>');
+            html = html.replace(/^\d+\. (.*?)$/gm, '<li style="margin-left:16px; margin-bottom:3px; color:#cbd5e1;">$1</li>');
+
+            // 8. Restore Code Blocks
+            codeBlocks.forEach(function(block, idx) {
+                html = html.replace('___CODE_BLOCK_' + idx + '___', block);
+            });
+
+            // 9. Clean line breaks outside tables/divs/headers
+            html = html.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+            html = html.replace(/(<\/h[3-6]>|<hr.*?>|<\/div>|<pre.*?>.*?<\/pre>)\s*<br\s*\/?>/gi, '$1');
+
             return html;
         };
 
