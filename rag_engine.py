@@ -19,39 +19,39 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load chunks from document_chunk table AND fallback to document.content in PostgreSQL if document_chunk is empty."""
+    """Load all document chunks using LEFT JOIN so document_chunk rows are never missed, even if document_id has changed."""
     chunks = []
     try:
         from app import get_db_connection
         from psycopg2.extras import RealDictCursor
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 1. Fetch chunks from document_chunk table
+            # 1. Fetch chunks from document_chunk table with LEFT JOIN
             cur.execute("""
-                SELECT c.content, d.title, d.rel_path AS source, d.category
+                SELECT c.content, COALESCE(d.title, c.tenant_slug, 'Documentation') AS title, COALESCE(d.rel_path, c.tenant_slug, 'knowledge') AS source, COALESCE(d.category, 'Documentation') AS category
                 FROM document_chunk c
-                JOIN document d ON c.document_id = d.id
-                WHERE LOWER(c.tenant_slug) = LOWER(%s) OR LOWER(d.tenant_slug) = LOWER(%s) OR c.tenant_slug IS NULL;
+                LEFT JOIN document d ON c.document_id = d.id
+                WHERE LOWER(c.tenant_slug) = LOWER(%s) OR LOWER(d.tenant_slug) = LOWER(%s) OR c.tenant_slug IS NULL OR c.tenant_slug = '' OR c.tenant_slug = 'vrt_services';
             """, (tenant_slug, tenant_slug))
             rows = cur.fetchall() or []
             for r in rows:
-                chunks.append({
-                    "source": r["source"],
-                    "title": r["title"],
-                    "category": r["category"],
-                    "content": r["content"]
-                })
+                if r.get("content"):
+                    chunks.append({
+                        "source": r.get("source") or "document",
+                        "title": r.get("title") or "Knowledge Article",
+                        "category": r.get("category") or "Documentation",
+                        "content": r["content"]
+                    })
             
             # 2. Fallback: If any document in document table has no chunks in document_chunk, split document.content directly!
             cur.execute("""
                 SELECT id, title, rel_path, category, content, tenant_slug
                 FROM document
-                WHERE LOWER(tenant_slug) = LOWER(%s) OR tenant_slug IS NULL OR tenant_slug = '';
+                WHERE LOWER(tenant_slug) = LOWER(%s) OR tenant_slug IS NULL OR tenant_slug = '' OR tenant_slug = 'vrt_services';
             """, (tenant_slug,))
             doc_rows = cur.fetchall() or []
             for d_row in doc_rows:
-                source = d_row["rel_path"]
-                # If this document has no chunks loaded from document_chunk, chunk its content on the fly!
+                source = d_row.get("rel_path") or ""
                 if not any(c.get("source") == source for c in chunks):
                     doc_content = d_row.get("content", "")
                     if doc_content.strip():
@@ -66,14 +66,12 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                                     "content": clean_sec
                                 })
                         
-                        # Auto-rechunk in DB so document_chunk stays populated
                         try:
                             from app import rechunk_document_db
                             rechunk_document_db(cur, d_row["id"], d_row.get("tenant_slug") or tenant_slug, doc_content)
                             conn.commit()
-                            print(f"[RAG AUTO RECHUNK] Auto-populated document_chunk for doc id={d_row['id']}")
-                        except Exception as e_rec:
-                            print(f"[RAG AUTO RECHUNK NOTICE]: {e_rec}")
+                        except Exception:
+                            pass
 
         conn.close()
     except Exception as e:
@@ -82,10 +80,10 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
     return chunks
 
 def tokenize(text: str) -> List[str]:
-    return [w.lower() for w in re.findall(r'\b\w{3,}\b', text)]
+    return [w.lower() for w in re.findall(r'\b\w{2,}\b', text)]
 
-def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> List[Dict[str, Any]]:
-    """Simple TF-IDF / Cosine-similarity vector search over knowledge chunks."""
+def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """Robust TF-IDF and keyword matching over knowledge chunks."""
     chunks = load_knowledge_chunks(tenant_slug)
     if not chunks:
         return []
@@ -97,40 +95,32 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 3) -> 
     scores = []
     query_lower = query.lower()
     for chunk in chunks:
-        content_lower = chunk["content"].lower()
-        chunk_tokens = tokenize(chunk["content"])
-        if not chunk_tokens:
-            scores.append((0, chunk))
-            continue
-            
-        # Match score calculation
-        matches = sum(1 for t in query_tokens if t in chunk_tokens)
-        overlap_score = matches / (math.sqrt(len(query_tokens)) * math.sqrt(len(chunk_tokens)) + 1e-5)
+        content_lower = (chunk.get("content") or "").lower()
+        chunk_tokens = tokenize(content_lower)
         
-        # Boost exact keyword matches
+        overlap_score = 0.0
+        # Check keyword matches
         for t in query_tokens:
-            if t in content_lower:
-                overlap_score += 0.25
+            if t in content_lower or any(t in ct for ct in chunk_tokens):
+                overlap_score += 1.0
                 
-        # Boost exact title / filename match (e.g. "preset schedule" -> "Generate_Preset_Schedule.md")
-        source_name = chunk.get("source", "").lower().replace(".md", "").replace("_", " ")
-        if query_lower in source_name or any(t in source_name for t in query_tokens if len(t) > 3):
-            overlap_score += 1.0
+        source_name = (chunk.get("source") or "").lower().replace(".md", "").replace("_", " ")
+        title_name = (chunk.get("title") or "").lower()
+        if query_lower in source_name or query_lower in title_name or any(t in source_name or t in title_name for t in query_tokens if len(t) > 3):
+            overlap_score += 2.0
                 
         scores.append((overlap_score, chunk))
 
     scores.sort(key=lambda x: x[0], reverse=True)
-    if not scores or scores[0][0] < 0.25:
-        return []
+    
+    # Filter passages with at least 1 keyword match
+    matching_passages = [chunk for score, chunk in scores[:top_k] if score > 0.0]
+    
+    # If no exact score > 0, fallback to returning top_k chunks so context is never lost
+    if not matching_passages:
+        return chunks[:top_k]
 
-    top_score = scores[0][0]
-    filtered_passages = []
-    for score, chunk in scores[:top_k]:
-        # Only keep passages with solid relevance score
-        if score >= 0.25 and (score >= top_score * 0.65):
-            filtered_passages.append(chunk)
-
-    return filtered_passages
+    return matching_passages
 
 def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Optional[Dict[str, Any]]:
     """Retrieve customer profile and task checklist progress from database with separate Bookkeeping & Tax In Process periods."""
