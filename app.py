@@ -7052,21 +7052,7 @@ async def create_knowledge_doc(request: Request):
 
 @app.delete("/api/knowledge/delete")
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
-    import rag_engine
-    tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
-    if not path or ".." in path:
-        raise HTTPException(status_code=400, detail="Invalid path.")
-    
-    target_cat = path.split("/")[0] if "/" in path else path
-    if target_cat != tenant_slug:
-        raise HTTPException(status_code=403, detail="Access denied: Cannot delete documents belonging to another organization.")
-
-    full_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
-    if os.path.exists(full_path):
-        os.remove(full_path)
-    
-    delete_kb_doc_from_db(path, tenant_slug)
-    return {"success": True, "message": "Article deleted successfully."}
+    raise HTTPException(status_code=403, detail="Document deletion is disabled by administrator policy.")
 
 @app.post("/api/knowledge/upload")
 async def upload_knowledge_doc(

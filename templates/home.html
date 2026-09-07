@@ -1052,7 +1052,7 @@
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button onclick="enableKbDocEditor()" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">✏️ Edit</button>
-                            <button onclick="confirmDeleteKbArticle()" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">🗑️ Delete</button>
+                            <button onclick="confirmDeleteKbArticle()" style="display: none !important; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">🗑️ Delete</button>
                         </div>
                     </div>
                     
@@ -1516,29 +1516,8 @@
         };
 
         window.confirmDeleteKbArticle = async function() {
-            if (!CURRENT_KB_DOC_PATH) {
-                alert('Please select an article from the sidebar to delete.');
-                return;
-            }
-            if (!confirm(`Are you sure you want to delete "${CURRENT_KB_DOC_TITLE}"?`)) return;
-
-            try {
-                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_KB_DOC_PATH)}`, {
-                    method: 'DELETE'
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to delete article');
-                
-                alert('🗑️ Article deleted successfully!');
-                CURRENT_KB_DOC_PATH = '';
-                CURRENT_KB_DOC_RAW = '';
-                document.getElementById('kbDocTitle').innerText = 'Select a Document';
-                document.getElementById('kbDocViewerContent').innerHTML = 'Please select a document from the left sidebar.';
-                disableKbDocEditor();
-                await loadKnowledgeBaseTree();
-            } catch (err) {
-                alert('❌ Error deleting article: ' + err.message);
-            }
+            alert('⚠️ Document deletion is disabled by administrator policy.');
+            return;
         };
 
         window.openCreateKbArticleModal = function() {
