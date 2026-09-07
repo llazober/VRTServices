@@ -8378,20 +8378,18 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                             print(f"[RESEND INBOUND ROUTING] Tier 1.2 SUCCESS match by invoice number '{clean_inv}' -> Customer #{cust['id']} ({cust['legal_name']})")
                             break
 
-                # Tier 2: Match by Sender Email or Recipient Email address in customer table & customer_invoices
+                # Tier 2: Match by Sender Email or Recipient Email address in customer table
                 if not cust and (sender_email or recipient_email):
                     search_emails = [e for e in [sender_email, recipient_email] if e and "@" in e]
                     for s_email in search_emails:
                         cur.execute("""
                             SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
                             FROM customer c
-                            LEFT JOIN customer_invoices i ON i.customer_id = c.id
                             WHERE LOWER(COALESCE(c.email, '')) = LOWER(%s) 
                                OR LOWER(COALESCE(c.billing_email, '')) = LOWER(%s)
-                               OR LOWER(COALESCE(i.email, '')) = LOWER(%s)
                             ORDER BY c.id DESC
                             LIMIT 1;
-                        """, (s_email, s_email, s_email))
+                        """, (s_email, s_email))
                         found_email_cust = cur.fetchone()
                         if found_email_cust:
                             cust = found_email_cust
