@@ -1401,7 +1401,7 @@
 
             try {
                 const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
-                const res = await fetch(`/api/knowledge/list?parent_name=${encodeURIComponent(parentName)}`);
+                const res = await fetch(`/api/knowledge/list?parent_name=${encodeURIComponent(parentName)}&_t=${Date.now()}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to load document list');
 

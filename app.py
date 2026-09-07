@@ -6930,6 +6930,23 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
     kb_base = rag_engine.KB_DIR
 
+    # Query active articles from database to prevent listing deleted rows
+    db_articles = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT tenant_slug, rel_path, filename, title FROM knowledge_articles;")
+            rows = cur.fetchall() or []
+            for r in rows:
+                db_articles[r["rel_path"].lower()] = r
+                db_articles[r["filename"].lower()] = r
+    except Exception as e:
+        print(f"[KB LIST DB ERROR] {e}")
+    finally:
+        if conn:
+            conn.close()
+
     all_flat_docs = []
     category_list = []
 
@@ -6953,7 +6970,14 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
             for file in sorted(os.listdir(cat_dir)):
                 if file.endswith(".md") or file.endswith(".txt"):
                     rel_path = f"{slug}/{file}"
-                    title = file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+                    
+                    # If DB has records, verify file is in DB (or if DB empty, allow file)
+                    db_entry = db_articles.get(rel_path.lower()) or db_articles.get(file.lower())
+                    if db_articles and not db_entry:
+                        # Exclude files deleted from DB
+                        continue
+
+                    title = db_entry["title"] if db_entry and db_entry.get("title") else file.replace("_", " ").replace(".md", "").replace(".txt", "").title()
                     doc_obj = {
                         "filename": file,
                         "rel_path": rel_path,
@@ -6971,12 +6995,16 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
             "items": cat_items
         })
 
-    return {
+    response = JSONResponse({
         "success": True,
         "tenant": tenant_slug,
         "docs": all_flat_docs,
         "categories": category_list
-    }
+    })
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/api/knowledge/doc")
 async def get_knowledge_doc(request: Request, path: str = ""):
