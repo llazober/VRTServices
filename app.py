@@ -1044,49 +1044,12 @@ def init_document_tables():
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            # Clean purge of initial default template articles so Knowledge Base is 100% user-managed
+            cur.execute("""
+                DELETE FROM document 
+                WHERE rel_path IN ('vrt_services/company_info.md', 'vrt_services/irs_pub17_general_tax.md', 'vrt_services/service_faq.md');
+            """)
             conn.commit()
-
-            # Seed default initial documents if table is empty
-            cur.execute("SELECT COUNT(*) AS cnt FROM document;")
-            count_row = cur.fetchone() or {}
-            if count_row.get("cnt", 0) == 0:
-                default_docs = [
-                    {
-                        "tenant_slug": "vrt_services",
-                        "category": "Documentation",
-                        "title": "Company Info",
-                        "rel_path": "vrt_services/company_info.md",
-                        "filename": "company_info.md",
-                        "content": "# VRT Services -- Company Overview & Portal Guide\n\n## About VRT Services\nVRT Services is an enterprise accounting, tax preparation, and bookkeeping advisory firm. We provide client portal services, tax organizer processing, bank statement reconciliation, and QuickBooks Online integration for individuals, LLCs, and corporations.\n\n## Contact Information & Hours\n- **Primary Support Email:** notification@vrtservices12.com\n- **Notification Domain:** notification@datalazo.net\n- **Business Hours:** Monday - Friday, 8:00 AM - 6:00 PM EST\n- **Client Portal:** https://vrt.datalazo.net / https://crm.datalazo.net\n\n## Primary Services Provided\n1. **Individual Tax Returns (Form 1040):** W-2, 1099, Schedule C, itemized deductions, and state tax filings.\n2. **Corporate & LLC Taxes (Form 1120 / 1120-S / 1065):** Business income tax returns, K-1 generation, and payroll tax compliance.\n3. **Monthly Bookkeeping & Bank Statement OCR:** Automated extraction of bank statements and check images into QuickBooks Chart of Accounts."
-                    },
-                    {
-                        "tenant_slug": "vrt_services",
-                        "category": "Documentation",
-                        "title": "Irs Pub17 General Tax",
-                        "rel_path": "vrt_services/irs_pub17_general_tax.md",
-                        "filename": "irs_pub17_general_tax.md",
-                        "content": "# IRS Publication 17 -- General Tax Guidelines\n\n## Overview\nIRS Publication 17 covers general rules for filing individual income tax returns. It includes guidance on gross income, filing status, standard vs itemized deductions, credit calculations, and tax planning strategies.\n\n## Standard Deductions & Thresholds\nFiling status determines your standard deduction amount. Taxpayers who are 65 or older or blind qualify for an additional deduction."
-                    },
-                    {
-                        "tenant_slug": "vrt_services",
-                        "category": "Documentation",
-                        "title": "Service Faq",
-                        "rel_path": "vrt_services/service_faq.md",
-                        "filename": "service_faq.md",
-                        "content": "# VRT Services -- Frequently Asked Questions (FAQ)\n\n## Client Portal Access\nQ: How do I access my tax organizers?\nA: Log in to the client portal at https://vrt.datalazo.net and navigate to the Tax Checklist section."
-                    }
-                ]
-                for doc in default_docs:
-                    cur.execute("""
-                        INSERT INTO document (tenant_slug, category, title, rel_path, filename, content)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (rel_path) DO NOTHING
-                        RETURNING id;
-                    """, (doc["tenant_slug"], doc["category"], doc["title"], doc["rel_path"], doc["filename"], doc["content"]))
-                    res = cur.fetchone()
-                    if res:
-                        rechunk_document_db(cur, res["id"], doc["tenant_slug"], doc["content"])
-                conn.commit()
             print("Document tables (document, document_chunk) initialized successfully.")
     except Exception as e:
         print(f"Error initializing document tables: {e}")
