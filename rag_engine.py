@@ -71,6 +71,28 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[RAG DB CHUNK LOAD ERROR] {e}")
 
+    # 3. Always ensure Core Company Contact & Overview Chunks exist as a permanent safety net
+    has_contact = any(
+        "notification@vrtservices12.com" in (c.get("content") or "") or 
+        "contact information" in (c.get("content") or "").lower() or 
+        "contact information" in (c.get("title") or "").lower()
+        for c in chunks
+    )
+    
+    if not has_contact:
+        chunks.append({
+            "source": "company_contact_info",
+            "title": "Contact Information & Hours",
+            "category": "Company Information",
+            "content": (
+                "## Contact Information & Business Hours\n"
+                "- **Support Email:** notification@vrtservices12.com\n"
+                "- **Business Hours:** Monday – Friday, 8:00 AM – 6:00 PM EST (Closed Weekends & Federal Holidays)\n"
+                "- **Services Offered:** Tax Preparation (Individual Form 1040, LLC Form 1065, Corporate Form 1120/1120S), Enterprise Accounting, Bookkeeping Advisory, Bank Statement Reconciliation, IRS Form 8879 Processing, and QuickBooks Online (QBO) Integration.\n"
+                "- **Client Portal & File Upload:** Upload documents securely via the Client Storage Portal or reply directly to any portal email notification."
+            )
+        })
+
     return chunks
 
 def tokenize(text: str) -> List[str]:
