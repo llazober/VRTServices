@@ -6678,10 +6678,14 @@
 
         window.confirmDeleteKbArticle = async function() {
             if (!CURRENT_KB_DOC_PATH) {
-                alert('Please select an article from the sidebar to delete.');
+                if (typeof showCustomAlert === 'function') showCustomAlert("No Document Selected", "Please select an article from the sidebar to delete.", "error");
+                else alert('Please select an article from the sidebar to delete.');
                 return;
             }
-            if (!confirm(`Are you sure you want to delete "${CURRENT_KB_DOC_TITLE}"?`)) return;
+            const confirmed = typeof showCustomConfirm === 'function'
+                ? await showCustomConfirm(`Are you sure you want to delete "${CURRENT_KB_DOC_TITLE}"?`, "Delete Document", "Yes, Delete", "Cancel")
+                : confirm(`Are you sure you want to delete "${CURRENT_KB_DOC_TITLE}"?`);
+            if (!confirmed) return;
 
             try {
                 const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_KB_DOC_PATH)}`, {
@@ -6692,15 +6696,18 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to delete article');
                 
-                alert('🗑️ Article deleted successfully!');
+                if (typeof showCustomAlert === 'function') showCustomAlert("Article Deleted", `Article "${CURRENT_KB_DOC_TITLE}" deleted successfully.`, "success");
+                else alert('🗑️ Article deleted successfully!');
                 CURRENT_KB_DOC_PATH = '';
                 CURRENT_KB_DOC_RAW = '';
                 document.getElementById('kbDocTitle').innerText = 'Select a Document';
                 document.getElementById('kbDocViewerContent').innerHTML = 'Please select a document from the left sidebar.';
                 disableKbDocEditor();
                 await loadKnowledgeBaseTree();
+                if (typeof loadPageKbDocs === 'function') await loadPageKbDocs();
             } catch (err) {
-                alert('❌ Error deleting article: ' + err.message);
+                if (typeof showCustomAlert === 'function') showCustomAlert("Delete Failed", err.message, "error");
+                else alert('❌ Error deleting article: ' + err.message);
             }
         };
 
@@ -7243,26 +7250,39 @@
         }
 
         window.deleteKbDocumentById = async function(path, title, docId) {
-            if (!confirm('Are you sure you want to delete \'' + (title || path) + '\'?')) return;
+            const confirmed = typeof showCustomConfirm === 'function' 
+                ? await showCustomConfirm("Are you sure you want to delete this document?\n\nTitle: " + (title || path), "Delete Document", "Yes, Delete", "Cancel")
+                : confirm('Are you sure you want to delete \'' + (title || path) + '\'?');
+            if (!confirmed) return;
+
             var parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             try {
                 var reqBody = { path: path, parent_name: parentName };
                 if (docId) reqBody.doc_id = parseInt(docId, 10);
-                console.log('[KB DELETE v3] Sending:', JSON.stringify(reqBody));
+                console.log('[KB DELETE v4] Sending:', JSON.stringify(reqBody));
                 var res = await fetch('/api/knowledge/delete?path=' + encodeURIComponent(path) + '&parent_name=' + encodeURIComponent(parentName), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody)
                 });
                 var data = await res.json();
-                console.log('[KB DELETE v3] Response HTTP ' + res.status + ':', JSON.stringify(data));
-                if (!res.ok) throw new Error(data.detail || 'Failed to delete document (HTTP ' + res.status + ')');
-                alert('SUCCESS: Document \'' + (title || path) + '\' deleted!');
-                await loadPageKbDocs();
+                console.log('[KB DELETE v4] Response HTTP ' + res.status + ':', JSON.stringify(data));
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Document Deleted", "Document '" + (title || path) + "' deleted successfully.", "success");
+                } else {
+                    alert('SUCCESS: Document \'' + (title || path) + '\' deleted!');
+                }
                 showKbToast('Document deleted successfully', false);
+                await loadPageKbDocs();
             } catch (err) {
-                console.error('[KB DELETE v3] Error:', err.message);
-                alert('DELETE FAILED: ' + err.message);
+                console.error('[KB DELETE v4] Error:', err.message);
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Delete Failed", err.message, "error");
+                } else {
+                    alert('DELETE FAILED: ' + err.message);
+                }
                 showKbToast('Delete failed: ' + err.message, true);
             }
         };
