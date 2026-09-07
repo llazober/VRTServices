@@ -1012,15 +1012,22 @@ def init_knowledge_articles_table():
                     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge_articles_meta (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value VARCHAR(255) NOT NULL
+                );
+            """)
             conn.commit()
 
-            # 1. Seed database from disk ONLY IF table is completely empty (fresh deployment)
-            cur.execute("SELECT COUNT(*) AS cnt FROM knowledge_articles;")
-            count_row = cur.fetchone() or {}
-            table_count = count_row.get("cnt", 0)
+            # Check if initial seeding has already been performed
+            cur.execute("SELECT value FROM knowledge_articles_meta WHERE key = 'initial_seed_done';")
+            meta_row = cur.fetchone()
+            already_seeded = bool(meta_row and meta_row.get("value") == "true")
 
             kb_base = rag_engine.KB_DIR
-            if table_count == 0 and os.path.exists(kb_base):
+            if not already_seeded and os.path.exists(kb_base):
+                # 1. Seed database from disk ONLY ONCE on fresh deployment
                 for slug in os.listdir(kb_base):
                     slug_dir = os.path.join(kb_base, slug)
                     if os.path.isdir(slug_dir):
@@ -1039,6 +1046,11 @@ def init_knowledge_articles_table():
                                     """, (slug, rel_p, fname, title, fcontent))
                                 except Exception as e_seed:
                                     print(f"[KB SEED ERROR] {rel_p}: {e_seed}")
+                cur.execute("""
+                    INSERT INTO knowledge_articles_meta (key, value)
+                    VALUES ('initial_seed_done', 'true')
+                    ON CONFLICT (key) DO UPDATE SET value = 'true';
+                """)
                 conn.commit()
 
             # 2. Sync active DB articles to disk
@@ -6952,42 +6964,42 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
     tenant_slug = rag_engine.get_tenant_slug(parent_name or get_current_username(request) or "VRT Services")
     kb_base = rag_engine.KB_DIR
 
-    # Primary source of truth: Query PostgreSQL database table
-    db_articles = []
+    all_flat_docs = []
+    category_list = []
+    grouped_by_slug = {}
+
+    db_connected = False
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT id, tenant_slug, rel_path, filename, title FROM knowledge_articles ORDER BY title ASC;")
             db_articles = cur.fetchall() or []
+            db_connected = True
+            
+            for art in db_articles:
+                s = art["tenant_slug"]
+                if s not in grouped_by_slug:
+                    grouped_by_slug[s] = []
+                
+                doc_obj = {
+                    "id": art.get("id"),
+                    "filename": art.get("filename"),
+                    "rel_path": art.get("rel_path"),
+                    "path": art.get("rel_path"),
+                    "title": art.get("title"),
+                    "tenant_slug": s
+                }
+                grouped_by_slug[s].append(doc_obj)
+                all_flat_docs.append(doc_obj)
     except Exception as e:
         print(f"[KB LIST DB ERROR] {e}")
     finally:
         if conn:
             conn.close()
 
-    all_flat_docs = []
-    category_list = []
-
-    grouped_by_slug = {}
-    for art in db_articles:
-        s = art["tenant_slug"]
-        if s not in grouped_by_slug:
-            grouped_by_slug[s] = []
-        
-        doc_obj = {
-            "id": art.get("id"),
-            "filename": art.get("filename"),
-            "rel_path": art.get("rel_path"),
-            "path": art.get("rel_path"),
-            "title": art.get("title"),
-            "tenant_slug": s
-        }
-        grouped_by_slug[s].append(doc_obj)
-        all_flat_docs.append(doc_obj)
-
-    # Fallback to disk scan if database table is completely empty
-    if not db_articles and os.path.exists(kb_base):
+    # Fallback to disk scan ONLY if database connection fails
+    if not db_connected and os.path.exists(kb_base):
         for slug in sorted(os.listdir(kb_base)):
             cat_dir = os.path.join(kb_base, slug)
             if os.path.isdir(cat_dir):
@@ -7171,6 +7183,11 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
                    OR rel_path ILIKE %s;
             """, (clean_rel_path, raw_filename, base_name, f"%{slugified_base}%", f"%{slugified_base}%"))
             deleted_db_rows = cur.rowcount
+            cur.execute("""
+                INSERT INTO knowledge_articles_meta (key, value)
+                VALUES ('initial_seed_done', 'true')
+                ON CONFLICT (key) DO UPDATE SET value = 'true';
+            """)
             conn.commit()
             print(f"[KB DELETE DB SUCCESS] Deleted {deleted_db_rows} rows from knowledge_articles for {raw_filename}.")
     except Exception as e:
