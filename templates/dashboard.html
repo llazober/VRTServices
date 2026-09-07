@@ -7206,22 +7206,57 @@
             }
         };
 
+        // ── KB Toast notification helper ──────────────────────────────
+        function showKbToast(message, isError) {
+            var existing = document.getElementById('kbToastNotification');
+            if (existing) existing.remove();
+            var toast = document.createElement('div');
+            toast.id = 'kbToastNotification';
+            toast.style.cssText = [
+                'position:fixed',
+                'bottom:28px',
+                'right:28px',
+                'z-index:99999',
+                'padding:14px 22px',
+                'border-radius:12px',
+                'font-size:0.92rem',
+                'font-weight:700',
+                'color:#fff',
+                'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
+                'transition:opacity 0.4s ease',
+                'opacity:1',
+                isError
+                    ? 'background:linear-gradient(135deg,#7f1d1d,#ef4444);border:1px solid rgba(248,113,113,0.4);'
+                    : 'background:linear-gradient(135deg,#064e3b,#10b981);border:1px solid rgba(16,185,129,0.4);'
+            ].join(';');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 450);
+            }, 3500);
+        }
+
         window.deleteKbDocumentById = async function(path, title, docId) {
             if (!confirm('Are you sure you want to delete \'' + (title || path) + '\'?')) return;
             var parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             try {
                 var reqBody = { path: path, parent_name: parentName };
                 if (docId) reqBody.doc_id = parseInt(docId, 10);
+                console.log('[KB DELETE] Sending:', JSON.stringify(reqBody));
                 var res = await fetch('/api/knowledge/delete?path=' + encodeURIComponent(path) + '&parent_name=' + encodeURIComponent(parentName), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody)
                 });
                 var data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+                console.log('[KB DELETE] Response HTTP ' + res.status + ':', JSON.stringify(data));
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document (HTTP ' + res.status + ')');
                 await loadPageKbDocs();
+                showKbToast('✅ Document \'' + (title || path) + '\' deleted successfully', false);
             } catch (err) {
-                alert('❌ Error deleting document: ' + err.message);
+                console.error('[KB DELETE] Error:', err.message);
+                showKbToast('❌ Delete failed: ' + err.message, true);
             }
         };
 

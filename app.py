@@ -7088,6 +7088,8 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
         except Exception:
             pass
 
+    print(f"[KB DELETE] Received: path={repr(path)} doc_id={repr(doc_id)}")
+
     if not path and not doc_id:
         raise HTTPException(status_code=400, detail="Invalid document path or id provided.")
     
@@ -7101,6 +7103,24 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
+            # Ensure document table exists (safety guard for fresh deployments)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS document (
+                    id          SERIAL PRIMARY KEY,
+                    tenant_slug VARCHAR(100) NOT NULL DEFAULT 'vrt_services',
+                    category    VARCHAR(100) NOT NULL DEFAULT 'Documentation',
+                    title       VARCHAR(255) NOT NULL,
+                    rel_path    VARCHAR(255) NOT NULL UNIQUE,
+                    filename    VARCHAR(255) NOT NULL,
+                    content     TEXT NOT NULL DEFAULT '',
+                    tags        VARCHAR(255) DEFAULT '',
+                    is_published BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+
             if doc_id:
                 # Preferred: delete by primary key
                 cur.execute("DELETE FROM document WHERE id = %s;", (int(doc_id),))
@@ -7120,7 +7140,8 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
             conn.commit()
     except Exception as e:
         if conn:
-            conn.rollback()
+            try: conn.rollback()
+            except: pass
         print(f"[KB DELETE ERROR] path={clean_rel_path} id={doc_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error while deleting: {str(e)}")
     finally:
@@ -7128,13 +7149,28 @@ async def delete_knowledge_doc(request: Request, path: str = "", parent_name: st
             conn.close()
 
     if deleted_rows == 0:
-        raise HTTPException(status_code=404, detail=f"Document not found or already deleted.")
+        raise HTTPException(status_code=404, detail=f"Document not found or already deleted. (path={clean_rel_path}, id={doc_id})")
 
     return {
         "success": True, 
         "message": f"Article '{base_name or doc_id}' deleted successfully.",
         "db_rows_deleted": deleted_rows
     }
+
+@app.get("/api/knowledge/debug")
+async def debug_knowledge_docs(request: Request):
+    """Debug endpoint: shows what's actually in the document table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, tenant_slug, title, rel_path, filename, created_at FROM document ORDER BY id;")
+            rows = cur.fetchall() or []
+            return {"count": len(rows), "rows": [dict(r) for r in rows]}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if conn: conn.close()
 
 @app.post("/api/knowledge/upload")
 async def upload_knowledge_doc(
