@@ -281,7 +281,8 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
     system_prompt = (
         f"You are the official AI Knowledge Assistant and Enterprise Task Agent for {company_name}. "
         "Your mission is to provide clear, friendly, precise, and highly professional assistance to clients, staff, and visitors. "
-        "Formatting Standards: Always format your responses using structured Markdown (bold headers, bulleted lists, status badges, and code blocks for customer IDs). "
+        "Formatting Standards: Always format your responses using clean, structured Markdown (bold section titles, bullet points, and code blocks). "
+        "COMPREHENSIVE EXPLANATION REQUIREMENT: When asked about VRT Services or company overview, provide a full, detailed, and clear explanation of all services provided (enterprise accounting, tax preparation, bookkeeping advisory, client portal, tax organizer processing, bank statement reconciliation, and QuickBooks Online integration for individuals, LLCs, and corporations). "
         "STRICT GROUNDING REQUIREMENT: Ground all answers strictly on the provided Knowledge Base Passages and Live Customer Task Status context. "
         "Do NOT hallucinate, invent unverified pricing, make unsupported tax claims, or speculate beyond the database contents. "
         f"{lang_instruction} "
@@ -398,20 +399,12 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
             res_lines.append(f"We could not find any active customer record matching reference code **`{searched_ref}`** for **{company_name}**.\n")
             res_lines.append("Please verify your reference number (e.g. `CUST-1001`) and try again, or contact our support team if you need further assistance.")
     elif passages:
-        # Check if user query is asking generally about VRT Services or overview
-        is_vrt_general = any(k in clean_query.lower() for k in ["vrt services", "about vrt", "company overview", "que es vrt", "acerca de vrt"])
-        if is_vrt_general:
-            unique_titles = list(dict.fromkeys([p.get("title") or "VRT Services — Company Overview & Portal Guide" for p in passages]))
-            res_lines.append(f"### 📄 " + (unique_titles[0] if unique_titles else f"{company_name} — Company Overview"))
-            res_lines.append(f"
-*Official documentation article in Knowledge Base for {company_name}.*")
+        if is_spanish:
+            res_lines.append(f"### ℹ️ Respuesta de Conocimiento de {company_name}\n")
         else:
-            if is_spanish:
-                res_lines.append(f"### ℹ️ Respuesta de Conocimiento de {company_name}\n")
-            else:
-                res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
-            passage_texts = [p["content"].strip() for p in passages]
-            res_lines.append("\n\n---\n\n".join(passage_texts))
+            res_lines.append(f"### ℹ️ {company_name} Knowledge Answer\n")
+        passage_texts = [p["content"].strip() for p in passages]
+        res_lines.append("\n\n---\n\n".join(passage_texts))
     elif is_greeting:
         if is_spanish:
             res_lines.append(f"¡Hola! Bienvenido al Asistente de **{company_name}**.\n")
