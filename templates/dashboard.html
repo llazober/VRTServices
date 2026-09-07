@@ -971,6 +971,11 @@
                     <span>{{ company_name }}</span>
                 </div>
 
+                <button class="chatbot-header-pill" id="openHeaderChatbotBtn" onclick="toggleHeaderAiChatbot()" title="Launch AI Knowledge & Task Assistant" style="background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.35); color: #38bdf8; padding: 6px 14px; border-radius: 30px; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); transition: all 0.2s ease;">
+                    <span style="font-size: 1.05rem; filter: drop-shadow(0 0 6px #06b6d4);">🤖</span>
+                    <span>AI Assistant</span>
+                </button>
+
                 <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: default; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" title="Unread email replies indicator — automatically disappears when all replies are read">
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
@@ -8174,6 +8179,54 @@
             </div>
         </div>
     </div>
+
+    <!-- ── FLOATING AI ASSISTANT CHATBOT DRAWER ─────────────────────── -->
+    <div id="headerAiChatbotDrawer" style="display: none; position: fixed; top: 0; right: 0; width: 440px; max-width: 90vw; height: 100vh; background: #090d16; border-left: 1px solid rgba(56, 189, 248, 0.25); box-shadow: -10px 0 35px rgba(0, 0, 0, 0.6); z-index: 999999; flex-direction: column; transition: all 0.3s ease; backdrop-filter: blur(20px);">
+        <!-- Drawer Header -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); background: rgba(15, 23, 42, 0.8); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2)); border: 1px solid rgba(6, 182, 212, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);">
+                    🤖
+                </div>
+                <div>
+                    <div style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1rem; color: #fff;">
+                        AI Knowledge Assistant
+                    </div>
+                    <div style="font-size: 0.75rem; color: #38bdf8; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block; box-shadow: 0 0 6px #10b981;"></span>
+                        Online • Grounded on {{ company_name }} KB
+                    </div>
+                </div>
+            </div>
+            <button onclick="toggleHeaderAiChatbot()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: color 0.2s ease;">
+                ✕
+            </button>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="aiChatDrawerMessages" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth;">
+            <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 16px; padding: 16px; color: #cbd5e1; font-size: 0.88rem; line-height: 1.5;">
+                👋 <strong>Hello!</strong> I am the official AI Knowledge Assistant for <strong>{{ company_name }}</strong>.<br><br>
+                Ask me any questions about company documentation, guidelines, pricing, tax prep workflows, or check customer status (e.g., <code>CUST-4060</code>).
+            </div>
+        </div>
+
+        <!-- Quick Suggestions Chips -->
+        <div style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto; border-top: 1px solid rgba(255, 255, 255, 0.05); background: rgba(15, 23, 42, 0.4);">
+            <button onclick="sendQuickAiQuery('Pricing & Fees')" style="white-space: nowrap; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s;">💲 Pricing</button>
+            <button onclick="sendQuickAiQuery('Check status CUST-4060')" style="white-space: nowrap; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s;">📋 Customer Status</button>
+            <button onclick="sendQuickAiQuery('¿Cuáles son los procedimientos de impuestos?')" style="white-space: nowrap; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s;">🇪🇸 En Español</button>
+        </div>
+
+        <!-- Input Footer -->
+        <div style="padding: 16px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(15, 23, 42, 0.9); display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="aiChatDrawerInput" placeholder="Ask a question or enter customer code..." onkeypress="handleAiChatKeypress(event)" style="flex: 1; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.88rem; outline: none; transition: border-color 0.2s ease;">
+            <button onclick="sendAiChatDrawerMessage()" id="aiChatSendBtn" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); border: none; color: #fff; width: 44px; height: 44px; border-radius: 12px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(6, 182, 212, 0.3); transition: transform 0.2s ease;">
+                ✈️
+            </button>
+        </div>
+    </div>
+
 </body>
 
 </html>
