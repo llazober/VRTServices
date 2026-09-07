@@ -626,6 +626,7 @@ def init_customer_table():
                     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS parent_name VARCHAR(200);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS billing_email VARCHAR(255);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_folder_path VARCHAR(300);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS assigned_user_id VARCHAR(100);
@@ -8385,9 +8386,9 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                             SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
                             FROM customer c
                             LEFT JOIN customer_invoices i ON i.customer_id = c.id
-                            WHERE LOWER(c.email) = LOWER(%s) 
-                               OR LOWER(c.billing_email) = LOWER(%s)
-                               OR LOWER(i.email) = LOWER(%s)
+                            WHERE LOWER(COALESCE(c.email, '')) = LOWER(%s) 
+                               OR LOWER(COALESCE(c.billing_email, '')) = LOWER(%s)
+                               OR LOWER(COALESCE(i.email, '')) = LOWER(%s)
                             ORDER BY c.id DESC
                             LIMIT 1;
                         """, (s_email, s_email, s_email))
