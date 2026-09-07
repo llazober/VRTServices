@@ -1014,9 +1014,13 @@ def init_knowledge_articles_table():
             """)
             conn.commit()
 
-            # 1. Seed database from disk if seed files exist on disk but not in DB
+            # 1. Seed database from disk ONLY IF table is completely empty (fresh deployment)
+            cur.execute("SELECT COUNT(*) AS cnt FROM knowledge_articles;")
+            count_row = cur.fetchone() or {}
+            table_count = count_row.get("cnt", 0)
+
             kb_base = rag_engine.KB_DIR
-            if os.path.exists(kb_base):
+            if table_count == 0 and os.path.exists(kb_base):
                 for slug in os.listdir(kb_base):
                     slug_dir = os.path.join(kb_base, slug)
                     if os.path.isdir(slug_dir):
@@ -1037,7 +1041,7 @@ def init_knowledge_articles_table():
                                     print(f"[KB SEED ERROR] {rel_p}: {e_seed}")
                 conn.commit()
 
-            # 2. Restore DB articles to disk (so articles created/edited by user survive container redeployment)
+            # 2. Sync active DB articles to disk
             cur.execute("SELECT tenant_slug, rel_path, content FROM knowledge_articles;")
             rows = cur.fetchall() or []
             valid_rel_paths = set()
@@ -1062,12 +1066,11 @@ def init_knowledge_articles_table():
                         if fname.endswith(".md") or fname.endswith(".txt"):
                             rel_check = os.path.relpath(os.path.join(root, fname), kb_base).replace("\\", "/").lower()
                             if rel_check not in valid_rel_paths and fname.lower() not in valid_filenames:
-                                if fname.lower() not in ["company_info.md", "irs_pub17_general_tax.md", "service_faq.md", "tel_link_setup_guide.md"]:
-                                    try:
-                                        os.remove(os.path.join(root, fname))
-                                        print(f"[KB DISK CLEANUP] Removed orphaned disk file: {rel_check}")
-                                    except Exception as e_del:
-                                        print(f"[KB DISK CLEANUP ERROR] {rel_check}: {e_del}")
+                                try:
+                                    os.remove(os.path.join(root, fname))
+                                    print(f"[KB DISK CLEANUP] Removed orphaned disk file: {rel_check}")
+                                except Exception as e_del:
+                                    print(f"[KB DISK CLEANUP ERROR] {rel_check}: {e_del}")
 
             print(f"Knowledge Base DB synced successfully ({len(rows)} articles active).")
     except Exception as e:
