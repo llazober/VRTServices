@@ -7118,13 +7118,18 @@
                     badge.textContent = 'READY';
 
                     var delBtn = document.createElement('button');
+                    delBtn.setAttribute('type', 'button');
                     delBtn.title = 'Delete document';
                     delBtn.style.cssText = 'background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:1.1rem;padding:4px;transition:color 0.2s ease;';
                     delBtn.textContent = '🗑️';
                     (function(path, name, id) {
                         delBtn.addEventListener('mouseover', function() { this.style.color = '#f87171'; });
                         delBtn.addEventListener('mouseout', function() { this.style.color = '#94a3b8'; });
-                        delBtn.addEventListener('click', function() { deleteKbDocumentById(path, name, id); });
+                        delBtn.onclick = function(e) {
+                            if (e) { e.preventDefault(); e.stopPropagation(); }
+                            console.log('[KB DELETE BTN CLICK]', path, name, id);
+                            deleteKbDocumentById(path, name, id);
+                        };
                     })(d.rel_path || d.path || '', displayName, d.id || null);
 
                     rightDiv.appendChild(badge);
