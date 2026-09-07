@@ -1524,7 +1524,9 @@
 
             try {
                 const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_KB_DOC_PATH)}`, {
-                    method: 'DELETE'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_KB_DOC_PATH })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to delete article');

@@ -6723,7 +6723,9 @@
 
             try {
                 const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_KB_DOC_PATH)}`, {
-                    method: 'DELETE'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_KB_DOC_PATH })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to delete article');
@@ -7176,23 +7178,33 @@
         };
 
         window.deletePageKbDoc = async function() {
-            if (!CURRENT_PAGE_KB_PATH) return;
+            if (!CURRENT_PAGE_KB_PATH) {
+                alert('Please select an article to delete.');
+                return;
+            }
             if (!confirm(`Are you sure you want to delete article '${CURRENT_PAGE_KB_PATH}'?`)) return;
             const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
             try {
                 const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_PAGE_KB_PATH)}&parent_name=${encodeURIComponent(parentName)}`, {
-                    method: 'DELETE'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: CURRENT_PAGE_KB_PATH, parent_name: parentName })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
                 alert('✓ Article deleted successfully.');
                 CURRENT_PAGE_KB_PATH = "";
-                document.getElementById('pageKbContentEditor').value = "";
-                document.getElementById('pageKbCurrentTitle').innerText = "Select an article to view";
-                document.getElementById('pageKbCurrentPath').innerText = "knowledge_base/";
-                document.getElementById('pageKbSaveBtn').style.display = 'none';
-                document.getElementById('pageKbDeleteBtn').style.display = 'none';
-                loadPageKbDocs();
+                const editor = document.getElementById('pageKbContentEditor');
+                if (editor) editor.value = "";
+                const titleEl = document.getElementById('pageKbCurrentTitle');
+                if (titleEl) titleEl.innerText = "Select an article to view";
+                const pathEl = document.getElementById('pageKbCurrentPath');
+                if (pathEl) pathEl.innerText = "knowledge_base/";
+                const saveBtn = document.getElementById('pageKbSaveBtn');
+                if (saveBtn) saveBtn.style.display = 'none';
+                const deleteBtn = document.getElementById('pageKbDeleteBtn');
+                if (deleteBtn) deleteBtn.style.display = 'none';
+                await loadPageKbDocs();
             } catch (err) {
                 alert('❌ Error deleting article: ' + err.message);
             }

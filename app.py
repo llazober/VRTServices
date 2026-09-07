@@ -7050,11 +7050,24 @@ async def create_knowledge_doc(request: Request):
     upsert_kb_doc_in_db(tenant_slug, rel_path, filename, title, content)
     return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
 
-@app.delete("/api/knowledge/delete")
+@app.api_route("/api/knowledge/delete", methods=["DELETE", "POST", "GET"])
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
     import rag_engine
+    
+    # Extract path from query params or JSON body if POST
+    if not path:
+        path = request.query_params.get("path", "")
+    if not path and request.method == "POST":
+        try:
+            body = await request.json()
+            path = body.get("path", "")
+            if not parent_name:
+                parent_name = body.get("parent_name", "")
+        except Exception:
+            pass
+
     if not path or ".." in path:
-        raise HTTPException(status_code=400, detail="Invalid file path.")
+        raise HTTPException(status_code=400, detail="Invalid file path provided.")
     
     clean_rel_path = path.replace("\\", "/").strip("/")
     filename = clean_rel_path.split("/")[-1]
