@@ -2362,11 +2362,15 @@ async def read_knowledge_page(request: Request, msg: str = "", error: str = ""):
     ctx["msg"] = msg
     ctx["error"] = error
     ctx["active_tab"] = "knowledge"
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request=request,
         name="dashboard.html",
         context=ctx
     )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/billing", response_class=HTMLResponse)
 @app.get("/invoices", response_class=HTMLResponse)

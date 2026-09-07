@@ -7243,20 +7243,22 @@
             try {
                 var reqBody = { path: path, parent_name: parentName };
                 if (docId) reqBody.doc_id = parseInt(docId, 10);
-                console.log('[KB DELETE] Sending:', JSON.stringify(reqBody));
+                console.log('[KB DELETE v3] Sending:', JSON.stringify(reqBody));
                 var res = await fetch('/api/knowledge/delete?path=' + encodeURIComponent(path) + '&parent_name=' + encodeURIComponent(parentName), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody)
                 });
                 var data = await res.json();
-                console.log('[KB DELETE] Response HTTP ' + res.status + ':', JSON.stringify(data));
+                console.log('[KB DELETE v3] Response HTTP ' + res.status + ':', JSON.stringify(data));
                 if (!res.ok) throw new Error(data.detail || 'Failed to delete document (HTTP ' + res.status + ')');
+                alert('SUCCESS: Document \'' + (title || path) + '\' deleted!');
                 await loadPageKbDocs();
-                showKbToast('✅ Document \'' + (title || path) + '\' deleted successfully', false);
+                showKbToast('Document deleted successfully', false);
             } catch (err) {
-                console.error('[KB DELETE] Error:', err.message);
-                showKbToast('❌ Delete failed: ' + err.message, true);
+                console.error('[KB DELETE v3] Error:', err.message);
+                alert('DELETE FAILED: ' + err.message);
+                showKbToast('Delete failed: ' + err.message, true);
             }
         };
 
