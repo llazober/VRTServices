@@ -228,8 +228,8 @@ def is_spanish_query(text: str) -> bool:
 def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optional[Dict] = None, passages: List[Dict] = None, customer_ref_not_found: bool = False, searched_ref: str = None) -> str:
     """Synthesize final Chatbot response using Gemini, OpenAI, or Fallback Synthesizer."""
     gemini_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
-    openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
-    provider = (os.environ.get("AI_PROVIDER") or "").strip().upper()
+    openai_key = (os.environ.get("OPENAI_API_KEY") or os.environ.get("OPEN_API_KEY") or "").strip()
+    provider = (os.environ.get("AI_PROVIDER") or "OPENAI").strip().upper()
 
     company_name = "VRT Services" if get_tenant_slug(parent_name) == "vrt_services" else "Datalazo LLC"
     clean_query = (user_query or "").strip()
@@ -288,12 +288,41 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
         f"{lang_instruction} "
         "If the user sends a simple greeting (e.g. 'hello', 'hi', 'hola', 'buenos días'), greet them warmly and invite them to ask about company documentation, pricing, tax prep workflows, or check their customer task status by providing their reference code (e.g. CUST-4060). "
         "If answering a customer status query, present a clean breakdown of both Bookkeeping Period & Tax Return milestones, including percentage completion and completed vs pending items. "
-        "If a requested customer reference code is not found in the database, explicitly inform the user that the code does not exist in our records and suggest verifying their code or contacting support. "
-        "If answering general tax policy questions from knowledge base documents, include a brief standard disclaimer that guidance is for informational purposes and official filings are verified upon final accountant review."
+        "If a requested customer reference code is not found in the database, explicitly inform the user that the code does not exist in our records and suggest verifying their code or contacting support."
     )
 
-    # 1. Try Google Gemini API first if configured
-    if gemini_key and (provider == "GEMINI" or not openai_key):
+    # 1. Try OpenAI API first if key is present or AI_PROVIDER is OPENAI
+    if openai_key and (provider == "OPENAI" or not gemini_key):
+        try:
+            url = "https://api.openai.com/v1/chat/completions"
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context_str}\n\nUser Question: {user_query}"}
+                ],
+                "temperature": 0.2,
+                "max_tokens": 600
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                choices = data.get("choices", [])
+                if choices:
+                    return choices[0].get("message", {}).get("content", "").strip()
+        except Exception as e_oai:
+            print(f"[RAG OPENAI API NOTICE]: {e_oai}")
+
+    # 2. Try Google Gemini API secondary
+    if gemini_key:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
             payload = {
@@ -323,36 +352,6 @@ def synthesize_ai_response(user_query: str, parent_name: str, status_info: Optio
                         return parts[0].get("text", "").strip()
         except Exception as e_gem:
             print(f"[RAG GEMINI API NOTICE]: {e_gem}")
-
-    # 2. Try OpenAI API if configured
-    if openai_key:
-        try:
-            url = "https://api.openai.com/v1/chat/completions"
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Context:\n{context_str}\n\nUser Question: {user_query}"}
-                ],
-                "temperature": 0.2,
-                "max_tokens": 600
-            }
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json"
-                },
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                choices = data.get("choices", [])
-                if choices:
-                    return choices[0].get("message", {}).get("content", "").strip()
-        except Exception as e_oai:
-            print(f"[RAG OPENAI API NOTICE]: {e_oai}")
 
     # 3. Fallback Formatter (Zero API key / offline mode)
     res_lines = []
