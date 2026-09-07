@@ -7052,7 +7052,39 @@ async def create_knowledge_doc(request: Request):
 
 @app.delete("/api/knowledge/delete")
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
-    raise HTTPException(status_code=403, detail="Document deletion is disabled by administrator policy.")
+    import rag_engine
+    if not path or ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+    
+    clean_rel_path = path.replace("\\", "/").strip("/")
+    full_path = os.path.normpath(os.path.join(rag_engine.KB_DIR, clean_rel_path.replace("/", os.sep)))
+    
+    if not full_path.startswith(os.path.normpath(rag_engine.KB_DIR)):
+        raise HTTPException(status_code=403, detail="Access denied: Invalid path scope.")
+
+    if os.path.exists(full_path):
+        try:
+            os.remove(full_path)
+        except Exception as e:
+            print(f"[KB FILE DELETE ERROR] Could not remove {full_path}: {e}")
+
+    filename = clean_rel_path.split("/")[-1]
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM knowledge_articles 
+                WHERE rel_path = %s OR filename = %s OR rel_path LIKE %s;
+            """, (clean_rel_path, filename, f"%/{filename}"))
+            conn.commit()
+    except Exception as e:
+        print(f"[KB DB DELETE ERROR] {clean_rel_path}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+    return {"success": True, "message": "Article deleted successfully."}
 
 @app.post("/api/knowledge/upload")
 async def upload_knowledge_doc(

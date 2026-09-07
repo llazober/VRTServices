@@ -1182,7 +1182,7 @@
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <button id="pageKbSaveBtn" onclick="savePageKbDoc()" style="padding: 8px 18px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">💾 Save Changes</button>
-                                <button id="pageKbDeleteBtn" onclick="deletePageKbDoc()" style="display: none !important;">🗑️ Delete</button>
+                                <button id="pageKbDeleteBtn" onclick="deletePageKbDoc()" style="padding: 8px 14px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: #f87171; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">🗑️ Delete</button>
                             </div>
                         </div>
 
@@ -6512,7 +6512,7 @@
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button onclick="enableKbDocEditor()" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">✏️ Edit</button>
-                            <button onclick="confirmDeleteKbArticle()" style="display: none !important; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">🗑️ Delete</button>
+                            <button onclick="confirmDeleteKbArticle()" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; font-size: 0.76rem; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;">🗑️ Delete</button>
                         </div>
                     </div>
                     
@@ -7144,7 +7144,7 @@
             
             editor.value = "Loading article content...";
             if (saveBtn) saveBtn.style.display = 'inline-block';
-            if (deleteBtn) deleteBtn.style.display = 'none';
+            if (deleteBtn) deleteBtn.style.display = 'inline-block';
 
             try {
                 const res = await fetch(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
@@ -7176,8 +7176,26 @@
         };
 
         window.deletePageKbDoc = async function() {
-            alert('⚠️ Document deletion is disabled by administrator policy.');
-            return;
+            if (!CURRENT_PAGE_KB_PATH) return;
+            if (!confirm(`Are you sure you want to delete article '${CURRENT_PAGE_KB_PATH}'?`)) return;
+            const parentName = typeof CURRENT_PARENT_NAME !== 'undefined' ? CURRENT_PARENT_NAME : 'VRT Services';
+            try {
+                const res = await fetch(`/api/knowledge/delete?path=${encodeURIComponent(CURRENT_PAGE_KB_PATH)}&parent_name=${encodeURIComponent(parentName)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to delete document');
+                alert('✓ Article deleted successfully.');
+                CURRENT_PAGE_KB_PATH = "";
+                document.getElementById('pageKbContentEditor').value = "";
+                document.getElementById('pageKbCurrentTitle').innerText = "Select an article to view";
+                document.getElementById('pageKbCurrentPath').innerText = "knowledge_base/";
+                document.getElementById('pageKbSaveBtn').style.display = 'none';
+                document.getElementById('pageKbDeleteBtn').style.display = 'none';
+                loadPageKbDocs();
+            } catch (err) {
+                alert('❌ Error deleting article: ' + err.message);
+            }
         };
 
         window.togglePageKbCreateForm = function() {
