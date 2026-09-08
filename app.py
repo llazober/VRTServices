@@ -6658,8 +6658,17 @@ def run_daily_billing_job():
                 FROM customer_billing_schedules s
                 JOIN customer c ON s.customer_id = c.id
                 WHERE s.status = 'Active'
-                  AND (s.billing_day <= %s OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s))
-                  AND (s.last_billed_at IS NULL OR s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE));
+                  AND (
+                      s.last_billed_at IS NULL
+                      OR DATE_TRUNC('month', s.last_billed_at) < DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                      OR (
+                          s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE)
+                          AND (
+                              s.billing_day <= %s 
+                              OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s)
+                          )
+                      )
+                  );
             """, (current_day, current_day, current_day))
             schedules = cur.fetchall() or []
 
