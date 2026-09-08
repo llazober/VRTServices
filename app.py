@@ -3209,6 +3209,90 @@ async def generate_compliance_preset(customer_id: int, request: Request, target_
         if conn:
             conn.close()
 
+@app.post("/api/compliance/generate-preset-all")
+async def generate_compliance_preset_all_clients(request: Request, target_year: int = None):
+    """Generates default statutory compliance calendar preset events for ALL active clients for the specified year."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    import datetime
+    tyear = target_year if target_year else datetime.datetime.now().year
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, customer_type, assigned_user_id, legal_name FROM customer WHERE status = 'Active' OR status IS NULL;")
+            customers = cur.fetchall() or []
+            
+            total_created = 0
+            total_skipped = 0
+            processed_clients = 0
+
+            for cust in customers:
+                cid = cust["id"]
+                c_type = (cust.get("customer_type") or "Business").strip()
+                assigned_tax_prep = cust.get("assigned_user_id") or None
+                created, skipped = generate_preset_compliance_events_for_customer(cur, cid, c_type, assigned_tax_prep, target_year=tyear)
+                total_created += created
+                total_skipped += skipped
+                processed_clients += 1
+            
+            conn.commit()
+            return {
+                "success": True,
+                "target_year": tyear,
+                "processed_clients": processed_clients,
+                "total_created": total_created,
+                "total_skipped": total_skipped
+            }
+    except Exception as e:
+        print(f"Error generating bulk compliance preset: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/compliance/check-preset-status")
+async def check_compliance_preset_status(request: Request, target_year: int = None):
+    """Checks if active clients are missing compliance events for the target year."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    import datetime
+    tyear = target_year if target_year else datetime.datetime.now().year
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) AS active_cnt FROM customer WHERE status = 'Active' OR status IS NULL;")
+            active_cnt = (cur.fetchone() or {}).get("active_cnt", 0)
+
+            cur.execute("""
+                SELECT COUNT(DISTINCT customer_id) AS covered_cnt
+                FROM compliance_calendar_events
+                WHERE EXTRACT(YEAR FROM due_date) = %s;
+            """, (tyear,))
+            covered_cnt = (cur.fetchone() or {}).get("covered_cnt", 0)
+
+            missing_cnt = max(0, active_cnt - covered_cnt)
+            needs_preset = (missing_cnt > 0)
+
+            return {
+                "target_year": tyear,
+                "total_active_clients": active_cnt,
+                "clients_with_preset": covered_cnt,
+                "missing_clients_count": missing_cnt,
+                "needs_preset": needs_preset
+            }
+    except Exception as e:
+        print(f"Error checking preset status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
 
 @app.get("/api/customers")
 async def get_customers(request: Request, query: str = "", parentName: str = ""):
@@ -6559,7 +6643,7 @@ async def view_invoice_html(invoice_id: str):
         if conn: conn.close()
 
 def run_daily_billing_job():
-    """Generates monthly recurring invoices for active schedules matching today's day of month."""
+    """Generates monthly recurring invoices for active schedules matching today's day of month or any unbilled past days in the current month."""
     import datetime
     today = datetime.date.today()
     current_day = today.day
@@ -6574,7 +6658,7 @@ def run_daily_billing_job():
                 FROM customer_billing_schedules s
                 JOIN customer c ON s.customer_id = c.id
                 WHERE s.status = 'Active'
-                  AND (s.billing_day = %s OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s))
+                  AND (s.billing_day <= %s OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s))
                   AND (s.last_billed_at IS NULL OR s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE));
             """, (current_day, current_day, current_day))
             schedules = cur.fetchall() or []
@@ -6627,7 +6711,7 @@ def run_daily_billing_job():
                         except Exception as e_s:
                             print(f"[RECURRING BILLING SEND ERROR] Invoice #{inv_number}: {e_s}")
 
-        print(f"[RECURRING BILLING SCHEDULER] Generated {generated_count} invoice(s) for Day {current_day}.")
+        print(f"[RECURRING BILLING SCHEDULER] Generated {generated_count} invoice(s) (including catch-up through Day {current_day}).")
         return {"status": "success", "generated_count": generated_count, "day": current_day}
     except Exception as e:
         print(f"[RECURRING BILLING SCHEDULER ERROR]: {e}")

@@ -1320,13 +1320,28 @@
                         </p>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <button type="button" id="btnBulkPresetSchedule" onclick="runBulkPresetComplianceSchedule()" style="padding: 10px 16px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; border-radius: 12px; cursor: pointer; transition: all 0.2s ease;" title="Generate Annual Preset Compliance Schedule for ALL Active Clients">
+                            ⚡ Bulk Preset for All Clients
+                        </button>
                         <button type="button" onclick="openPresetComplianceModal(event)" style="padding: 10px 16px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; border-radius: 12px; cursor: pointer; transition: all 0.2s ease;" title="Manually generate statutory compliance deadlines for a client">
-                            ⚡ Generate Preset Schedule
+                            ⚡ Single Client Preset
                         </button>
                         <button type="button" onclick="openCreateComplianceModal(event)" style="padding: 10px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 0 15px rgba(245, 158, 11, 0.35); transition: all 0.2s ease;">
                             ➕ New Deadline
                         </button>
                     </div>
+                </div>
+
+                <!-- Annual Auto-Preset Detection Alert Banner -->
+                <div id="complianceAutoPresetBanner" style="display: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(56, 189, 248, 0.2)); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 14px; padding: 14px 20px; margin-bottom: 20px; align-items: center; justify-content: space-between; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.5rem;">🔔</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 0.92rem; display: block;">Annual Compliance Schedule Generation Recommended</strong>
+                            <span style="color: #cbd5e1; font-size: 0.82rem;" id="complianceAutoPresetBannerText">Active clients detected without preset statutory tax & compliance deadlines for the current year.</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="runBulkPresetComplianceSchedule()" style="padding: 8px 18px; background: #f59e0b; color: #000; font-weight: 800; font-size: 0.82rem; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap; box-shadow: 0 0 10px rgba(245,158,11,0.4);">⚡ Generate Schedules Now</button>
                 </div>
 
                 <!-- Compliance KPI Summary Cards -->
@@ -3182,7 +3197,7 @@
                         showCustomAlert("Scheduler Error", data.message || "Failed to run billing job.", "error");
                         return;
                     }
-                    showCustomAlert("Scheduler Triggered", `Generated ${data.generated_count || 0} invoice(s) for today (Day ${data.day}).`, "success");
+                    showCustomAlert("Scheduler Triggered", `Generated ${data.generated_count || 0} recurring invoice(s) (including past-due catch-up for actual date and earlier days in current month).`, "success");
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
@@ -7474,6 +7489,9 @@
             }
             currentCustomerList = currentCustomerRecords;
             populateComplianceModalDropdowns();
+            if (typeof checkCompliancePresetStatus === 'function') {
+                checkCompliancePresetStatus();
+            }
 
             const customer = document.getElementById('complianceFilterCustomer')?.value || 'all';
             const category = document.getElementById('complianceFilterCategory')?.value || 'all';
@@ -7867,6 +7885,53 @@
                 }
             } catch (err) {
                 alert('Error generating preset schedule: ' + err.message);
+            }
+        }
+
+        async function runBulkPresetComplianceSchedule() {
+            const confirmed = await showCustomConfirm("Are you sure you want to generate statutory compliance preset schedules for ALL active clients? (Duplicate events will be automatically skipped)", "Bulk Compliance Generator", "Yes, Generate All", "Cancel");
+            if (!confirmed) return;
+            try {
+                const res = await fetch('/api/compliance/generate-preset-all', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    const msg = `Bulk Generation Complete!\nProcessed Clients: ${data.processed_clients}\nCreated Events: ${data.total_created}\nSkipped Duplicates: ${data.total_skipped}`;
+                    if (typeof showAlert === 'function') {
+                        showAlert(msg, 'success', 'All-Clients Schedule Generated');
+                    } else {
+                        alert(msg);
+                    }
+                    checkCompliancePresetStatus();
+                    if (typeof loadComplianceData === 'function') {
+                        await loadComplianceData();
+                    }
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || 'Failed to generate bulk preset schedule'));
+                }
+            } catch (err) {
+                alert('Error running bulk preset schedule: ' + err.message);
+            }
+        }
+
+        async function checkCompliancePresetStatus() {
+            try {
+                const res = await fetch('/api/compliance/check-preset-status');
+                if (res.ok) {
+                    const data = await res.json();
+                    const banner = document.getElementById('complianceAutoPresetBanner');
+                    const textElem = document.getElementById('complianceAutoPresetBannerText');
+                    if (banner) {
+                        if (data.needs_preset) {
+                            if (textElem) textElem.innerText = `${data.missing_clients_count} out of ${data.total_active_clients} active clients are missing preset statutory tax & compliance deadlines for ${data.target_year}.`;
+                            banner.style.display = 'flex';
+                        } else {
+                            banner.style.display = 'none';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("[PRESET STATUS CHECK ERROR]:", e);
             }
         }
 
