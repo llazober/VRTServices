@@ -6041,11 +6041,15 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
         <div style="background: #0f172a; padding: 24px 32px; color: #ffffff;">
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td>
-                        <h2 style="margin: 0; color: #38bdf8; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">VRT Services</h2>
-                        <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">Tax, Accounting & Bookkeeping Advisory</p>
+                    <td style="vertical-align: top;">
+                        <h2 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Victor Rivera</h2>
+                        <p style="margin: 6px 0 0 0; color: #38bdf8; font-size: 13.5px; font-weight: 600; line-height: 1.45;">
+                            VRT Services, LLC<br/>
+                            1041 NW 106th ST<br/>
+                            Miami, FL 33150-1061
+                        </p>
                     </td>
-                    <td style="text-align: right;">
+                    <td style="text-align: right; vertical-align: top;">
                         <span style="display: inline-block; font-size: 14px; font-weight: 700; background: #1e293b; color: #38bdf8; padding: 6px 14px; border-radius: 6px; border: 1px solid #334155;">INVOICE</span>
                         <p style="margin: 6px 0 0 0; font-size: 13px; color: #cbd5e1; font-family: monospace;">#{inv_num}</p>
                     </td>
@@ -6091,8 +6095,13 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
             </table>
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-top: 28px; font-size: 13px; color: #475569;">
-                <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">💳 Payment Remittance & Instructions:</p>
-                <p style="margin: 0; line-height: 1.5;">Please remit payment via ACH / Bank Transfer or Check to <strong>VRT Services</strong>. For invoice queries or electronic payment details, reply directly to this email or contact support.</p>
+                <p style="margin: 0 0 8px 0; font-weight: 700; color: #0f172a; font-size: 14px;">💳 Terms & Conditions / Payment Instructions:</p>
+                <p style="margin: 0; line-height: 1.6; color: #1e293b; font-size: 13px;">
+                    <strong>Make your check payable to:</strong><br/>
+                    Victor Rivera or deposit<br/>
+                    Chase acct: <strong>685503230</strong><br/>
+                    Via Zelle at <strong>305.903.7963</strong>
+                </p>
             </div>
         </div>
         <div style="background: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8;">
