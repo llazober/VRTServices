@@ -3066,11 +3066,11 @@ async def update_compliance_event_status(event_id: int, request: Request):
         if conn:
             conn.close()
 
-def generate_preset_compliance_events_for_customer(cur, customer_id: int, customer_type: str = "Business", assigned_tax_prep: str = None) -> int:
-    """Generates default statutory compliance calendar preset schedule events for a customer."""
+def generate_preset_compliance_events_for_customer(cur, customer_id: int, customer_type: str = "Business", assigned_tax_prep: str = None, target_year: int = None) -> tuple[int, int]:
+    """Generates default statutory compliance calendar preset schedule events for a customer, skipping exact duplicates."""
     c_type = (customer_type or "Business").strip()
     import datetime
-    current_year = datetime.datetime.now().year
+    current_year = target_year if target_year else datetime.datetime.now().year
     
     generated_events = []
     
@@ -3150,17 +3150,32 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
             'Annual', assigned_tax_prep, 30, True
         ))
 
+    check_sql = """
+        SELECT 1 FROM compliance_calendar_events 
+        WHERE customer_id = %s 
+          AND category = %s 
+          AND title = %s 
+          AND due_date = %s;
+    """
     insert_sql = """
         INSERT INTO compliance_calendar_events (
             customer_id, category, title, description, jurisdiction, due_date, frequency, assigned_tax_prep, reminder_days_prior, auto_generated
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
     """
+    created_count = 0
+    skipped_count = 0
     for item in generated_events:
+        # Check exact duplicate: customer_id, category, title, due_date
+        cur.execute(check_sql, (item[0], item[1], item[2], item[5]))
+        if cur.fetchone():
+            skipped_count += 1
+            continue
         cur.execute(insert_sql, item)
-    return len(generated_events)
+        created_count += 1
+    return created_count, skipped_count
 
 @app.post("/api/compliance/generate-preset/{customer_id}")
-async def generate_compliance_preset(customer_id: int, request: Request):
+async def generate_compliance_preset(customer_id: int, request: Request, target_year: int = None):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -3177,9 +3192,15 @@ async def generate_compliance_preset(customer_id: int, request: Request):
             c_type = (cust.get("customer_type") or "Business").strip()
             assigned_tax_prep = cust.get("assigned_user_id") or None
             
-            count = generate_preset_compliance_events_for_customer(cur, customer_id, c_type, assigned_tax_prep)
+            created_count, skipped_count = generate_preset_compliance_events_for_customer(cur, customer_id, c_type, assigned_tax_prep, target_year=target_year)
             conn.commit()
-            return {"success": True, "count": count, "customer_id": customer_id}
+            return {
+                "success": True, 
+                "count": created_count, 
+                "created_count": created_count, 
+                "skipped_count": skipped_count, 
+                "customer_id": customer_id
+            }
 
     except Exception as e:
         print(f"Error generating compliance preset: {e}")
