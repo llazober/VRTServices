@@ -7,6 +7,12 @@ import urllib.parse
 from typing import List, Dict, Any, Optional
 import datetime
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
 KB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base")
 
 def get_tenant_slug(parent_name: str) -> str:
@@ -100,10 +106,40 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
     # 2. Second attempt: Scan local filesystem KB_DIR for .md / .txt files as dynamic fallback & guarantee
     if os.path.exists(KB_DIR):
         for root, _, files in os.walk(KB_DIR):
-            rel_root = os.path.relpath(root, KB_DIR).replace("\\", "/")
-            # If subfolder belongs to a different tenant, skip it
-            if rel_root != "." and rel_root not in [tenant_slug, "."] and rel_root in ["vrt_services", "datalazo_llc"]:
-                continue
+            for file in files:
+                if file.endswith((".md", ".txt")):
+                    full_path = os.path.join(root, file)
+                    rel_p = os.path.relpath(full_path, KB_DIR).replace("\\", "/")
+                    
+                    # Avoid duplicate if already present from DB
+                    if any(c.get("source") == rel_p for c in chunks):
+                        continue
+
+                    try:
+                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                            file_text = f.read()
+
+                        if not file_text.strip():
+                            continue
+
+                        # Extract Title from first # line or filename
+                        title = file.replace("_", " ").replace("-", " ").replace(".md", "").replace(".txt", "").title()
+                        first_line = file_text.strip().split("\n")[0]
+                        if first_line.startswith("#"):
+                            title = first_line.lstrip("#").strip()
+
+                        raw_sections = re.split(r'\n(?=#{1,3}\s)', file_text)
+                        for sec in raw_sections:
+                            clean_sec = sec.strip()
+                            if len(clean_sec) > 10:
+                                chunks.append({
+                                    "source": rel_p,
+                                    "title": title,
+                                    "category": "Documentation",
+                                    "content": clean_sec
+                                })
+                    except Exception as fe:
+                        print(f"[RAG FS CHUNK ERROR] {full_path}: {fe}")
 
             for file in files:
                 if file.endswith((".md", ".txt")):
