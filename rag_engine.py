@@ -19,14 +19,15 @@ def get_tenant_slug(parent_name: str) -> str:
     return "vrt_services"
 
 def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
-    """Load all document_chunk and document rows 100% dynamically from PostgreSQL (supports both lowercase and PascalCase schemas)."""
+    """Load all document_chunk and document rows dynamically from PostgreSQL and local knowledge_base filesystem."""
     chunks = []
+    
+    # 1. First attempt: Load chunks directly from PostgreSQL
     try:
         from app import get_db_connection
         from psycopg2.extras import RealDictCursor
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 1. Try fetching from document_chunk (lowercase) or "DocumentChunk" (PascalCase)
             rows = []
             try:
                 cur.execute("""
@@ -63,7 +64,7 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
                         "content": r["content"]
                     })
 
-            # 2. Also check document / "Document" table for any unchunked documents
+            # Also check document / "Document" table for any unchunked documents
             doc_rows = []
             try:
                 cur.execute("SELECT id, title, rel_path, category, content FROM document;")
@@ -94,12 +95,72 @@ def load_knowledge_chunks(tenant_slug: str) -> List[Dict[str, Any]]:
 
         conn.close()
     except Exception as e:
-        print(f"[RAG DB CHUNK LOAD ERROR] {e}")
+        print(f"[RAG DB CHUNK LOAD NOTICE] {e}")
+
+    # 2. Second attempt: Scan local filesystem KB_DIR for .md / .txt files as dynamic fallback & guarantee
+    if os.path.exists(KB_DIR):
+        for root, _, files in os.walk(KB_DIR):
+            rel_root = os.path.relpath(root, KB_DIR).replace("\\", "/")
+            # If subfolder belongs to a different tenant, skip it
+            if rel_root != "." and rel_root not in [tenant_slug, "."] and rel_root in ["vrt_services", "datalazo_llc"]:
+                continue
+
+            for file in files:
+                if file.endswith((".md", ".txt")):
+                    full_path = os.path.join(root, file)
+                    rel_p = os.path.relpath(full_path, KB_DIR).replace("\\", "/")
+                    
+                    # Avoid duplicate if already present from DB
+                    if any(c.get("source") == rel_p for c in chunks):
+                        continue
+
+                    try:
+                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                            file_text = f.read()
+
+                        if not file_text.strip():
+                            continue
+
+                        # Extract Title from first # line or filename
+                        title = file.replace("_", " ").replace("-", " ").replace(".md", "").replace(".txt", "").title()
+                        first_line = file_text.strip().split("\n")[0]
+                        if first_line.startswith("#"):
+                            title = first_line.lstrip("#").strip()
+
+                        raw_sections = re.split(r'\n(?=#{1,3}\s)', file_text)
+                        for sec in raw_sections:
+                            clean_sec = sec.strip()
+                            if len(clean_sec) > 10:
+                                chunks.append({
+                                    "source": rel_p,
+                                    "title": title,
+                                    "category": "Documentation",
+                                    "content": clean_sec
+                                })
+                    except Exception as fe:
+                        print(f"[RAG FS CHUNK ERROR] {full_path}: {fe}")
 
     return chunks
 
 def tokenize(text: str) -> List[str]:
-    return [w.lower() for w in re.findall(r'\b\w{2,}\b', text)]
+    """Tokenize string into lowercase terms including form numbers with hyphens/numbers."""
+    if not text:
+        return []
+    raw_tokens = re.findall(r'[\w-]+', text.lower())
+    tokens = []
+    for t in raw_tokens:
+        clean_t = t.strip('-')
+        if len(clean_t) >= 2:
+            tokens.append(clean_t)
+            if '-' in clean_t:
+                no_hyphen = clean_t.replace('-', '')
+                if no_hyphen and no_hyphen not in tokens:
+                    tokens.append(no_hyphen)
+                parts = clean_t.split('-')
+                for p in parts:
+                    if len(p) >= 2 and p not in tokens:
+                        tokens.append(p)
+    return tokens
 
 def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 8) -> List[Dict[str, Any]]:
     """Robust TF-IDF, intent-boosted, and keyword matching over knowledge chunks with guaranteed context fallback."""
@@ -114,6 +175,9 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 8) -> 
     scores = []
     query_lower = (query or "").lower().strip()
     
+    # Pre-extract form numbers or specific intent terms from query (e.g. 8879, 1040, 1120-s, 1065)
+    form_numbers = re.findall(r'\b(?:form\s*)?(\d{3,4}(?:-[a-z]+)?)\b', query_lower)
+    
     for chunk in chunks:
         content_lower = (chunk.get("content") or "").lower()
         title_lower = (chunk.get("title") or "").lower()
@@ -126,8 +190,16 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 8) -> 
             score += 20.0
         if query_lower and query_lower in title_lower:
             score += 25.0
-            
-        # 2. Individual token matches
+
+        # 2. Form number specific boost (e.g. 8879, 1040, 1120-S, 1065, 7004, 4868)
+        for fn in form_numbers:
+            fn_clean = fn.replace('-', '')
+            if fn in content_lower or fn_clean in content_lower or f"form {fn}" in content_lower or f"form {fn_clean}" in content_lower:
+                score += 35.0
+            if fn in title_lower or fn_clean in title_lower:
+                score += 40.0
+
+        # 3. Individual token matches
         chunk_tokens = set(tokenize(content_lower))
         for t in query_tokens:
             if len(t) <= 1:
@@ -139,25 +211,45 @@ def retrieve_relevant_passages(query: str, tenant_slug: str, top_k: int = 8) -> 
             if t in chunk_tokens:
                 score += 2.0
                 
-        # 3. Special intent boost for contact / support / hours queries
+        # 4. Special intent boost for contact / support / hours queries
         contact_terms = ["contact", "email", "phone", "hours", "support", "address", "location", "reach"]
         if any(term in query_lower for term in contact_terms):
             if any(term in content_lower for term in ["contact", "email", "hours", "phone", "support", "notification@", "monday", "est"]):
                 score += 30.0
+
+        tax_terms = ["8879", "tax", "deadline", "filing", "signature", "e-sign", "kba", "retention", "1040", "1120", "1065", "4868", "7004", "1040-es"]
+        if any(term in query_lower for term in tax_terms):
+            if any(term in content_lower for term in tax_terms):
+                score += 15.0
 
         scores.append((score, chunk))
 
     # Sort ALL chunks by score descending
     scores.sort(key=lambda x: x[0], reverse=True)
     
-    # Filter chunks with score > 0 across entire database
-    matching_passages = [chunk for score, chunk in scores if score > 0.0]
+    # Filter chunks with score > 0 across entire database and deduplicate
+    matching_passages = []
+    seen_contents = set()
+    for score, chunk in scores:
+        if score > 0.0:
+            c_text = (chunk.get("content") or "").strip()
+            if c_text not in seen_contents:
+                seen_contents.add(c_text)
+                matching_passages.append(chunk)
     
     if matching_passages:
         return matching_passages[:top_k]
 
-    # Fallback: Return top_k chunks unconditionally if no positive scores
-    return [chunk for score, chunk in scores[:top_k]]
+    # Fallback: Return top_k unique chunks unconditionally if no positive scores
+    fallback_passages = []
+    for score, chunk in scores:
+        c_text = (chunk.get("content") or "").strip()
+        if c_text not in seen_contents:
+            seen_contents.add(c_text)
+            fallback_passages.append(chunk)
+            if len(fallback_passages) >= top_k:
+                break
+    return fallback_passages
 
 def get_customer_task_status(cur, customer_ref: str, parent_name: str) -> Optional[Dict[str, Any]]:
     """Retrieve customer profile and task checklist progress from database with separate Bookkeeping & Tax In Process periods."""

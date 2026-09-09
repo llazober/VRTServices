@@ -7140,6 +7140,39 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
         if conn:
             conn.close()
 
+    # Also scan filesystem KB_DIR for any local .md files not in DB
+    kb_dir = rag_engine.KB_DIR
+    if os.path.exists(kb_dir):
+        for root, _, files in os.walk(kb_dir):
+            for file in files:
+                if file.endswith((".md", ".txt")):
+                    full_path = os.path.join(root, file)
+                    rel_p = os.path.relpath(full_path, kb_dir).replace("\\", "/")
+                    if not any(d.get("rel_path") == rel_p or d.get("path") == rel_p for d in all_flat_docs):
+                        s = rel_p.split("/")[0] if "/" in rel_p else tenant_slug
+                        title = file.replace("_", " ").replace("-", " ").replace(".md", "").replace(".txt", "").title()
+                        try:
+                            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                                first_l = f.readline()
+                                if first_l.startswith("#"):
+                                    title = first_l.lstrip("#").strip()
+                        except Exception:
+                            pass
+                        if s not in grouped_by_slug:
+                            grouped_by_slug[s] = []
+                        doc_obj = {
+                            "id": None,
+                            "filename": file,
+                            "rel_path": rel_p,
+                            "path": rel_p,
+                            "title": title,
+                            "category": "Documentation",
+                            "tenant_slug": s,
+                            "updated_at": ""
+                        }
+                        grouped_by_slug[s].append(doc_obj)
+                        all_flat_docs.append(doc_obj)
+
     available_slugs = list(grouped_by_slug.keys())
     if tenant_slug not in available_slugs:
         available_slugs.insert(0, tenant_slug)
@@ -7167,6 +7200,7 @@ async def list_knowledge_docs(request: Request, parent_name: str = ""):
 
 @app.get("/api/knowledge/doc")
 async def get_knowledge_doc(request: Request, path: str = ""):
+    import rag_engine
     if not path:
         raise HTTPException(status_code=400, detail="Invalid path")
     
@@ -7179,20 +7213,56 @@ async def get_knowledge_doc(request: Request, path: str = ""):
                 WHERE rel_path = %s OR id::text = %s OR LOWER(filename) = LOWER(%s);
             """, (path, path, os.path.basename(path)))
             row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Knowledge document not found")
-            return {
-                "success": True, 
-                "id": row["id"],
-                "path": row["rel_path"], 
-                "title": row["title"],
-                "content": row["content"],
-                "category": row.get("category", "Documentation"),
-                "tenant_slug": row["tenant_slug"]
-            }
+            if row:
+                return {
+                    "success": True, 
+                    "id": row["id"],
+                    "path": row["rel_path"], 
+                    "title": row["title"],
+                    "content": row["content"],
+                    "category": row.get("category", "Documentation"),
+                    "tenant_slug": row["tenant_slug"]
+                }
+    except Exception as e:
+        print(f"[KB GET DB ERROR] {e}")
     finally:
         if conn:
             conn.close()
+
+    # Fallback to reading file from disk if not found in DB
+    fs_path = os.path.join(rag_engine.KB_DIR, path.replace("/", os.sep))
+    if not os.path.exists(fs_path):
+        # try search in tenant folders
+        for root, _, files in os.walk(rag_engine.KB_DIR):
+            for f in files:
+                if f.lower() == os.path.basename(path).lower():
+                    fs_path = os.path.join(root, f)
+                    break
+
+    if os.path.exists(fs_path) and os.path.isfile(fs_path):
+        try:
+            with open(fs_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            filename = os.path.basename(fs_path)
+            title = filename.replace("_", " ").replace("-", " ").replace(".md", "").replace(".txt", "").title()
+            first_l = content.strip().split("\n")[0]
+            if first_l.startswith("#"):
+                title = first_l.lstrip("#").strip()
+            rel_p = os.path.relpath(fs_path, rag_engine.KB_DIR).replace("\\", "/")
+            tenant_s = rel_p.split("/")[0] if "/" in rel_p else "vrt_services"
+            return {
+                "success": True,
+                "id": None,
+                "path": rel_p,
+                "title": title,
+                "content": content,
+                "category": "Documentation",
+                "tenant_slug": tenant_s
+            }
+        except Exception as fe:
+            print(f"[KB GET FS ERROR] {fe}")
+
+    raise HTTPException(status_code=404, detail="Knowledge document not found")
 
 @app.post("/api/knowledge/save")
 async def save_knowledge_doc(request: Request):
@@ -7208,6 +7278,12 @@ async def save_knowledge_doc(request: Request):
     
     filename = os.path.basename(rel_path)
     title = filename.replace("_", " ").replace(".md", "").replace(".txt", "").title()
+
+    # Also save to disk
+    disk_path = os.path.join(rag_engine.KB_DIR, tenant_slug, filename)
+    os.makedirs(os.path.dirname(disk_path), exist_ok=True)
+    with open(disk_path, "w", encoding="utf-8") as df:
+        df.write(content)
 
     conn = None
     try:
@@ -7234,10 +7310,13 @@ async def save_knowledge_doc(request: Request):
                 if new_row:
                     rechunk_document_db(cur, new_row["id"], tenant_slug, content)
                 conn.commit()
-        return {"success": True, "message": "Article saved successfully.", "path": rel_path}
+    except Exception as e:
+        print(f"[KB SAVE DB ERROR] {e}")
     finally:
         if conn:
             conn.close()
+
+    return {"success": True, "message": "Article saved successfully.", "path": rel_path}
 
 @app.post("/api/knowledge/create")
 async def create_knowledge_doc(request: Request):
@@ -7260,6 +7339,12 @@ async def create_knowledge_doc(request: Request):
         
     rel_path = f"{tenant_slug}/{filename}"
 
+    # Also save to disk
+    disk_path = os.path.join(rag_engine.KB_DIR, tenant_slug, filename)
+    os.makedirs(os.path.dirname(disk_path), exist_ok=True)
+    with open(disk_path, "w", encoding="utf-8") as df:
+        df.write(content)
+
     conn = None
     try:
         conn = get_db_connection()
@@ -7274,10 +7359,13 @@ async def create_knowledge_doc(request: Request):
             if doc_row:
                 rechunk_document_db(cur, doc_row["id"], tenant_slug, content)
             conn.commit()
-        return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
+    except Exception as e:
+        print(f"[KB CREATE DB ERROR] {e}")
     finally:
         if conn:
             conn.close()
+
+    return {"success": True, "message": "New article created successfully.", "path": rel_path, "filename": filename}
 
 @app.api_route("/api/knowledge/delete", methods=["DELETE", "POST", "GET"])
 async def delete_knowledge_doc(request: Request, path: str = "", parent_name: str = ""):
