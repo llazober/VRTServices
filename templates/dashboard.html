@@ -6375,6 +6375,8 @@
             tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
+                document.body.appendChild(el);
+            }
         })();
 
         document.addEventListener('DOMContentLoaded', () => {
