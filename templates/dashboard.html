@@ -7862,12 +7862,18 @@
                 if ((!currentCustomerRecords || currentCustomerRecords.length === 0) && typeof fetchCustomerRecords === 'function') {
                     await fetchCustomerRecords();
                 }
-                currentCustomerList = currentCustomerRecords || [];
+                const rawCustList = currentCustomerRecords || currentCustomerList || [];
+                const validCustList = rawCustList.filter(c => {
+                    const num = (c.custumer_number || '').trim();
+                    const legal = (c.legal_name || '').trim().toLowerCase();
+                    return num !== 'CUST-0000' && !legal.includes('catch-all') && !legal.includes('unassigned');
+                });
+
                 const modal = document.getElementById('presetComplianceModal');
                 const select = document.getElementById('presetComplianceCustomerSelect');
                 if (!modal || !select) return;
 
-                select.innerHTML = '<option value="">Select Customer *</option>' + currentCustomerList.map(c => 
+                select.innerHTML = '<option value="">Select Customer *</option>' + validCustList.map(c => 
                     `<option value="${c.id}" ${preselectedCid && String(preselectedCid) === String(c.id) ? 'selected' : ''}>${c.legal_name} (${c.custumer_number || 'No ID'}) [${c.customer_type || 'Business'}]</option>`
                 ).join('');
 
@@ -7970,9 +7976,15 @@
             const filterCust = document.getElementById('complianceFilterCustomer');
             const filterTaxPrep = document.getElementById('complianceFilterTaxPrep');
 
-            const custs = (typeof currentCustomerRecords !== 'undefined' && currentCustomerRecords.length > 0) 
+            const rawCusts = (typeof currentCustomerRecords !== 'undefined' && currentCustomerRecords.length > 0) 
                 ? currentCustomerRecords 
                 : (currentCustomerList || []);
+            
+            const custs = rawCusts.filter(c => {
+                const num = (c.custumer_number || '').trim();
+                const legal = (c.legal_name || '').trim().toLowerCase();
+                return num !== 'CUST-0000' && !legal.includes('catch-all') && !legal.includes('unassigned');
+            });
             const taxTeam = (typeof currentTaxTeamList !== 'undefined') ? currentTaxTeamList : [];
 
             if (custSelect) {
