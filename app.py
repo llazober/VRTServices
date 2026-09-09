@@ -3223,7 +3223,14 @@ async def generate_compliance_preset_all_clients(request: Request, target_year: 
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, customer_type, assigned_user_id, legal_name FROM customer WHERE status = 'Active' OR status IS NULL;")
+            cur.execute("""
+                SELECT id, customer_type, assigned_user_id, legal_name 
+                FROM customer 
+                WHERE (status = 'Active' OR status IS NULL)
+                  AND COALESCE(custumer_number, '') != 'CUST-0000'
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%'
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Unassigned%';
+            """)
             customers = cur.fetchall() or []
             
             total_created = 0
@@ -3267,13 +3274,25 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT COUNT(*) AS active_cnt FROM customer WHERE status = 'Active' OR status IS NULL;")
+            cur.execute("""
+                SELECT COUNT(*) AS active_cnt 
+                FROM customer 
+                WHERE (status = 'Active' OR status IS NULL)
+                  AND COALESCE(custumer_number, '') != 'CUST-0000'
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%'
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Unassigned%';
+            """)
             active_cnt = (cur.fetchone() or {}).get("active_cnt", 0)
 
             cur.execute("""
-                SELECT COUNT(DISTINCT customer_id) AS covered_cnt
-                FROM compliance_calendar_events
-                WHERE EXTRACT(YEAR FROM due_date) = %s;
+                SELECT COUNT(DISTINCT e.customer_id) AS covered_cnt
+                FROM compliance_calendar_events e
+                JOIN customer c ON e.customer_id = c.id
+                WHERE EXTRACT(YEAR FROM e.due_date) = %s
+                  AND (c.status = 'Active' OR c.status IS NULL)
+                  AND COALESCE(c.custumer_number, '') != 'CUST-0000'
+                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%'
+                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Unassigned%';
             """, (tyear,))
             covered_cnt = (cur.fetchone() or {}).get("covered_cnt", 0)
 
