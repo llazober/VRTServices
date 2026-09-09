@@ -7867,11 +7867,7 @@
                     await fetchCustomerRecords();
                 }
                 const rawCustList = currentCustomerRecords || currentCustomerList || [];
-                const validCustList = rawCustList.filter(c => {
-                    const num = (c.custumer_number || '').trim();
-                    const legal = (c.legal_name || '').trim().toLowerCase();
-                    return num !== 'CUST-0000' && !legal.includes('catch-all') && !legal.includes('unassigned');
-                });
+                const validCustList = rawCustList.filter(c => (c.custumer_number || '').trim() !== 'CUST-0000');
 
                 const modal = document.getElementById('presetComplianceModal');
                 const select = document.getElementById('presetComplianceCustomerSelect');
@@ -7984,11 +7980,7 @@
                 ? currentCustomerRecords 
                 : (currentCustomerList || []);
             
-            const custs = rawCusts.filter(c => {
-                const num = (c.custumer_number || '').trim();
-                const legal = (c.legal_name || '').trim().toLowerCase();
-                return num !== 'CUST-0000' && !legal.includes('catch-all') && !legal.includes('unassigned');
-            });
+            const custs = rawCusts.filter(c => (c.custumer_number || '').trim() !== 'CUST-0000');
             const taxTeam = (typeof currentTaxTeamList !== 'undefined') ? currentTaxTeamList : [];
 
             if (custSelect) {

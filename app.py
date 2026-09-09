@@ -990,9 +990,7 @@ def init_compliance_tables():
                 DELETE FROM compliance_calendar_events 
                 WHERE customer_id IN (
                     SELECT id FROM customer 
-                    WHERE custumer_number = 'CUST-0000' 
-                       OR legal_name ILIKE '%Catch-All%' 
-                       OR legal_name ILIKE '%Unassigned%'
+                    WHERE custumer_number = 'CUST-0000'
                 );
             """)
             conn.commit()
@@ -2857,8 +2855,7 @@ async def get_compliance_events(
                 FROM compliance_calendar_events e
                 LEFT JOIN customer c ON e.customer_id = c.id
                 WHERE 1=1
-                  AND COALESCE(c.custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%'
+                  AND (c.custumer_number IS NULL OR c.custumer_number != 'CUST-0000')
             """
             params = []
             if customer_id and customer_id.strip() and customer_id != "all":
@@ -3087,14 +3084,13 @@ async def update_compliance_event_status(event_id: int, request: Request):
 
 def generate_preset_compliance_events_for_customer(cur, customer_id: int, customer_type: str = "Business", assigned_tax_prep: str = None, target_year: int = None) -> tuple[int, int]:
     """Generates default statutory compliance calendar preset schedule events for a customer, skipping exact duplicates."""
-    # Guard: Do not generate compliance schedules for CUST-0000 / Catch-all / Unassigned system customer
+    # Guard: Do not generate compliance schedules for unique system catch-all customer CUST-0000
     try:
-        cur.execute("SELECT custumer_number, legal_name FROM customer WHERE id = %s;", (customer_id,))
+        cur.execute("SELECT custumer_number FROM customer WHERE id = %s;", (customer_id,))
         cust_info = cur.fetchone()
         if cust_info:
             c_num = (cust_info.get("custumer_number") or "").strip()
-            l_name = (cust_info.get("legal_name") or "").strip().lower()
-            if c_num == "CUST-0000" or "catch-all" in l_name or "unassigned" in l_name:
+            if c_num == "CUST-0000":
                 print(f"Skipping preset compliance schedule generation for catch-all customer #{customer_id} ({c_num})")
                 return 0, 0
     except Exception as check_err:
@@ -3222,8 +3218,7 @@ async def generate_compliance_preset(customer_id: int, request: Request, target_
                 raise HTTPException(status_code=404, detail="Customer not found")
             
             c_num = (cust.get("custumer_number") or "").strip()
-            l_name = (cust.get("legal_name") or "").strip().lower()
-            if c_num == "CUST-0000" or "catch-all" in l_name or "unassigned" in l_name:
+            if c_num == "CUST-0000":
                 raise HTTPException(status_code=400, detail="Cannot generate compliance schedule for system catch-all customer (CUST-0000).")
             
             c_type = (cust.get("customer_type") or "Business").strip()
@@ -3264,8 +3259,7 @@ async def generate_compliance_preset_all_clients(request: Request, target_year: 
                 SELECT id, customer_type, assigned_user_id, legal_name 
                 FROM customer 
                 WHERE (LOWER(COALESCE(status, 'active')) = 'active' OR status IS NULL OR status = '')
-                  AND COALESCE(custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%';
+                  AND COALESCE(custumer_number, '') != 'CUST-0000';
             """)
             customers = cur.fetchall() or []
             
@@ -3314,8 +3308,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
                 SELECT COUNT(*) AS active_cnt 
                 FROM customer 
                 WHERE (LOWER(COALESCE(status, 'active')) = 'active' OR status IS NULL OR status = '')
-                  AND COALESCE(custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%';
+                  AND COALESCE(custumer_number, '') != 'CUST-0000';
             """)
             active_cnt = (cur.fetchone() or {}).get("active_cnt", 0)
 
@@ -3325,8 +3318,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
                 JOIN customer c ON e.customer_id = c.id
                 WHERE EXTRACT(YEAR FROM e.due_date) = %s
                   AND (LOWER(COALESCE(c.status, 'active')) = 'active' OR c.status IS NULL OR c.status = '')
-                  AND COALESCE(c.custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%';
+                  AND COALESCE(c.custumer_number, '') != 'CUST-0000';
             """, (tyear,))
             covered_cnt = (cur.fetchone() or {}).get("covered_cnt", 0)
 
