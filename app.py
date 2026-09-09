@@ -6542,43 +6542,78 @@ async def send_invoice_email(invoice_id: str):
         if conn: conn.close()
 
 @app.post("/api/billing/invoices/{invoice_id}/status")
+def revert_schedule_last_billed_at_if_needed(cur, schedule_id: int, target_invoice_id: int = None):
+    """Reverts a recurring schedule's last_billed_at timestamp to the prior valid invoice date, or NULL if none exists."""
+    if not schedule_id:
+        return
+    try:
+        cur.execute("""
+            SELECT created_at FROM customer_invoices
+            WHERE schedule_id = %s 
+              AND (%s IS NULL OR id != %s)
+              AND status NOT IN ('CANCELLED', 'VOID')
+            ORDER BY id DESC LIMIT 1;
+        """, (schedule_id, target_invoice_id, target_invoice_id))
+        prior = cur.fetchone()
+        if prior and (isinstance(prior, dict) and prior.get("created_at") or hasattr(prior, "__getitem__") and prior[0]):
+            prior_ts = prior.get("created_at") if isinstance(prior, dict) else prior[0]
+            cur.execute("UPDATE customer_billing_schedules SET last_billed_at = %s WHERE id = %s;", (prior_ts, schedule_id))
+            print(f"[BILLING REVERSION] Schedule #{schedule_id} last_billed_at reverted to prior invoice date: {prior_ts}")
+        else:
+            cur.execute("UPDATE customer_billing_schedules SET last_billed_at = NULL WHERE id = %s;", (schedule_id,))
+            print(f"[BILLING REVERSION] Schedule #{schedule_id} last_billed_at reset to NULL (no remaining active invoices).")
+    except Exception as e:
+        print(f"[BILLING REVERSION ERROR] Failed to revert last_billed_at for schedule #{schedule_id}: {e}")
+
+@app.put("/api/billing/invoices/{invoice_id}/status")
+@app.post("/api/billing/invoices/{invoice_id}/status")
 async def update_invoice_status(invoice_id: str, request: Request):
-    """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes."""
+    """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes, reverting recurring schedule last_billed_at if voided."""
     payload = await request.json()
     new_status = (payload.get("status") or "PAID").upper()
     payment_method = payload.get("payment_method") or "ACH / Bank Transfer"
     transaction_ref = payload.get("transaction_ref") or ""
     notes = payload.get("notes") or ""
 
-    if new_status not in ["PAID", "SENT", "OVERDUE", "DRAFT", "CANCELLED"]:
+    if new_status not in ["PAID", "SENT", "OVERDUE", "DRAFT", "CANCELLED", "VOID"]:
         raise HTTPException(status_code=400, detail="Invalid status value.")
 
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             inv_str = str(invoice_id).strip()
             if inv_str.isdigit():
-                where_clause = "WHERE id = %s OR invoice_number = %s"
-                params_paid = (new_status, payment_method, transaction_ref, notes, int(inv_str), inv_str)
-                params_other = (new_status, notes, int(inv_str), inv_str)
+                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
             else:
-                where_clause = "WHERE invoice_number = %s"
-                params_paid = (new_status, payment_method, transaction_ref, notes, inv_str)
-                params_other = (new_status, notes, inv_str)
+                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+            inv_row = cur.fetchone()
+            if not inv_row:
+                raise HTTPException(status_code=404, detail="Invoice not found.")
 
-            if new_status == "PAID":
-                cur.execute(f"""
-                    UPDATE customer_invoices 
-                    SET status = %s, paid_at = CURRENT_TIMESTAMP, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
-                    {where_clause};
-                """, params_paid)
-            else:
-                cur.execute(f"""
+            inv_id = inv_row["id"]
+            schedule_id = inv_row.get("schedule_id")
+
+            if new_status in ["CANCELLED", "VOID"]:
+                revert_schedule_last_billed_at_if_needed(cur, schedule_id, inv_id)
+                cur.execute("""
                     UPDATE customer_invoices 
                     SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
-                    {where_clause};
-                """, params_other)
+                    WHERE id = %s;
+                """, (new_status, notes or f"Voided by admin on {datetime.date.today()}", inv_id))
+            elif new_status == "PAID":
+                cur.execute("""
+                    UPDATE customer_invoices 
+                    SET status = %s, paid_at = CURRENT_TIMESTAMP, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                """, (new_status, payment_method, transaction_ref, notes, inv_id))
+            else:
+                cur.execute("""
+                    UPDATE customer_invoices 
+                    SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                """, (new_status, notes, inv_id))
+
             conn.commit()
             return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
     except HTTPException:
@@ -6590,16 +6625,20 @@ async def update_invoice_status(invoice_id: str, request: Request):
 
 @app.delete("/api/billing/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str):
-    """Deletes an invoice record."""
+    """Deletes an invoice record, reverting recurring schedule last_billed_at if associated."""
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             inv_str = str(invoice_id).strip()
             if inv_str.isdigit():
-                cur.execute("DELETE FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+                cur.execute("SELECT id, schedule_id FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
             else:
-                cur.execute("DELETE FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+                cur.execute("SELECT id, schedule_id FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+            inv_row = cur.fetchone()
+            if inv_row:
+                revert_schedule_last_billed_at_if_needed(cur, inv_row.get("schedule_id"), inv_row.get("id"))
+                cur.execute("DELETE FROM customer_invoices WHERE id = %s;", (inv_row["id"],))
             conn.commit()
             return {"status": "success", "message": f"Invoice #{invoice_id} deleted."}
     except HTTPException:
