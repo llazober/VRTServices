@@ -985,6 +985,15 @@ def init_compliance_tables():
                 CREATE INDEX IF NOT EXISTS idx_compliance_events_due_date ON compliance_calendar_events (due_date);
                 CREATE INDEX IF NOT EXISTS idx_compliance_events_status ON compliance_calendar_events (status);
                 CREATE INDEX IF NOT EXISTS idx_compliance_events_tax_prep ON compliance_calendar_events (assigned_tax_prep);
+
+                -- Guarantee CUST-0000 system customer has no compliance events
+                DELETE FROM compliance_calendar_events 
+                WHERE customer_id IN (
+                    SELECT id FROM customer 
+                    WHERE custumer_number = 'CUST-0000' 
+                       OR legal_name ILIKE '%Catch-All%' 
+                       OR legal_name ILIKE '%Unassigned%'
+                );
             """)
             conn.commit()
             print("Compliance calendar table initialized successfully.")
@@ -2848,6 +2857,9 @@ async def get_compliance_events(
                 FROM compliance_calendar_events e
                 LEFT JOIN customer c ON e.customer_id = c.id
                 WHERE 1=1
+                  AND COALESCE(c.custumer_number, '') != 'CUST-0000'
+                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%'
+                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Unassigned%'
             """
             params = []
             if customer_id and customer_id.strip() and customer_id != "all":
@@ -2920,6 +2932,14 @@ async def create_compliance_event(request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT custumer_number, legal_name FROM customer WHERE id = %s;", (int(customer_id),))
+            c_chk = cur.fetchone()
+            if c_chk:
+                c_num = (c_chk.get("custumer_number") or "").strip()
+                l_name = (c_chk.get("legal_name") or "").strip().lower()
+                if c_num == "CUST-0000" or "catch-all" in l_name or "unassigned" in l_name:
+                    raise HTTPException(status_code=400, detail="Cannot create compliance events for system catch-all customer (CUST-0000).")
+
             cur.execute("""
                 INSERT INTO compliance_calendar_events (
                     customer_id, category, title, description, jurisdiction,
@@ -3068,6 +3088,19 @@ async def update_compliance_event_status(event_id: int, request: Request):
 
 def generate_preset_compliance_events_for_customer(cur, customer_id: int, customer_type: str = "Business", assigned_tax_prep: str = None, target_year: int = None) -> tuple[int, int]:
     """Generates default statutory compliance calendar preset schedule events for a customer, skipping exact duplicates."""
+    # Guard: Do not generate compliance schedules for CUST-0000 / Catch-all / Unassigned system customer
+    try:
+        cur.execute("SELECT custumer_number, legal_name FROM customer WHERE id = %s;", (customer_id,))
+        cust_info = cur.fetchone()
+        if cust_info:
+            c_num = (cust_info.get("custumer_number") or "").strip()
+            l_name = (cust_info.get("legal_name") or "").strip().lower()
+            if c_num == "CUST-0000" or "catch-all" in l_name or "unassigned" in l_name:
+                print(f"Skipping preset compliance schedule generation for catch-all customer #{customer_id} ({c_num})")
+                return 0, 0
+    except Exception as check_err:
+        print(f"Notice checking catch-all status for customer #{customer_id}: {check_err}")
+
     c_type = (customer_type or "Business").strip()
     import datetime
     current_year = target_year if target_year else datetime.datetime.now().year
@@ -3188,6 +3221,11 @@ async def generate_compliance_preset(customer_id: int, request: Request, target_
             cust = cur.fetchone()
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer not found")
+            
+            c_num = (cust.get("custumer_number") or "").strip()
+            l_name = (cust.get("legal_name") or "").strip().lower()
+            if c_num == "CUST-0000" or "catch-all" in l_name or "unassigned" in l_name:
+                raise HTTPException(status_code=400, detail="Cannot generate compliance schedule for system catch-all customer (CUST-0000).")
             
             c_type = (cust.get("customer_type") or "Business").strip()
             assigned_tax_prep = cust.get("assigned_user_id") or None
