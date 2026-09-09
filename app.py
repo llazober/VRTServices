@@ -6541,7 +6541,6 @@ async def send_invoice_email(invoice_id: str):
     finally:
         if conn: conn.close()
 
-@app.post("/api/billing/invoices/{invoice_id}/status")
 def revert_schedule_last_billed_at_if_needed(cur, schedule_id: int, target_invoice_id: int = None):
     """Reverts a recurring schedule's last_billed_at timestamp to the prior valid invoice date, or NULL if none exists."""
     if not schedule_id:
