@@ -7734,7 +7734,11 @@
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = (today.getFullYear() === year && (today.getMonth() + 1) === month && today.getDate() === day);
 
-                const dayEvents = complianceCurrentEvents.filter(e => e.due_date && e.due_date.startsWith(dateStr));
+                const dayEvents = (complianceCurrentEvents || []).filter(e => {
+                    if (!e || !e.due_date) return false;
+                    const cleanDate = String(e.due_date).trim().split('T')[0];
+                    return cleanDate === dateStr;
+                });
 
                 let dayBg = 'rgba(15, 23, 42, 0.6)';
                 if (isToday) dayBg = 'rgba(245, 158, 11, 0.12)';

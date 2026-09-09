@@ -2859,7 +2859,6 @@ async def get_compliance_events(
                 WHERE 1=1
                   AND COALESCE(c.custumer_number, '') != 'CUST-0000'
                   AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%'
-                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Unassigned%'
             """
             params = []
             if customer_id and customer_id.strip() and customer_id != "all":
@@ -3266,8 +3265,7 @@ async def generate_compliance_preset_all_clients(request: Request, target_year: 
                 FROM customer 
                 WHERE (LOWER(COALESCE(status, 'active')) = 'active' OR status IS NULL OR status = '')
                   AND COALESCE(custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Unassigned%';
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%';
             """)
             customers = cur.fetchall() or []
             
@@ -3317,8 +3315,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
                 FROM customer 
                 WHERE (LOWER(COALESCE(status, 'active')) = 'active' OR status IS NULL OR status = '')
                   AND COALESCE(custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%'
-                  AND COALESCE(legal_name, '') NOT ILIKE '%Unassigned%';
+                  AND COALESCE(legal_name, '') NOT ILIKE '%Catch-All%';
             """)
             active_cnt = (cur.fetchone() or {}).get("active_cnt", 0)
 
@@ -3329,8 +3326,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
                 WHERE EXTRACT(YEAR FROM e.due_date) = %s
                   AND (LOWER(COALESCE(c.status, 'active')) = 'active' OR c.status IS NULL OR c.status = '')
                   AND COALESCE(c.custumer_number, '') != 'CUST-0000'
-                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%'
-                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Unassigned%';
+                  AND COALESCE(c.legal_name, '') NOT ILIKE '%Catch-All%';
             """, (tyear,))
             covered_cnt = (cur.fetchone() or {}).get("covered_cnt", 0)
 
