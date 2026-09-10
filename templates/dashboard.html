@@ -3060,7 +3060,16 @@
                 }
             });
 
-            if (tabName === 'audit') {
+            if (tabName === 'coa') {
+                fetchCoaRecords();
+            } else if (tabName === 'mappings') {
+                populateCustomerDropdownForMappings();
+                fetchParentMappings();
+            } else if (tabName === 'rules') {
+                fetchHistoryRecords();
+            } else if (tabName === 'taxteam') {
+                fetchTaxTeamMembers();
+            } else if (tabName === 'audit') {
                 loadAuditLogs(auditCurrentPage);
             } else if (tabName === 'rag') {
                 fetchKbDocuments();
@@ -3081,22 +3090,12 @@
             const tabParam = urlParams.get('tab') || '{{ sub_tab or "coa" }}';
             const targetTab = ['coa', 'mappings', 'rules', 'taxteam', 'audit', 'rag', 'esign'].includes(tabParam) ? tabParam : 'coa';
             
-            switchMgmtTab(targetTab);
-
             try {
-                await Promise.all([
-                    syncClientSelectDropdowns(),
-                    populateCustomerDropdownForMappings(),
-                    fetchCoaRecords(),
-                    fetchParentMappings(),
-                    fetchHistoryRecords(),
-                    fetchTaxTeamMembers(),
-                    fetchKbDocuments(),
-                    fetchEsignatureRequests()
-                ]);
+                await syncClientSelectDropdowns();
             } catch (err) {
-                console.error("Notice initializing Management Hub data:", err);
+                console.error("Notice syncing client select dropdowns:", err);
             }
+            switchMgmtTab(targetTab);
         }
 
         // ── VRT KNOWLEDGE BASE & RAG CONTROLLER ──────────────────────────────────────
