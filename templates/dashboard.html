@@ -2878,6 +2878,16 @@
         }
 
         // ── VRT KNOWLEDGE BASE & RAG CONTROLLER ──────────────────────────────────────
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         let kbDocumentsList = [];
 
         async function fetchKbDocuments() {
@@ -2923,7 +2933,7 @@
                             ${doc.chunk_count || 0} chunks
                         </td>
                         <td style="padding: 10px 12px; text-align: right;">
-                            <button onclick="deleteKbDocument(${doc.id})" title="Delete Document" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; padding: 4px 8px; font-size: 0.72rem; cursor: pointer;">
+                            <button onclick="deleteKbDocument(${doc.id})" title="Delete Document from VRT DB" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; font-weight: 800; border-radius: 8px; padding: 6px 12px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 4px;">
                                 🗑️ Delete
                             </button>
                         </td>
