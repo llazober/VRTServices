@@ -960,6 +960,13 @@
                     <span>{{ company_name }}</span>
                 </div>
 
+                <!-- AI Chatbot Header Button -->
+                <button type="button" onclick="openRagAssistantModal()" class="ai-chatbot-pill-btn" title="Open GPT-4o Mini AI Assistant & RAG Terminal" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(139, 92, 246, 0.25)); border: 1px solid rgba(236, 72, 153, 0.5); color: #fff; padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(236, 72, 153, 0.3); transition: all 0.2s ease;">
+                    <span style="font-size: 1.1rem; filter: drop-shadow(0 0 4px rgba(236, 72, 153, 0.8));">🤖</span>
+                    <span style="font-family: 'Outfit', sans-serif; font-weight: 800; background: linear-gradient(135deg, #f472b6, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">AI Assistant</span>
+                    <span style="background: rgba(236, 72, 153, 0.35); color: #f472b6; font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; font-weight: 800; border: 1px solid rgba(236, 72, 153, 0.5);">RAG</span>
+                </button>
+
                 <div id="headerUnreadEmailBadge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: default; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);" title="Unread email replies indicator — automatically disappears when all replies are read">
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
@@ -2342,6 +2349,71 @@
         </div>
     </div>
 
+    <!-- ── RAG AI CHATBOT ASSISTANT MODAL ────────────────────────── -->
+    <div id="ragAssistantModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+        <div style="background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 24px; max-width: 95%; width: 920px; max-height: 90vh; display: flex; flex-direction: column; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); transform: scale(0.95); transition: transform 0.3s ease; gap: 16px; color: #fff;">
+            <!-- Modal Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 14px; background: linear-gradient(135deg, rgba(236,72,153,0.3), rgba(56,189,248,0.3)); border: 1px solid rgba(236,72,153,0.5); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                        🤖
+                    </div>
+                    <div>
+                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            ✨ GPT-4o Mini <span style="color: #38bdf8;">RAG Query Terminal</span>
+                        </h3>
+                        <p style="font-size: 0.8rem; color: #94a3b8; margin: 2px 0 0 0;">
+                            Enterprise Knowledge Assistant powered by VRT Database Vector RAG
+                        </p>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 0.72rem; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 12px; border-radius: 12px; font-weight: 700;">
+                        VRT Database Vector RAG
+                    </span>
+                    <button onclick="closeRagAssistantModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; cursor: pointer; font-size: 1.1rem; border-radius: 10px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">✕</button>
+                </div>
+            </div>
+
+            <!-- Quick Suggestions Chips -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8;">Quick Prompts:</span>
+                <button type="button" onclick="setKbModalPrompt('What are the rules and guidelines for Form 8879?')" style="padding: 5px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.75rem; border-radius: 12px; cursor: pointer;">Form 8879 Rules</button>
+                <button type="button" onclick="setKbModalPrompt('Summarize tax return client onboarding requirements')" style="padding: 5px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.75rem; border-radius: 12px; cursor: pointer;">Client Onboarding</button>
+                <button type="button" onclick="setKbModalPrompt('What is the procedure for chart of accounts categorization?')" style="padding: 5px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.75rem; border-radius: 12px; cursor: pointer;">COA Procedures</button>
+            </div>
+
+            <!-- Input Box -->
+            <div style="display: flex; gap: 10px;">
+                <textarea id="kbModalQueryInput" rows="3" placeholder="Ask anything about your uploaded VRT Knowledge Base documents..." style="flex: 1; background: rgba(0,0,0,0.35); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 14px; padding: 12px 16px; font-size: 0.9rem; color: #fff; outline: none; resize: none; font-family: inherit;"></textarea>
+                <button type="button" id="kbModalQuerySubmitBtn" onclick="submitKbModalRagQuery()" style="width: 110px; background: linear-gradient(135deg, #0284c7, #3b82f6); color: #fff; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 18px rgba(56, 189, 248, 0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s ease;">
+                    <span style="font-size: 1.1rem;">🔍</span>
+                    <span>ASK AI</span>
+                </button>
+            </div>
+
+            <!-- AI Output Box -->
+            <div style="flex: 1; min-height: 300px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+                <div id="kbModalQueryResponseBox" style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px; font-size: 0.9rem; color: #e2e8f0; line-height: 1.6; overflow-y: auto; max-height: 360px;">
+                    <div style="text-align: center; color: #64748b; margin-top: 50px;">
+                        <div style="font-size: 2.4rem; margin-bottom: 10px;">🤖</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #f1f5f9;">GPT-4o Mini Knowledge Assistant Ready</div>
+                        <div style="font-size: 0.8rem; margin-top: 6px; color: #94a3b8;">Enter a question above to retrieve context chunks from VRT Database documents and generate AI answers.</div>
+                    </div>
+                </div>
+
+                <!-- Citations & Chunks Container -->
+                <div id="kbModalCitationsBox" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 16px;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>Retrieved Context Chunks (VRT DB)</span>
+                        <span id="kbModalChunkCountLabel" style="color: #ec4899;">0 chunks</span>
+                    </div>
+                    <div id="kbModalCitationsList" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ── BILLING MODALS ─────────────────────────────────────────── -->
     <!-- Create Recurring Schedule Modal -->
     <div id="billingScheduleModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
@@ -3096,6 +3168,115 @@
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = "<span>🔍</span><span>Ask AI</span>";
+            }
+        }
+
+        // ── RAG ASSISTANT MODAL CONTROLLER ──────────────────────────────────────────
+        function openRagAssistantModal() {
+            const modal = document.getElementById('ragAssistantModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            requestAnimationFrame(() => {
+                modal.style.opacity = '1';
+                const content = modal.firstElementChild;
+                if (content) content.style.transform = 'scale(1)';
+            });
+        }
+
+        function closeRagAssistantModal() {
+            const modal = document.getElementById('ragAssistantModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            const content = modal.firstElementChild;
+            if (content) content.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+
+        function setKbModalPrompt(text) {
+            const input = document.getElementById('kbModalQueryInput');
+            if (input) {
+                input.value = text;
+                input.focus();
+            }
+        }
+
+        async function submitKbModalRagQuery() {
+            const input = document.getElementById('kbModalQueryInput');
+            const submitBtn = document.getElementById('kbModalQuerySubmitBtn');
+            const responseBox = document.getElementById('kbModalQueryResponseBox');
+            const citationsBox = document.getElementById('kbModalCitationsBox');
+            const citationsList = document.getElementById('kbModalCitationsList');
+            const chunkCountLabel = document.getElementById('kbModalChunkCountLabel');
+
+            const query = input ? input.value.trim() : '';
+            if (!query) {
+                alert("Please enter a query question first.");
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = "<span style='font-size:1rem;'>⏳</span><span>Searching</span>";
+            responseBox.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #38bdf8;">
+                    <div style="font-size: 2rem; animation: spin 1s linear infinite; display: inline-block;">⚙️</div>
+                    <div style="font-weight: 700; margin-top: 12px; font-size: 0.95rem;">Retrieving context from VRT Database & Querying GPT-4o Mini...</div>
+                </div>
+            `;
+
+            try {
+                const resp = await fetch('/api/kb/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const res = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(res.detail || "Failed to query RAG engine");
+                }
+
+                let formattedAnswer = escapeHtml(res.answer || "");
+                formattedAnswer = formattedAnswer
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/### (.*?)\n/g, '<h3 style="color:#fff; font-size:1.05rem; margin:12px 0 6px 0;">$1</h3>')
+                    .replace(/\[Source (\d+)\]/g, '<span style="background:rgba(236,72,153,0.2); border:1px solid rgba(236,72,153,0.4); color:#f472b6; padding:2px 6px; border-radius:6px; font-size:0.75rem; font-weight:700;">Source $1</span>')
+                    .replace(/\n/g, '<br>');
+
+                responseBox.innerHTML = `
+                    <div style="font-family: inherit;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                            <span style="font-weight: 800; color: #f472b6; font-size: 0.85rem; text-transform: uppercase;">Answer from GPT-4o Mini</span>
+                            <span style="font-size: 0.75rem; color: #94a3b8;">${res.retrieved_chunks ? res.retrieved_chunks.length : 0} Sources Retrieved</span>
+                        </div>
+                        <div>${formattedAnswer}</div>
+                    </div>
+                `;
+
+                if (res.citations && res.citations.length > 0) {
+                    citationsBox.style.display = "block";
+                    chunkCountLabel.textContent = `${res.citations.length} retrieved chunks`;
+                    citationsList.innerHTML = res.citations.map(c => `
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 12px; font-size: 0.78rem;">
+                            <div style="font-weight: 700; color: #38bdf8; display: flex; justify-content: space-between;">
+                                <span>[Source ${c.source_id}] ${escapeHtml(c.title)}</span>
+                                <span style="color: #ec4899;">Score: ${c.score}</span>
+                            </div>
+                            <div style="color: #cbd5e1; margin-top: 4px; font-style: italic;">"${escapeHtml(c.snippet)}"</div>
+                        </div>
+                    `).join('');
+                } else {
+                    citationsBox.style.display = "none";
+                }
+
+            } catch (err) {
+                console.error("Modal RAG Query Error:", err);
+                responseBox.innerHTML = `<div style="color: #f87171; font-weight: 700;">❌ Query Error: ${escapeHtml(err.message)}</div>`;
+                citationsBox.style.display = "none";
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = "<span style='font-size: 1.1rem;'>🔍</span><span>ASK AI</span>";
             }
         }
 
