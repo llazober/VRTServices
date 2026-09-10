@@ -8210,7 +8210,7 @@
                         <td style="padding: 12px 16px; text-align: right;">
                             <div style="display: flex; justify-content: flex-end; gap: 8px;">
                                 ${isCompleted ? 
-                                    `${r.embed_src ? `<button onclick="viewEsignatureRequest('${escapeHtml(r.embed_src)}', '${escapeHtml(r.document_name)}')" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">👁️ Summary</button>` : ''}
+                                    `<button onclick="openEsignatureSummaryModal(${r.id}, '${escapeHtml(r.document_name)}', '${escapeHtml(r.customer_name)}', '${escapeHtml(r.signer_email)}', '${signedDate}')" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">👁️ Summary</button>
                                      <a href="/api/esignature/requests/${r.id}/pdf" target="_blank" style="padding: 6px 12px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; font-size: 0.75rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">📄 Signed PDF</a>
                                      <a href="/api/esignature/requests/${r.id}/audit-pdf" target="_blank" style="padding: 6px 12px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 8px; font-size: 0.75rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">📜 Audit Certificate</a>` : 
                                     (r.embed_src ? `<button onclick="viewEsignatureRequest('${escapeHtml(r.embed_src)}', '${escapeHtml(r.document_name)}')" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">✍️ Sign Document</button>` : '')
@@ -8321,6 +8321,54 @@
             } finally {
                 if (btn) { btn.disabled = false; btn.innerText = 'Send Signature Request'; }
             }
+        }
+
+        function openEsignatureSummaryModal(reqId, docTitle, custName, signerEmail, signedDate) {
+            closeAllAppModals();
+            const modal = document.getElementById('esignatureViewModal');
+            const container = document.getElementById('esignViewModalContainer');
+            const title = document.getElementById('esignViewModalTitle');
+
+            if (!modal || !container) return;
+
+            if (title) title.innerText = '✍️ E-Signature Summary — ' + (docTitle || 'Document');
+
+            container.innerHTML = `
+                <div style="padding: 24px; color: #f8fafc; font-family: 'Outfit', sans-serif;">
+                    <div style="background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                        <div>
+                            <span style="background: #4ade80; color: #0f172a; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">COMPLETED & VERIFIED</span>
+                            <h3 style="margin: 8px 0 0 0; color: #fff; font-size: 1.1rem;">${escapeHtml(docTitle)}</h3>
+                        </div>
+                        <div style="text-align: right; font-size: 0.85rem; color: #94a3b8;">
+                            <div>Signed Date: <strong style="color: #4ade80;">${signedDate || 'Completed'}</strong></div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 14px 18px; border-radius: 10px;">
+                            <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Customer</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: #38bdf8; margin-top: 4px;">${escapeHtml(custName || '-')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 14px 18px; border-radius: 10px;">
+                            <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Signer Email</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: #cbd5e1; margin-top: 4px;">${escapeHtml(signerEmail || '-')}</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                        <a href="/api/esignature/requests/${reqId}/pdf" target="_blank" style="flex: 1; text-align: center; padding: 12px; background: rgba(74, 222, 128, 0.2); border: 1px solid rgba(74, 222, 128, 0.4); color: #4ade80; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem;">📄 Open Signed PDF Document</a>
+                        <a href="/api/esignature/requests/${reqId}/audit-pdf" target="_blank" style="flex: 1; text-align: center; padding: 12px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem;">📜 Open Legal Audit Certificate</a>
+                    </div>
+
+                    <div style="border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); height: 420px; background: #141722;">
+                        <iframe src="/api/esignature/requests/${reqId}/pdf" style="width: 100%; height: 100%; border: none;"></iframe>
+                    </div>
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+            setTimeout(() => { modal.style.opacity = '1'; }, 10);
         }
 
         function viewEsignatureRequest(embedSrc, docTitle) {

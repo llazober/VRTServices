@@ -3419,75 +3419,85 @@ def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str
     
     if "8879" in dn_lower:
         return f"""
-        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">IRS Form 8879 — e-File Signature Authorization</h2>
-            <p><strong>Taxpayer Name:</strong> <text-field name="Taxpayer Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
-            <p><strong>Spouse Name (if filing jointly):</strong> <text-field name="Spouse Name" required="false" style="width: 280px; display: inline-block;"></text-field></p>
-            <p style="margin-top: 20px;">
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879 — e-File Signature Authorization</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Taxpayer Name:</strong> <text-field name="Taxpayer Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Spouse Name (if filing jointly):</strong> <text-field name="Spouse Name" required="false" style="width: 300px; display: inline-block;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Authorization Agreement</h4>
+            <p style="font-size: 15px; color: #334155;">
                 I authorize <strong>VRT Services</strong> to enter my Self-Select PIN as my signature on my electronically filed income tax return.
                 I confirm that I have reviewed a copy of my tax return and that the information shown is true, correct, and complete to the best of my knowledge.
             </p>
-            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
-                <p style="margin-bottom: 12px;"><strong>Taxpayer E-Signature:</strong></p>
-                <signature-field name="Taxpayer Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            <div style="margin-top: 48px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Taxpayer E-Signature:</strong></p>
+                <signature-field name="Taxpayer Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
             </div>
-            <div style="margin-top: 20px;">
-                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
             </div>
         </div>
         """
     elif "engagement" in dn_lower:
         return f"""
-        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">2026 Tax Preparation Engagement Letter</h2>
-            <p><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
-            <p style="margin-top: 20px;">
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">2026 Tax Preparation Engagement Letter</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Terms of Engagement</h4>
+            <p style="font-size: 15px; color: #334155;">
                 This letter confirms our understanding of the terms and objectives of our engagement and the nature and limitations of the tax services VRT Services will provide.
                 We will prepare your federal and state tax returns from information you furnish to us.
             </p>
-            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
-                <p style="margin-bottom: 12px;"><strong>Client E-Signature:</strong></p>
-                <signature-field name="Client Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            <div style="margin-top: 48px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Client E-Signature:</strong></p>
+                <signature-field name="Client Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
             </div>
-            <div style="margin-top: 20px;">
-                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
             </div>
         </div>
         """
     elif "consent" in dn_lower or "7216" in dn_lower:
         return f"""
-        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">IRC § 7216 Consent to Use Tax Return Information</h2>
-            <p><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
-            <p style="margin-top: 20px;">
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRC § 7216 Consent to Use Tax Return Information</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+            </div>
+            <p style="font-size: 15px; color: #334155;">
                 Federal law requires this consent form to be provided to you. Unless authorized by law, we cannot use your tax return information for purposes other than the preparation and filing of your tax return without your consent.
             </p>
-            <p>
+            <p style="font-size: 15px; color: #334155;">
                 By signing below, you authorize VRT Services to use and retain your tax documentation for multi-year tax planning and advisory services.
             </p>
-            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
-                <p style="margin-bottom: 12px;"><strong>Client E-Signature:</strong></p>
-                <signature-field name="Client Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            <div style="margin-top: 48px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Client E-Signature:</strong></p>
+                <signature-field name="Client Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
             </div>
-            <div style="margin-top: 20px;">
-                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
             </div>
         </div>
         """
     else:
         return f"""
-        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">{doc_name}</h2>
-            <p><strong>Signer Name:</strong> <text-field name="Signer Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
-            <p style="margin-top: 20px;">
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">{doc_name}</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Signer Name:</strong> <text-field name="Signer Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+            </div>
+            <p style="font-size: 15px; color: #334155;">
                 Please review and sign this document to complete your request with VRT Services.
             </p>
-            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
-                <p style="margin-bottom: 12px;"><strong>Signature:</strong></p>
-                <signature-field name="Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            <div style="margin-top: 48px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Signature:</strong></p>
+                <signature-field name="Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
             </div>
-            <div style="margin-top: 20px;">
-                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
             </div>
         </div>
         """
@@ -3649,11 +3659,11 @@ async def public_esignature_page(request: Request, request_id: int):
                     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     padding: 16px 32px; display: flex; justify-content: space-between; align-items: center;
                 }}
-                .header h1 {{ font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0; }}
+                .header h1 {{ font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; }}
                 .container {{ flex: 1; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
                 .card {{
                     background: #141722; border: 1px solid rgba(255,255,255,0.1);
-                    border-radius: 20px; width: 100%; max-width: 960px; height: 82vh;
+                    border-radius: 20px; width: 100%; max-width: 980px; height: 84vh;
                     box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;
                 }}
                 docuseal-form {{ width: 100%; height: 100%; display: block; }}
@@ -3662,8 +3672,13 @@ async def public_esignature_page(request: Request, request_id: int):
         </head>
         <body>
             <div class="header">
-                <h1>✍️ {parent_name} Portal — E-Signature</h1>
-                <div style="font-size: 0.9rem; color: #38bdf8; font-weight: 700;">{doc_name} ({customer_name})</div>
+                <div>
+                    <h1>✍️ {parent_name} Portal — E-Signature</h1>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;">📜 Please review all document details below before signing.</div>
+                </div>
+                <div style="font-size: 0.88rem; color: #38bdf8; font-weight: 700; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); padding: 8px 16px; border-radius: 12px;">
+                    📄 {doc_name} ({customer_name})
+                </div>
             </div>
             <div class="container">
                 <div class="card">
