@@ -3656,6 +3656,7 @@ async def public_esignature_page(request: Request, request_id: int):
                     border-radius: 20px; width: 100%; max-width: 960px; height: 82vh;
                     box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;
                 }}
+                docuseal-form {{ width: 100%; height: 100%; display: block; }}
                 iframe {{ width: 100%; height: 100%; border: none; }}
             </style>
         </head>
@@ -3666,7 +3667,7 @@ async def public_esignature_page(request: Request, request_id: int):
             </div>
             <div class="container">
                 <div class="card">
-                    {f'<iframe src="{embed_src}" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
+                    {f'<docuseal-form data-src="{embed_src}" data-expand="true"><iframe src="{embed_src}{"?" if "?" not in embed_src else "&"}expand=true" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe></docuseal-form>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
                 </div>
             </div>
         </body>
