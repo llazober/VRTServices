@@ -3413,14 +3413,114 @@ def get_docuseal_headers():
         "Content-Type": "application/json"
     }
 
+def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str:
+    dn_lower = (doc_name or "").lower()
+    sname = signer_name or "Taxpayer"
+    
+    if "8879" in dn_lower:
+        return f"""
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">IRS Form 8879 — e-File Signature Authorization</h2>
+            <p><strong>Taxpayer Name:</strong> <text-field name="Taxpayer Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
+            <p><strong>Spouse Name (if filing jointly):</strong> <text-field name="Spouse Name" required="false" style="width: 280px; display: inline-block;"></text-field></p>
+            <p style="margin-top: 20px;">
+                I authorize <strong>VRT Services</strong> to enter my Self-Select PIN as my signature on my electronically filed income tax return.
+                I confirm that I have reviewed a copy of my tax return and that the information shown is true, correct, and complete to the best of my knowledge.
+            </p>
+            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
+                <p style="margin-bottom: 12px;"><strong>Taxpayer E-Signature:</strong></p>
+                <signature-field name="Taxpayer Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 20px;">
+                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif "engagement" in dn_lower:
+        return f"""
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">2026 Tax Preparation Engagement Letter</h2>
+            <p><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
+            <p style="margin-top: 20px;">
+                This letter confirms our understanding of the terms and objectives of our engagement and the nature and limitations of the tax services VRT Services will provide.
+                We will prepare your federal and state tax returns from information you furnish to us.
+            </p>
+            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
+                <p style="margin-bottom: 12px;"><strong>Client E-Signature:</strong></p>
+                <signature-field name="Client Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 20px;">
+                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif "consent" in dn_lower or "7216" in dn_lower:
+        return f"""
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">IRC § 7216 Consent to Use Tax Return Information</h2>
+            <p><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
+            <p style="margin-top: 20px;">
+                Federal law requires this consent form to be provided to you. Unless authorized by law, we cannot use your tax return information for purposes other than the preparation and filing of your tax return without your consent.
+            </p>
+            <p>
+                By signing below, you authorize VRT Services to use and retain your tax documentation for multi-year tax planning and advisory services.
+            </p>
+            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
+                <p style="margin-bottom: 12px;"><strong>Client E-Signature:</strong></p>
+                <signature-field name="Client Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 20px;">
+                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            </div>
+        </div>
+        """
+    else:
+        return f"""
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 24px;">{doc_name}</h2>
+            <p><strong>Signer Name:</strong> <text-field name="Signer Name" required="true" default_value="{sname}" style="width: 280px; display: inline-block;"></text-field></p>
+            <p style="margin-top: 20px;">
+                Please review and sign this document to complete your request with VRT Services.
+            </p>
+            <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px;">
+                <p style="margin-bottom: 12px;"><strong>Signature:</strong></p>
+                <signature-field name="Signature" required="true" style="width: 340px; height: 90px; display: block; border: 1px dashed #0284c7; padding: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 20px;">
+                <p><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block;"></date-field></p>
+            </div>
+        </div>
+        """
+
 def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True):
     """
-    Calls DocuSeal API POST /submissions to issue an e-signature request.
+    Calls DocuSeal API to create a signature submission. If no template_id or PDF file base64
+    is provided, automatically generates a rich HTML e-signature template on DocuSeal Cloud via POST /templates/html.
     Returns parsed JSON response from DocuSeal.
     """
     headers = get_docuseal_headers()
+    target_template_id = None
+
+    if template_id and str(template_id).strip():
+        try:
+            target_template_id = int(template_id)
+        except ValueError:
+            target_template_id = template_id
+    elif not pdf_base64:
+        # Create HTML template dynamically on DocuSeal Cloud
+        html_content = docuseal_generate_html_template(document_name, signer_name)
+        url_tpl = f"{DOCUSEAL_HOST}/templates/html"
+        tpl_payload = {
+            "name": f"{document_name} Template",
+            "html": html_content
+        }
+        req_tpl_data = json.dumps(tpl_payload).encode("utf-8")
+        req_tpl = urllib.request.Request(url_tpl, data=req_tpl_data, headers=headers, method="POST")
+        with urllib.request.urlopen(req_tpl) as resp_tpl:
+            tpl_res = json.loads(resp_tpl.read().decode("utf-8"))
+            target_template_id = tpl_res.get("id")
+
     url = f"{DOCUSEAL_HOST}/submissions"
-    
     payload = {
         "send_email": send_email,
         "submitters": [
@@ -3431,12 +3531,9 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
             }
         ]
     }
-    
-    if template_id and str(template_id).strip():
-        try:
-            payload["template_id"] = int(template_id)
-        except ValueError:
-            payload["template_id"] = template_id
+
+    if target_template_id:
+        payload["template_id"] = target_template_id
     elif pdf_base64:
         payload["documents"] = [
             {
@@ -3444,13 +3541,7 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                 "file": pdf_base64
             }
         ]
-    else:
-        payload["documents"] = [
-            {
-                "name": document_name
-            }
-        ]
-        
+
     req_data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
     
@@ -3504,6 +3595,31 @@ async def public_esignature_page(request: Request, request_id: int):
         doc_name = req_rec.get("document_name") or "Document"
         customer_name = req_rec.get("customer_name") or ""
         parent_name = req_rec.get("parent_name") or "VRT Services"
+        signer_name = req_rec.get("signer_name") or customer_name or "Taxpayer"
+        signer_email = req_rec.get("signer_email") or ""
+
+        # Auto-heal: If embed_src is missing for a pending request, generate the DocuSeal submission on the fly
+        if not embed_src and (req_rec.get("status") or "pending").lower() == "pending":
+            try:
+                ds_resp = docuseal_create_submission(
+                    customer_id=req_rec["customer_id"],
+                    document_name=doc_name,
+                    signer_name=signer_name,
+                    signer_email=signer_email,
+                    send_email=False
+                )
+                sub_id, new_embed_src = extract_docuseal_info(ds_resp)
+                if new_embed_src:
+                    embed_src = new_embed_src
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE esignature_requests
+                            SET docuseal_submit_id = %s, embed_src = %s, updated_at = NOW()
+                            WHERE id = %s;
+                        """, (sub_id, embed_src, request_id))
+                    conn.commit()
+            except Exception as auto_heal_err:
+                print(f"[DOCUSEAL AUTO-HEAL WARNING] Could not auto-heal request {request_id}: {auto_heal_err}")
 
         return HTMLResponse(content=f"""
         <!DOCTYPE html>
