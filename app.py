@@ -27,7 +27,7 @@ import email.utils
 import re
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from fastapi.exceptions import HTTPException, RequestValidationError
@@ -3757,7 +3757,7 @@ async def send_esignature_request(
                 signer_email=signer_email,
                 template_id=template_id,
                 pdf_base64=pdf_b64,
-                send_email=send_email
+                send_email=False
             )
             ds_submit_id, ds_embed_src = extract_docuseal_info(ds_resp)
         except Exception as ds_err:
@@ -3789,14 +3789,19 @@ async def send_esignature_request(
                     email_payload = {
                         "from": "VRT Services Portal <notification@vrtservices12.com>",
                         "to": [signer_email],
-                        "subject": f"E-Signature Request: {document_name} — VRT Services",
+                        "subject": f"✍️ Signature Requested: {document_name}",
                         "html": f"""
-                            <div style="font-family: Arial, sans-serif; background-color: #0f172a; padding: 30px; color: #f8fafc; border-radius: 12px;">
-                                <h2 style="color: #38bdf8;">✍️ Signature Requested</h2>
-                                <p>Hello <strong>{signer_name}</strong>,</p>
-                                <p>You have been requested by <strong>VRT Services</strong> to review and e-sign the following document:</p>
-                                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                    <strong>Document Name:</strong> {document_name}
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
+                                <h2 style="color: #38bdf8; font-size: 20px; margin-top: 0;">✍️ E-Signature Request</h2>
+                                <p style="font-size: 15px; color: #cbd5e1; line-height: 1.6;">
+                                    Hello <strong>{signer_name}</strong>,
+                                </p>
+                                <p style="font-size: 15px; color: #cbd5e1; line-height: 1.6;">
+                                    <strong>VRT Services</strong> has requested your signature on the following document:
+                                </p>
+                                <div style="background: #1e293b; padding: 16px 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #38bdf8;">
+                                    <div style="font-size: 16px; font-weight: bold; color: #ffffff;">📄 {document_name}</div>
+                                    <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Sent by VRT Services Portal</div>
                                 </div>
                                 <p style="margin-top: 24px;">
                                     <a href="{sign_url}" style="background: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;">Review & Sign Document</a>
@@ -3836,6 +3841,73 @@ async def delete_esignature_request(request_id: int, request: Request):
         return {"success": True, "message": f"Request {request_id} deleted."}
     except Exception as e:
         print(f"Error deleting e-signature request {request_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/esignature/requests/{request_id}/pdf")
+@app.get("/portal/esignature/requests/{request_id}/pdf")
+async def get_esignature_signed_pdf(request_id: int):
+    """
+    Returns or streams the completed signed PDF for an e-signature request.
+    Downloads from DO Spaces if key exists, or fetches from DocuSeal Cloud API if available.
+    """
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT er.*, c.legal_name, c.parent_name
+                FROM esignature_requests er
+                JOIN customer c ON er.customer_id = c.id
+                WHERE er.id = %s;
+            """, (request_id,))
+            req_rec = cur.fetchone()
+
+        if not req_rec:
+            raise HTTPException(status_code=404, detail="E-Signature request not found.")
+
+        s3_key = req_rec.get("do_spaces_pdf_key")
+        pdf_bytes = None
+
+        # 1. Try to load from DigitalOcean Spaces if uploaded
+        if s3_key:
+            try:
+                s3_client, err = get_s3_client()
+                if s3_client:
+                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                    obj = s3_client.get_object(Bucket=bucket, Key=s3_key)
+                    pdf_bytes = obj["Body"].read()
+            except Exception as s3_err:
+                print(f"[ESIGN PDF] Error fetching from DO Spaces key {s3_key}: {s3_err}")
+
+        # 2. If not found in DO Spaces, fetch directly from DocuSeal API
+        if not pdf_bytes:
+            submit_id = req_rec.get("docuseal_submit_id")
+            if submit_id:
+                try:
+                    headers = get_docuseal_headers()
+                    pdf_url = f"{DOCUSEAL_HOST}/submissions/{submit_id}/download"
+                    pdf_req = urllib.request.Request(pdf_url, headers=headers)
+                    with urllib.request.urlopen(pdf_req) as pdf_resp:
+                        pdf_bytes = pdf_resp.read()
+                except Exception as ds_dl_err:
+                    print(f"[ESIGN PDF] Error downloading from DocuSeal: {ds_dl_err}")
+
+        if not pdf_bytes:
+            raise HTTPException(status_code=404, detail="Signed PDF document is not available yet.")
+
+        signer = (req_rec.get("signer_name") or req_rec.get("legal_name") or "Signed").replace(" ", "_")
+        docname = (req_rec.get("document_name") or "Document").replace(" ", "_")
+        filename = f"{signer}_{docname}_Signed.pdf"
+
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
@@ -3926,8 +3998,11 @@ async def docuseal_webhook_handler(request: Request):
                                 if s3_client:
                                     cust_dict = {"id": cust_id, "legal_name": req_rec["legal_name"], "parent_name": req_rec["parent_name"]}
                                     root_folder = get_customer_root_folder_path(cust_dict)
+                                    signer_name = req_rec.get("signer_name") or req_rec.get("legal_name") or "Signer"
+                                    safe_signer = sanitize_folder_name(signer_name)
                                     safe_doc = sanitize_folder_name(doc_name)
-                                    s3_key = f"{root_folder}ESignatures/{safe_doc}_Signed_{req_id}.pdf"
+                                    signed_date = datetime.datetime.now().strftime("%Y-%m-%d")
+                                    s3_key = f"{root_folder}ESignatures/{safe_signer}_{safe_doc}_Signed_{signed_date}.pdf"
                                     bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
 
                                     s3_client.put_object(
