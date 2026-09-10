@@ -23,7 +23,7 @@ This guide walks you through connecting **DocuSeal Cloud** (`https://api.docusea
 
 1. In your DocuSeal dashboard, go to **Settings ➔ Webhooks**.
 2. Click **Add Webhook**:
-   - **Target URL**: `https://vrt-services.com/api/webhooks/docuseal`
+   - **Target URL**: `https://vrtservices12.com/api/webhooks/docuseal`
    - **Events**: Select `form.completed` and `submission.completed`.
 3. Click **Save Webhook**.
 

@@ -115,7 +115,7 @@ sudo certbot --nginx -d esign.vrt-services.com
 3. Navigate to **Settings ➔ API** from the left menu.
 4. Click **Create API Key** and copy the generated token.
 5. Navigate to **Settings ➔ Webhooks**:
-   - **Target URL**: `https://vrt-services.com/api/webhooks/docuseal`
+   - **Target URL**: `https://vrtservices12.com/api/webhooks/docuseal`
    - **Events**: Select `form.completed` and `submission.completed`.
 
 ---
