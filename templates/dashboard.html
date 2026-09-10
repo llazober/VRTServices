@@ -3017,12 +3017,19 @@
             syncClientSelectDropdowns();
             loadWorkloadSummary();
 
-            if (window.location.pathname === '/billing' || '{{ active_tab }}' === 'billing') {
-                initBillingModule();
-            }
+            const currentPath = window.location.pathname;
+            const currentTab = '{{ active_tab or "" }}';
 
-            if (window.location.pathname.startsWith('/management') || window.location.pathname.startsWith('/tools') || '{{ active_tab }}' === 'management') {
+            if (currentPath === '/customers' || currentTab === 'customers') {
+                fetchCustomerRecords(true);
+            } else if (currentPath === '/billing' || currentTab === 'billing') {
+                initBillingModule();
+            } else if (currentPath === '/compliance' || currentTab === 'compliance') {
+                loadComplianceData();
+            } else if (currentPath.startsWith('/management') || currentPath.startsWith('/tools') || currentTab === 'management') {
                 initManagementModule();
+            } else {
+                fetchCustomerRecords();
             }
         });
 
