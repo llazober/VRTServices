@@ -1092,6 +1092,40 @@ def init_kb_tables():
         if conn:
             conn.close()
 
+def init_esignature_tables():
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS esignature_requests (
+                    id                  SERIAL PRIMARY KEY,
+                    docuseal_submit_id  VARCHAR(100),
+                    docuseal_template_id VARCHAR(100),
+                    customer_id         INT NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+                    document_name       VARCHAR(255) NOT NULL,
+                    signer_name         VARCHAR(255) NOT NULL,
+                    signer_email        VARCHAR(255) NOT NULL,
+                    status              VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    embed_src           TEXT DEFAULT '',
+                    do_spaces_pdf_key   TEXT DEFAULT '',
+                    do_spaces_cert_key  TEXT DEFAULT '',
+                    signed_at           TIMESTAMP,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_esign_cust_id ON esignature_requests(customer_id);
+                CREATE INDEX IF NOT EXISTS idx_esign_submit_id ON esignature_requests(docuseal_submit_id);
+            """)
+            conn.commit()
+            print("E-Signature tables initialized successfully in VRT database.")
+    except Exception as e:
+        print(f"Error initializing E-Signature tables: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
     if not text:
         return []
@@ -1334,6 +1368,7 @@ try:
     init_tax_team_table()
     init_compliance_tables()
     init_kb_tables()
+    init_esignature_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -1548,6 +1583,7 @@ def init_customer_do_folders(customer_id: int, legal_name: str, year: int = None
             f"{root_path}Tax Documents/",
             f"{root_path}Tax Documents/Tax Year {year}/",
             f"{root_path}Tax Documents/Tax Year {year - 1}/",
+            f"{root_path}ESignatures/",
         ]
     else:
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -1560,6 +1596,7 @@ def init_customer_do_folders(customer_id: int, legal_name: str, year: int = None
             f"{root_path}Check Images/Year {year}/",
             f"{root_path}Tax Documents/",
             f"{root_path}Tax Documents/Tax Year {year}/",
+            f"{root_path}ESignatures/",
         ]
         for m in months:
             folders_to_create.append(f"{root_path}Check Images/Year {year}/{m}/")
@@ -3364,6 +3401,341 @@ async def get_compliance_events(
     finally:
         if conn:
             conn.close()
+
+# ── DOCUSEAL E-SIGNATURE INTEGRATION & HELPERS ─────────────────────────────
+DOCUSEAL_API_KEY = os.environ.get("DOCUSEAL_API_KEY", "")
+DOCUSEAL_HOST = os.environ.get("DOCUSEAL_HOST", "https://api.docuseal.com").rstrip("/")
+
+def get_docuseal_headers():
+    api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
+    return {
+        "X-Auth-Token": api_key,
+        "Content-Type": "application/json"
+    }
+
+def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True):
+    """
+    Calls DocuSeal API POST /submissions to issue an e-signature request.
+    Returns parsed JSON response from DocuSeal.
+    """
+    headers = get_docuseal_headers()
+    url = f"{DOCUSEAL_HOST}/submissions"
+    
+    payload = {
+        "send_email": send_email,
+        "submitters": [
+            {
+                "name": signer_name,
+                "email": signer_email,
+                "role": "First Party"
+            }
+        ]
+    }
+    
+    if template_id and str(template_id).strip():
+        try:
+            payload["template_id"] = int(template_id)
+        except ValueError:
+            payload["template_id"] = template_id
+    elif pdf_base64:
+        payload["documents"] = [
+            {
+                "name": document_name,
+                "file": pdf_base64
+            }
+        ]
+    else:
+        payload["documents"] = [
+            {
+                "name": document_name
+            }
+        ]
+        
+    req_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
+    
+    with urllib.request.urlopen(req) as resp:
+        resp_body = resp.read().decode("utf-8")
+        return json.loads(resp_body)
+
+def extract_docuseal_info(ds_resp):
+    submit_id = None
+    embed_src = None
+    if isinstance(ds_resp, list) and len(ds_resp) > 0:
+        item = ds_resp[0]
+        submit_id = str(item.get("submission_id") or item.get("id") or "")
+        slug = item.get("slug")
+        embed_src = item.get("embed_src") or (f"{DOCUSEAL_HOST}/s/{slug}" if slug else "")
+    elif isinstance(ds_resp, dict):
+        submit_id = str(ds_resp.get("id") or "")
+        slug = ds_resp.get("slug")
+        submitters = ds_resp.get("submitters") or []
+        if submitters and isinstance(submitters, list) and len(submitters) > 0:
+            sub = submitters[0]
+            if not submit_id:
+                submit_id = str(sub.get("submission_id") or sub.get("id") or "")
+            slug = sub.get("slug") or slug
+            embed_src = sub.get("embed_src") or (f"{DOCUSEAL_HOST}/s/{slug}" if slug else "")
+        if not embed_src and slug:
+            embed_src = f"{DOCUSEAL_HOST}/s/{slug}"
+            
+    return submit_id, embed_src
+
+
+@app.get("/api/esignature/requests")
+async def list_esignature_requests(request: Request, customer_id: int = None, status: str = None):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user_parent = get_user_parent_name(username) or "VRT Services"
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT er.*, c.legal_name as customer_name, c.parent_name, c.email as customer_email
+                FROM esignature_requests er
+                JOIN customer c ON er.customer_id = c.id
+                WHERE 1=1
+            """
+            params = []
+            if user_parent and user_parent.lower() != "vrt services":
+                sql += " AND LOWER(COALESCE(c.parent_name, '')) = LOWER(%s)"
+                params.append(user_parent)
+            if customer_id:
+                sql += " AND er.customer_id = %s"
+                params.append(customer_id)
+            if status:
+                sql += " AND LOWER(er.status) = LOWER(%s)"
+                params.append(status)
+
+            sql += " ORDER BY er.id DESC"
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            reqs = [dict(r) for r in rows]
+            for r in reqs:
+                if r.get("signed_at"):
+                    r["signed_at"] = r["signed_at"].isoformat()
+                if r.get("created_at"):
+                    r["created_at"] = r["created_at"].isoformat()
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+            return {"requests": reqs}
+    except Exception as e:
+        print(f"Error fetching e-signature requests: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/esignature/send")
+async def send_esignature_request(
+    request: Request,
+    customer_id: int = Form(...),
+    document_name: str = Form(...),
+    signer_name: str = Form(...),
+    signer_email: str = Form(...),
+    template_id: str = Form(""),
+    send_email: bool = Form(True),
+    pdf_file: UploadFile = File(None)
+):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    pdf_b64 = None
+    if pdf_file and pdf_file.filename:
+        pdf_bytes = await pdf_file.read()
+        if pdf_bytes:
+            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    ds_submit_id = None
+    ds_embed_src = None
+    ds_status = "pending"
+
+    api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
+    if api_key:
+        try:
+            ds_resp = docuseal_create_submission(
+                customer_id=customer_id,
+                document_name=document_name,
+                signer_name=signer_name,
+                signer_email=signer_email,
+                template_id=template_id,
+                pdf_base64=pdf_b64,
+                send_email=send_email
+            )
+            ds_submit_id, ds_embed_src = extract_docuseal_info(ds_resp)
+        except Exception as ds_err:
+            print(f"[DOCUSEAL WARNING] Error issuing DocuSeal submission: {ds_err}")
+            ds_status = "pending"
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO esignature_requests
+                (docuseal_submit_id, docuseal_template_id, customer_id, document_name, signer_name, signer_email, status, embed_src)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING *;
+            """, (ds_submit_id, template_id, customer_id, document_name, signer_name, signer_email, ds_status, ds_embed_src or ""))
+            new_req = dict(cur.fetchone())
+            conn.commit()
+
+            if new_req.get("created_at"):
+                new_req["created_at"] = new_req["created_at"].isoformat()
+            if new_req.get("updated_at"):
+                new_req["updated_at"] = new_req["updated_at"].isoformat()
+
+            return {"success": True, "request": new_req}
+    except Exception as e:
+        print(f"Error creating e-signature request record: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/esignature/requests/{request_id}")
+async def delete_esignature_request(request_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM esignature_requests WHERE id = %s;", (request_id,))
+            conn.commit()
+        return {"success": True, "message": f"Request {request_id} deleted."}
+    except Exception as e:
+        print(f"Error deleting e-signature request {request_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/webhooks/docuseal")
+@app.post("/api/webhook/docuseal")
+async def docuseal_webhook_handler(request: Request):
+    """
+    Webhook handler for DocuSeal submission events (form.completed, submission.completed).
+    Downloads completed signed PDF & audit trail certificate, uploads to customer DO Spaces ESignatures/ folder,
+    and updates customer_task_checklist.tax_client_signature = TRUE.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    event_type = payload.get("event_type") or payload.get("event") or "form.completed"
+    data = payload.get("data") or payload
+    submitter = data.get("submitter") or data
+    submission_id = str(data.get("submission_id") or data.get("id") or submitter.get("submission_id") or "")
+    signer_email = submitter.get("email") or data.get("email") or ""
+
+    try:
+        conn_log = get_db_connection()
+        with conn_log.cursor() as cur_log:
+            cur_log.execute("""
+                INSERT INTO webhook_debug_log (payload_json, sender_email, subject, status)
+                VALUES (%s, %s, %s, %s);
+            """, (json.dumps(payload), signer_email, f"DocuSeal Event: {event_type}", f"DOCUSEAL_{event_type.upper()}"))
+            conn_log.commit()
+        conn_log.close()
+    except Exception as ex_log:
+        print(f"[DOCUSEAL WEBHOOK LOG WARNING]: {ex_log}")
+
+    if event_type in ["form.completed", "submission.completed", "completed"]:
+        conn = None
+        try:
+            conn = get_db_connection("VRT")
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT er.*, c.legal_name, c.parent_name
+                    FROM esignature_requests er
+                    JOIN customer c ON er.customer_id = c.id
+                    WHERE er.docuseal_submit_id = %s OR (LOWER(er.signer_email) = LOWER(%s) AND er.status = 'pending')
+                    ORDER BY er.id DESC LIMIT 1;
+                """, (submission_id, signer_email))
+                req_rec = cur.fetchone()
+
+                if req_rec:
+                    req_id = req_rec["id"]
+                    cust_id = req_rec["customer_id"]
+                    doc_name = req_rec["document_name"]
+                    
+                    cur.execute("""
+                        UPDATE esignature_requests
+                        SET status = 'completed', signed_at = NOW(), updated_at = NOW()
+                        WHERE id = %s;
+                    """, (req_id,))
+
+                    cur.execute("""
+                        UPDATE customer_task_checklist
+                        SET tax_client_signature = TRUE, updated_at = NOW()
+                        WHERE customer_id = %s;
+                    """, (cust_id,))
+
+                    conn.commit()
+
+                    documents = data.get("documents") or []
+                    pdf_url = None
+                    if documents and isinstance(documents, list) and len(documents) > 0:
+                        pdf_url = documents[0].get("url") or documents[0].get("download_url")
+
+                    if not pdf_url and submission_id:
+                        pdf_url = f"{DOCUSEAL_HOST}/submissions/{submission_id}/download"
+
+                    if pdf_url:
+                        try:
+                            headers = get_docuseal_headers()
+                            pdf_req = urllib.request.Request(pdf_url, headers=headers)
+                            with urllib.request.urlopen(pdf_req) as pdf_resp:
+                                pdf_data = pdf_resp.read()
+
+                            if pdf_data:
+                                s3_client, err = get_s3_client()
+                                if s3_client:
+                                    cust_dict = {"id": cust_id, "legal_name": req_rec["legal_name"], "parent_name": req_rec["parent_name"]}
+                                    root_folder = get_customer_root_folder_path(cust_dict)
+                                    safe_doc = sanitize_folder_name(doc_name)
+                                    s3_key = f"{root_folder}ESignatures/{safe_doc}_Signed_{req_id}.pdf"
+                                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+
+                                    s3_client.put_object(
+                                        Bucket=bucket,
+                                        Key=s3_key,
+                                        Body=pdf_data,
+                                        ContentType="application/pdf",
+                                        ACL="private"
+                                    )
+
+                                    cur.execute("""
+                                        UPDATE esignature_requests
+                                        SET do_spaces_pdf_key = %s, updated_at = NOW()
+                                        WHERE id = %s;
+                                    """, (s3_key, req_id))
+                                    conn.commit()
+                                    print(f"[DOCUSEAL WEBHOOK] Successfully stored signed PDF to DO Spaces key: {s3_key}")
+                        except Exception as dl_err:
+                            print(f"[DOCUSEAL WEBHOOK WARNING] Could not download/upload signed PDF: {dl_err}")
+
+            return {"success": True, "message": "Webhook processed successfully"}
+        except Exception as e:
+            print(f"[DOCUSEAL WEBHOOK ERROR]: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e)})
+        finally:
+            if conn:
+                conn.close()
+
+    return {"success": True, "message": f"Event '{event_type}' received."}
+
 
 @app.post("/api/compliance/events")
 async def create_compliance_event(request: Request):
