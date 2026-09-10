@@ -1045,6 +1045,283 @@ def init_compliance_tables():
         if conn:
             conn.close()
 
+# ── KNOWLEDGE BASE & RAG CORE (VRT DATABASE + GPT-4o MINI) ───────────────────
+def init_kb_tables():
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS document (
+                    id          SERIAL PRIMARY KEY,
+                    tenant_slug VARCHAR(100) NOT NULL DEFAULT 'vrt_services',
+                    category    VARCHAR(100) NOT NULL DEFAULT 'General Knowledge',
+                    title       VARCHAR(255) NOT NULL,
+                    rel_path    VARCHAR(500) DEFAULT '',
+                    filename    VARCHAR(255) NOT NULL,
+                    file_type   VARCHAR(50) DEFAULT 'pdf',
+                    file_size   BIGINT DEFAULT 0,
+                    content     TEXT NOT NULL DEFAULT '',
+                    summary     TEXT DEFAULT '',
+                    tags        VARCHAR(255) DEFAULT '',
+                    is_published BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS document_chunk (
+                    id          SERIAL PRIMARY KEY,
+                    document_id INT NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+                    tenant_slug VARCHAR(100) NOT NULL DEFAULT 'vrt_services',
+                    chunk_index INT NOT NULL DEFAULT 0,
+                    content     TEXT NOT NULL,
+                    embedding   JSONB DEFAULT '[]'::jsonb,
+                    metadata    JSONB DEFAULT '{}'::jsonb,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_document_tenant_slug ON document(tenant_slug);
+                CREATE INDEX IF NOT EXISTS idx_document_category ON document(category);
+                CREATE INDEX IF NOT EXISTS idx_document_chunk_doc_id ON document_chunk(document_id);
+            """)
+            conn.commit()
+            print("Knowledge Base (document & document_chunk) tables initialized successfully in VRT database.")
+    except Exception as e:
+        print(f"Error initializing Knowledge Base tables: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
+    if not text:
+        return []
+    clean_text = re.sub(r'\r\n|\r', '\n', text).strip()
+    if not clean_text:
+        return []
+    paragraphs = clean_text.split('\n\n')
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    for para in paragraphs:
+        p_len = len(para)
+        if current_length + p_len > chunk_size and current_chunk:
+            combined = "\n\n".join(current_chunk).strip()
+            if combined:
+                chunks.append(combined)
+            if len(current_chunk) > 1 and len(current_chunk[-1]) < overlap:
+                current_chunk = [current_chunk[-1], para]
+                current_length = len(current_chunk[0]) + len(para)
+            else:
+                current_chunk = [para]
+                current_length = p_len
+        else:
+            current_chunk.append(para)
+            current_length += p_len
+
+    if current_chunk:
+        combined = "\n\n".join(current_chunk).strip()
+        if combined:
+            chunks.append(combined)
+
+    final_chunks = []
+    for c in chunks:
+        if len(c) > chunk_size * 2:
+            sub_start = 0
+            while sub_start < len(c):
+                sub_end = sub_start + chunk_size
+                final_chunks.append(c[sub_start:sub_end])
+                sub_start += (chunk_size - overlap)
+        else:
+            final_chunks.append(c)
+
+    return final_chunks
+
+def generate_embedding(text: str) -> list[float]:
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if api_key:
+        try:
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/embeddings",
+                data=json.dumps({
+                    "model": "text-embedding-3-small",
+                    "input": text[:8000]
+                }).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                return res_data["data"][0]["embedding"]
+        except Exception as e:
+            print(f"[OPENAI EMBEDDING ERROR]: {e}")
+
+    words = re.findall(r'\w+', text.lower())
+    vec = [0.0] * 128
+    for w in words:
+        h = int(hashlib.md5(w.encode('utf-8')).hexdigest(), 16) % 128
+        vec[h] += 1.0
+    norm = sum(x*x for x in vec) ** 0.5
+    if norm > 0:
+        vec = [x / norm for x in vec]
+    return vec
+
+def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+    if not v1 or not v2:
+        return 0.0
+    min_len = min(len(v1), len(v2))
+    if min_len == 0:
+        return 0.0
+    v1_sub = v1[:min_len]
+    v2_sub = v2[:min_len]
+    dot = sum(a * b for a, b in zip(v1_sub, v2_sub))
+    norm1 = sum(a * a for a in v1_sub) ** 0.5
+    norm2 = sum(b * b for b in v2_sub) ** 0.5
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return dot / (norm1 * norm2)
+
+def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict:
+    conn = None
+    retrieved_chunks = []
+    try:
+        query_embedding = generate_embedding(query)
+        keywords = [w.lower() for w in re.findall(r'\w+', query) if len(w) > 2]
+        
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql = """
+                SELECT c.id as chunk_id, c.document_id, c.chunk_index, c.content, c.embedding, c.metadata,
+                       d.title as doc_title, d.category as doc_category, d.filename
+                FROM document_chunk c
+                JOIN document d ON c.document_id = d.id
+            """
+            params = []
+            if category and category.strip() and category != "All":
+                sql += " WHERE d.category = %s"
+                params.append(category.strip())
+            
+            cur.execute(sql, tuple(params))
+            all_chunks = cur.fetchall() or []
+
+            scored_chunks = []
+            for c in all_chunks:
+                chunk_emb = c.get("embedding")
+                if isinstance(chunk_emb, str):
+                    try:
+                        chunk_emb = json.loads(chunk_emb)
+                    except Exception:
+                        chunk_emb = []
+                
+                sim_score = cosine_similarity(query_embedding, chunk_emb) if chunk_emb else 0.0
+                
+                content_low = (c.get("content") or "").lower()
+                kw_matches = sum(1 for kw in keywords if kw in content_low)
+                kw_score = (kw_matches / len(keywords)) * 0.3 if keywords else 0.0
+                
+                combined_score = sim_score * 0.7 + kw_score
+                
+                scored_chunks.append({
+                    "chunk_id": c["chunk_id"],
+                    "document_id": c["document_id"],
+                    "chunk_index": c["chunk_index"],
+                    "content": c["content"],
+                    "doc_title": c["doc_title"],
+                    "doc_category": c["doc_category"],
+                    "filename": c["filename"],
+                    "score": round(combined_score, 4)
+                })
+
+            scored_chunks.sort(key=lambda x: x["score"], reverse=True)
+            retrieved_chunks = scored_chunks[:top_k]
+
+    except Exception as err:
+        print(f"RAG query chunk retrieval error: {err}")
+    finally:
+        if conn:
+            conn.close()
+
+    context_blocks = []
+    citations = []
+    for idx, item in enumerate(retrieved_chunks, 1):
+        context_blocks.append(f"--- Document Source [{idx}]: {item['doc_title']} ({item['doc_category']}) ---\n{item['content']}")
+        citations.append({
+            "source_id": idx,
+            "title": item["doc_title"],
+            "category": item["doc_category"],
+            "chunk_index": item["chunk_index"],
+            "filename": item["filename"],
+            "score": item["score"],
+            "snippet": item["content"][:200] + "..."
+        })
+
+    context_str = "\n\n".join(context_blocks) if context_blocks else "No relevant knowledge base documents found."
+
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    ai_answer = ""
+
+    if api_key:
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are the official VRT Services Knowledge Base & RAG Assistant.\n"
+                        "Your job is to answer user queries accurately based on the provided context retrieved from uploaded documents in the VRT Database.\n"
+                        "Rules:\n"
+                        "1. Cite sources using [Source 1], [Source 2], etc., matching the provided document sources.\n"
+                        "2. Provide clear, professional, well-structured markdown answers.\n"
+                        "3. If the context does not contain enough information, synthesize a helpful response using general knowledge while clearly noting what was found in the uploaded documents."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"User Query: {query}\n\nRetrieved Knowledge Base Context from VRT Database:\n{context_str}"
+                }
+            ]
+
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=json.dumps({
+                    "model": "gpt-4o-mini",
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 1000
+                }).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                ai_answer = res_data["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"[GPT-4o-MINI RAG API ERROR]: {e}")
+            ai_answer = f"⚠️ Could not reach OpenAI API ({str(e)}). Displaying retrieved VRT Database context below."
+
+    if not ai_answer:
+        if retrieved_chunks:
+            top_sources = ", ".join(list(set(c['doc_title'] for c in retrieved_chunks)))
+            ai_answer = f"### VRT Database Context Summary\nBased on your query **\"{query}\"**, the most relevant context retrieved from VRT Database documents ({top_sources}):\n\n"
+            for c in retrieved_chunks[:3]:
+                ai_answer += f"**From [{c['doc_title']}]:**\n> {c['content'][:300]}...\n\n"
+            ai_answer += "\n*(Note: Add your `OPENAI_API_KEY` to `.env` to enable full GPT-4o mini natural language synthesis).* "
+        else:
+            ai_answer = f"No documents found in VRT Database matching **\"{query}\"**. Please upload relevant documents in the Knowledge Base tab."
+
+    return {
+        "query": query,
+        "model": "gpt-4o-mini",
+        "answer": ai_answer,
+        "citations": citations,
+        "retrieved_chunks": retrieved_chunks
+    }
+
 try:
     init_customer_table()
     ensure_catchall_customer()
@@ -1056,6 +1333,7 @@ try:
     init_billing_tables()
     init_tax_team_table()
     init_compliance_tables()
+    init_kb_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -2796,6 +3074,218 @@ async def delete_tax_team_member(team_id: int, request: Request):
     finally:
         if conn:
             conn.close()
+
+
+# ── KNOWLEDGE BASE & RAG API ENDPOINTS ─────────────────────────────
+@app.get("/api/kb/documents")
+async def get_kb_documents(request: Request, category: str = ""):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT d.id, d.tenant_slug, d.category, d.title, d.filename, d.file_type, d.file_size,
+                       d.tags, d.created_at, d.updated_at,
+                       COUNT(c.id) as chunk_count,
+                       LEFT(d.content, 250) as snippet
+                FROM document d
+                LEFT JOIN document_chunk c ON d.id = c.document_id
+            """
+            params = []
+            if category and category.strip() and category != "All":
+                query += " WHERE d.category = %s"
+                params.append(category.strip())
+            query += " GROUP BY d.id ORDER BY d.id DESC;"
+            
+            cur.execute(query, tuple(params))
+            rows = cur.fetchall() or []
+            
+            docs = []
+            for r in rows:
+                doc_dict = dict(r)
+                if isinstance(doc_dict.get("created_at"), datetime.datetime):
+                    doc_dict["created_at"] = doc_dict["created_at"].isoformat()
+                if isinstance(doc_dict.get("updated_at"), datetime.datetime):
+                    doc_dict["updated_at"] = doc_dict["updated_at"].isoformat()
+                docs.append(doc_dict)
+            
+            return {"documents": docs}
+    except Exception as e:
+        print(f"Error fetching KB documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/kb/upload")
+async def upload_kb_document(
+    request: Request,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    category: str = Form("General Knowledge"),
+    tags: str = Form("")
+):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    filename = file.filename or "uploaded_document"
+    file_type = filename.split(".")[-1].lower() if "." in filename else "txt"
+    contents_bytes = await file.read()
+    file_size = len(contents_bytes)
+
+    extracted_text = ""
+    if file_type == "pdf":
+        try:
+            import fitz
+            doc = fitz.open(stream=contents_bytes, filetype="pdf")
+            extracted_text = "\n\n".join([page.get_text() for page in doc])
+        except Exception as pdf_err:
+            print(f"PDF extraction error: {pdf_err}")
+            extracted_text = contents_bytes.decode("utf-8", errors="ignore")
+    elif file_type == "docx":
+        try:
+            import zipfile, xml.etree.ElementTree as ET
+            with zipfile.ZipFile(io.BytesIO(contents_bytes)) as z:
+                xml_content = z.read("word/document.xml")
+                tree = ET.fromstring(xml_content)
+                texts = [node.text for node in tree.iter() if node.text]
+                extracted_text = " ".join(texts)
+        except Exception as docx_err:
+            print(f"DOCX extraction error: {docx_err}")
+            extracted_text = contents_bytes.decode("utf-8", errors="ignore")
+    else:
+        extracted_text = contents_bytes.decode("utf-8", errors="ignore")
+
+    extracted_text = extracted_text.strip()
+    if not extracted_text:
+        raise HTTPException(status_code=400, detail="Could not extract readable text from uploaded file.")
+
+    doc_title = title.strip() or filename
+    doc_category = category.strip() or "General Knowledge"
+    doc_tags = tags.strip()
+
+    chunks = chunk_text(extracted_text, chunk_size=800, overlap=150)
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO document (tenant_slug, category, title, filename, file_type, file_size, content, tags)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+            """, ('vrt_services', doc_category, doc_title, filename, file_type, file_size, extracted_text, doc_tags))
+            doc_id = cur.fetchone()[0]
+
+            for idx, chunk_str in enumerate(chunks):
+                emb = generate_embedding(chunk_str)
+                emb_json = json.dumps(emb)
+                meta_json = json.dumps({"source": filename, "chunk_index": idx, "uploaded_by": username})
+                cur.execute("""
+                    INSERT INTO document_chunk (document_id, tenant_slug, chunk_index, content, embedding, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (doc_id, 'vrt_services', idx, chunk_str, emb_json, meta_json))
+
+            conn.commit()
+            log_audit_event(request=request, action="UPLOAD_KB_DOCUMENT", entity_type="KB_DOCUMENT", entity_id=str(doc_id), details={"title": doc_title, "chunks": len(chunks), "size": file_size})
+
+            return {
+                "status": "success",
+                "document_id": doc_id,
+                "title": doc_title,
+                "category": doc_category,
+                "chunk_count": len(chunks),
+                "file_size": file_size,
+                "message": f"Successfully indexed '{doc_title}' into VRT Database ({len(chunks)} text chunks created)."
+            }
+    except Exception as e:
+        print(f"Error uploading KB document: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+@app.delete("/api/kb/documents/{doc_id}")
+async def delete_kb_document(doc_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("SELECT title FROM document WHERE id = %s;", (doc_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Document not found")
+            doc_title = row[0]
+
+            cur.execute("DELETE FROM document WHERE id = %s;", (doc_id,))
+            conn.commit()
+            log_audit_event(request=request, action="DELETE_KB_DOCUMENT", entity_type="KB_DOCUMENT", entity_id=str(doc_id), details={"title": doc_title})
+            return {"status": "success", "message": f"Document '{doc_title}' deleted successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting KB document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/api/kb/documents/{doc_id}/chunks")
+async def get_kb_document_chunks(doc_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, title, category, filename, content FROM document WHERE id = %s;", (doc_id,))
+            doc = cur.fetchone()
+            if not doc:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            cur.execute("SELECT id, chunk_index, content, metadata, created_at FROM document_chunk WHERE document_id = %s ORDER BY chunk_index ASC;", (doc_id,))
+            chunks = cur.fetchall() or []
+            
+            formatted_chunks = []
+            for c in chunks:
+                c_dict = dict(c)
+                if isinstance(c_dict.get("created_at"), datetime.datetime):
+                    c_dict["created_at"] = c_dict["created_at"].isoformat()
+                formatted_chunks.append(c_dict)
+
+            return {"document": dict(doc), "chunks": formatted_chunks}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching KB chunks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/kb/query")
+async def query_kb_rag_endpoint(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    query_str = (data.get("query") or "").strip()
+    category = (data.get("category") or "").strip()
+
+    if not query_str:
+        raise HTTPException(status_code=400, detail="Query prompt cannot be empty")
+
+    res = ask_gpt4o_mini_rag(query_str, category=category)
+    log_audit_event(request=request, action="RAG_QUERY", entity_type="KB_RAG", details={"query": query_str, "chunks_found": len(res.get("retrieved_chunks", []))})
+    return res
 
 
 # ── COMPLIANCE CALENDAR API ENDPOINTS ────────────────────────────────

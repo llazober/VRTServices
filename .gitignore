@@ -24,7 +24,9 @@ env/
 *.pdf
 scratch_*.js
 temp_*/
+scratch/
 
 # IDE
 .vscode/
 .idea/
+
