@@ -3590,6 +3590,36 @@ async def send_esignature_request(
             if new_req.get("updated_at"):
                 new_req["updated_at"] = new_req["updated_at"].isoformat()
 
+            # Dispatch notification email via Resend API from notification@vrtservices12.com
+            if send_email and signer_email:
+                try:
+                    sign_url = ds_embed_src or f"https://vrtservices12.com/management-tools?tab=esign"
+                    email_payload = {
+                        "from": "VRT Services Portal <notification@vrtservices12.com>",
+                        "to": [signer_email],
+                        "subject": f"E-Signature Request: {document_name} — VRT Services",
+                        "html": f"""
+                            <div style="font-family: Arial, sans-serif; background-color: #0f172a; padding: 30px; color: #f8fafc; border-radius: 12px;">
+                                <h2 style="color: #38bdf8;">✍️ Signature Requested</h2>
+                                <p>Hello <strong>{signer_name}</strong>,</p>
+                                <p>You have been requested by <strong>VRT Services</strong> to review and e-sign the following document:</p>
+                                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                    <strong>Document Name:</strong> {document_name}
+                                </div>
+                                <p style="margin-top: 24px;">
+                                    <a href="{sign_url}" style="background: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;">Review & Sign Document</a>
+                                </p>
+                                <p style="color: #94a3b8; font-size: 12px; margin-top: 30px;">
+                                    © 2026 VRT Services — Authorised IRS E-File Provider | notification@vrtservices12.com
+                                </p>
+                            </div>
+                        """
+                    }
+                    send_resend_email(email_payload)
+                    print(f"[RESEND E-SIGN EMAIL] Sent signature invitation email via Resend to {signer_email}")
+                except Exception as res_err:
+                    print(f"[RESEND E-SIGN EMAIL WARNING] Could not send email via Resend: {res_err}")
+
             return {"success": True, "request": new_req}
     except Exception as e:
         print(f"Error creating e-signature request record: {e}")
