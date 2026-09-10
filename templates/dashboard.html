@@ -8347,10 +8347,12 @@
         }
 
         async function deleteEsignatureRequest(reqId) {
-            if (!confirm('Are you sure you want to delete this e-signature request?')) return;
+            const confirmed = await showCustomConfirm('Are you sure you want to delete this e-signature request?', 'Delete Request', 'Yes, Delete', 'Cancel');
+            if (!confirmed) return;
             try {
                 const res = await fetch(`/api/esignature/requests/${reqId}`, { method: 'DELETE' });
                 if (res.ok) {
+                    showCustomAlert('Success', 'E-Signature request deleted.', 'success');
                     fetchEsignatureRequests();
                 } else {
                     showCustomAlert('Error', 'Could not delete request.', 'error');
