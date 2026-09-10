@@ -3482,6 +3482,82 @@ def extract_docuseal_info(ds_resp):
     return submit_id, embed_src
 
 
+@app.get("/esign/{request_id}", response_class=HTMLResponse)
+@app.get("/portal/esign/{request_id}", response_class=HTMLResponse)
+async def public_esignature_page(request: Request, request_id: int):
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT er.*, c.legal_name as customer_name, c.parent_name
+                FROM esignature_requests er
+                JOIN customer c ON er.customer_id = c.id
+                WHERE er.id = %s;
+            """, (request_id,))
+            req_rec = cur.fetchone()
+
+        if not req_rec:
+            raise HTTPException(status_code=404, detail="E-Signature request not found.")
+
+        embed_src = req_rec.get("embed_src") or ""
+        doc_name = req_rec.get("document_name") or "Document"
+        customer_name = req_rec.get("customer_name") or ""
+        parent_name = req_rec.get("parent_name") or "VRT Services"
+
+        return HTMLResponse(content=f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Sign {doc_name} — {parent_name}</title>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+            <script src="https://cdn.docuseal.com/js/form.js"></script>
+            <style>
+                body {{
+                    margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
+                    background: #0b0c10; color: #f5f6fa;
+                    display: flex; flex-direction: column; min-height: 100vh;
+                }}
+                .header {{
+                    background: rgba(15, 18, 28, 0.95);
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    padding: 16px 32px; display: flex; justify-content: space-between; align-items: center;
+                }}
+                .header h1 {{ font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0; }}
+                .container {{ flex: 1; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
+                .card {{
+                    background: #141722; border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 20px; width: 100%; max-width: 960px; height: 82vh;
+                    box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;
+                }}
+                iframe {{ width: 100%; height: 100%; border: none; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>✍️ {parent_name} Portal — E-Signature</h1>
+                <div style="font-size: 0.9rem; color: #38bdf8; font-weight: 700;">{doc_name} ({customer_name})</div>
+            </div>
+            <div class="container">
+                <div class="card">
+                    {f'<iframe src="{embed_src}" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
+                </div>
+            </div>
+        </body>
+        </html>
+        """)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/esignature/requests")
 async def list_esignature_requests(request: Request, customer_id: int = None, status: str = None):
     username = get_current_username(request)
@@ -3593,7 +3669,7 @@ async def send_esignature_request(
             # Dispatch notification email via Resend API from notification@vrtservices12.com
             if send_email and signer_email:
                 try:
-                    sign_url = ds_embed_src or f"https://vrtservices12.com/management-tools?tab=esign"
+                    sign_url = ds_embed_src if ds_embed_src else f"https://vrtservices12.com/esign/{new_req['id']}"
                     email_payload = {
                         "from": "VRT Services Portal <notification@vrtservices12.com>",
                         "to": [signer_email],
