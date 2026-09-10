@@ -3090,12 +3090,22 @@
             const tabParam = urlParams.get('tab') || '{{ sub_tab or "coa" }}';
             const targetTab = ['coa', 'mappings', 'rules', 'taxteam', 'audit', 'rag', 'esign'].includes(tabParam) ? tabParam : 'coa';
             
-            try {
-                await syncClientSelectDropdowns();
-            } catch (err) {
-                console.error("Notice syncing client select dropdowns:", err);
-            }
             switchMgmtTab(targetTab);
+
+            try {
+                await Promise.all([
+                    syncClientSelectDropdowns(),
+                    populateCustomerDropdownForMappings(),
+                    fetchCoaRecords(),
+                    fetchParentMappings(),
+                    fetchHistoryRecords(),
+                    fetchTaxTeamMembers(),
+                    fetchKbDocuments(),
+                    fetchEsignatureRequests()
+                ]);
+            } catch (err) {
+                console.error("Notice initializing Management Hub data:", err);
+            }
         }
 
         // ── VRT KNOWLEDGE BASE & RAG CONTROLLER ──────────────────────────────────────
