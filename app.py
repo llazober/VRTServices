@@ -3521,13 +3521,20 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
             target_template_id = tpl_res.get("id")
 
     url = f"{DOCUSEAL_HOST}/submissions"
+    today_str = datetime.datetime.now().strftime("%m/%d/%Y")
     payload = {
         "send_email": send_email,
         "submitters": [
             {
                 "name": signer_name,
                 "email": signer_email,
-                "role": "First Party"
+                "role": "First Party",
+                "values": {
+                    "Taxpayer Name": signer_name,
+                    "Client Name": signer_name,
+                    "Signer Name": signer_name,
+                    "Date Signed": today_str
+                }
             }
         ]
     }
