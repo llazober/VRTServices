@@ -1434,6 +1434,9 @@
                     <button id="mgmtTabBtn-taxteam" onclick="switchMgmtTab('taxteam')" class="mgmt-tab-btn" style="padding: 10px 20px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #94a3b8; transition: all 0.2s ease;">
                         👤 Tax Prep Team
                     </button>
+                    <button id="mgmtTabBtn-audit" onclick="switchMgmtTab('audit')" class="mgmt-tab-btn" style="padding: 10px 20px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #94a3b8; transition: all 0.2s ease;">
+                        📜 Audit Logs
+                    </button>
                 </div>
 
                 <!-- ── TAB 1: CHART OF ACCOUNTS ── -->
@@ -1614,6 +1617,104 @@
                                 <tr><td colSpan="3" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading Tax Prep Team Members...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- ── TAB 5: SYSTEM AUDIT LOGS ── -->
+                <div id="mgmtPanel-audit" class="mgmt-panel" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                📜 Audit Logs & Activity Inspector
+                            </h3>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 2px 0 0 0;">
+                                Track system mutations, customer record edits, file movements, and user authentication events.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button onclick="loadAuditLogs(1)" style="padding: 8px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; font-size: 0.78rem; font-weight: 700; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                🔄 Refresh
+                            </button>
+                            <button onclick="exportAuditLogsCsv()" style="padding: 8px 18px; background: linear-gradient(135deg, #a855f7, #6366f1); color: #fff; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(168, 85, 247, 0.35); display: flex; align-items: center; gap: 6px;">
+                                📥 Export CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filters Bar -->
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 14px; padding: 14px 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Search Keywords</label>
+                            <input type="text" id="auditSearchInput" placeholder="User, entity ID, action, details..." style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; color: #fff; outline: none;" onkeyup="if(event.key==='Enter') loadAuditLogs(1)">
+                        </div>
+                        <div style="width: 170px;">
+                            <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Filter Action</label>
+                            <select id="auditActionFilter" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; color: #fff; outline: none;" onchange="loadAuditLogs(1)">
+                                <option value="">All Actions</option>
+                                <option value="USER_LOGIN">USER_LOGIN</option>
+                                <option value="LOGIN_FAILED">LOGIN_FAILED</option>
+                                <option value="USER_LOGOUT">USER_LOGOUT</option>
+                                <option value="CREATE_CUSTOMER">CREATE_CUSTOMER</option>
+                                <option value="UPDATE_CUSTOMER">UPDATE_CUSTOMER</option>
+                                <option value="DELETE_CUSTOMER">DELETE_CUSTOMER</option>
+                                <option value="CREATE_COMPLIANCE_EVENT">CREATE_COMPLIANCE_EVENT</option>
+                                <option value="UPDATE_COMPLIANCE_EVENT">UPDATE_COMPLIANCE_EVENT</option>
+                                <option value="DELETE_COMPLIANCE_EVENT">DELETE_COMPLIANCE_EVENT</option>
+                                <option value="SEND_EMAIL">SEND_EMAIL</option>
+                                <option value="MOVE_FILE">MOVE_FILE</option>
+                                <option value="DELETE_FILE">DELETE_FILE</option>
+                            </select>
+                        </div>
+                        <div style="width: 140px;">
+                            <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Start Date</label>
+                            <input type="date" id="auditStartDate" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;" onchange="loadAuditLogs(1)">
+                        </div>
+                        <div style="width: 140px;">
+                            <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">End Date</label>
+                            <input type="date" id="auditEndDate" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;" onchange="loadAuditLogs(1)">
+                        </div>
+                        <div style="align-self: flex-end; display: flex; gap: 8px;">
+                            <button onclick="loadAuditLogs(1)" style="padding: 7px 16px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer;">
+                                Filter
+                            </button>
+                            <button onclick="resetAuditFilters()" style="padding: 7px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.78rem; font-weight: 600; border-radius: 8px; cursor: pointer;">
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Audit Table -->
+                    <div style="overflow-x: auto; max-height: 520px; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.83rem;">
+                            <thead style="position: sticky; top: 0; background: #141722; z-index: 10;">
+                                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">
+                                    <th style="padding: 12px 16px;">Timestamp</th>
+                                    <th style="padding: 12px 16px;">User / Operator</th>
+                                    <th style="padding: 12px 16px;">Action</th>
+                                    <th style="padding: 12px 16px;">Target Entity</th>
+                                    <th style="padding: 12px 16px;">IP Address</th>
+                                    <th style="padding: 12px 16px;">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditTableBody">
+                                <tr><td colSpan="6" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading audit log records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Audit Pagination Footer -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 8px;">
+                        <div style="font-size: 0.8rem; color: #94a3b8;">
+                            Showing page <span id="auditCurrentPageNum" style="color: #fff; font-weight: 700;">1</span> of <span id="auditTotalPagesNum" style="color: #fff; font-weight: 700;">1</span> (<span id="auditTotalRecordsNum" style="color: #c084fc; font-weight: 700;">0</span> total events recorded)
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="auditPrevBtn" onclick="changeAuditPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer;">
+                                ◀ Previous
+                            </button>
+                            <button id="auditNextBtn" onclick="changeAuditPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer;">
+                                Next ▶
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2549,12 +2650,13 @@
 
         // ── MANAGEMENT & TOOLS HUB CONTROLLER ────────────────────────────────────
         function switchMgmtTab(tabName) {
-            const tabs = ['coa', 'mappings', 'rules', 'taxteam'];
+            const tabs = ['coa', 'mappings', 'rules', 'taxteam', 'audit'];
             const activeStyles = {
                 coa: { border: 'rgba(103, 232, 249, 0.4)', bg: 'rgba(103, 232, 249, 0.15)', color: '#67e8f9' },
                 mappings: { border: 'rgba(192, 132, 252, 0.4)', bg: 'rgba(192, 132, 252, 0.15)', color: '#c084fc' },
                 rules: { border: 'rgba(110, 231, 183, 0.4)', bg: 'rgba(110, 231, 183, 0.15)', color: '#6ee7b7' },
-                taxteam: { border: 'rgba(250, 204, 21, 0.4)', bg: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }
+                taxteam: { border: 'rgba(250, 204, 21, 0.4)', bg: 'rgba(250, 204, 21, 0.15)', color: '#facc15' },
+                audit: { border: 'rgba(168, 85, 247, 0.4)', bg: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' }
             };
 
             tabs.forEach(t => {
@@ -2578,6 +2680,10 @@
                 }
             });
 
+            if (tabName === 'audit') {
+                loadAuditLogs(auditCurrentPage);
+            }
+
             if (window.history && window.history.replaceState) {
                 const url = new URL(window.location);
                 url.searchParams.set('tab', tabName);
@@ -2589,7 +2695,7 @@
             console.log("[MANAGEMENT MODULE] Initializing Management Hub...");
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab') || '{{ sub_tab or "coa" }}';
-            const targetTab = ['coa', 'mappings', 'rules', 'taxteam'].includes(tabParam) ? tabParam : 'coa';
+            const targetTab = ['coa', 'mappings', 'rules', 'taxteam', 'audit'].includes(tabParam) ? tabParam : 'coa';
             
             switchMgmtTab(targetTab);
 
@@ -2605,6 +2711,153 @@
             } catch (err) {
                 console.error("Notice initializing Management Hub data:", err);
             }
+        }
+
+        // ── SYSTEM AUDIT LOGS CONTROLLER ───────────────────────────────────────────
+        let auditCurrentPage = 1;
+        let auditTotalPages = 1;
+
+        async function loadAuditLogs(page = 1) {
+            auditCurrentPage = page;
+            const tableBody = document.getElementById('auditTableBody');
+            if (tableBody) {
+                tableBody.innerHTML = `<tr><td colSpan="6" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading audit log records...</td></tr>`;
+            }
+
+            const search = document.getElementById('auditSearchInput')?.value || '';
+            const action = document.getElementById('auditActionFilter')?.value || '';
+            const startDate = document.getElementById('auditStartDate')?.value || '';
+            const endDate = document.getElementById('auditEndDate')?.value || '';
+
+            const params = new URLSearchParams({
+                page: auditCurrentPage,
+                limit: 25,
+                search: search,
+                action: action,
+                start_date: startDate,
+                end_date: endDate
+            });
+
+            try {
+                const response = await fetch(`/api/audit-logs?${params.toString()}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to fetch audit logs');
+                }
+
+                auditTotalPages = data.pages || 1;
+                renderAuditLogsTable(data.logs || []);
+
+                const curPageElem = document.getElementById('auditCurrentPageNum');
+                const totPageElem = document.getElementById('auditTotalPagesNum');
+                const totRecElem = document.getElementById('auditTotalRecordsNum');
+                const prevBtn = document.getElementById('auditPrevBtn');
+                const nextBtn = document.getElementById('auditNextBtn');
+
+                if (curPageElem) curPageElem.innerText = data.page || 1;
+                if (totPageElem) totPageElem.innerText = auditTotalPages;
+                if (totRecElem) totRecElem.innerText = data.total || 0;
+
+                if (prevBtn) {
+                    prevBtn.disabled = (data.page <= 1);
+                    prevBtn.style.opacity = (data.page <= 1) ? '0.4' : '1';
+                }
+                if (nextBtn) {
+                    nextBtn.disabled = (data.page >= auditTotalPages);
+                    nextBtn.style.opacity = (data.page >= auditTotalPages) ? '0.4' : '1';
+                }
+
+            } catch (err) {
+                console.error("[AUDIT LOG ERROR]", err);
+                if (tableBody) {
+                    tableBody.innerHTML = `<tr><td colSpan="6" style="padding: 30px; text-align: center; color: #ef4444;">Failed to load audit logs: ${err.message}</td></tr>`;
+                }
+            }
+        }
+
+        function renderAuditLogsTable(logs) {
+            const tableBody = document.getElementById('auditTableBody');
+            if (!tableBody) return;
+
+            if (logs.length === 0) {
+                tableBody.innerHTML = `<tr><td colSpan="6" style="padding: 30px; text-align: center; color: var(--text-muted);">No audit log events found matching your filter criteria.</td></tr>`;
+                return;
+            }
+
+            const getActionBadge = (act) => {
+                const a = (act || '').toUpperCase();
+                if (a.includes('LOGIN') && !a.includes('FAILED')) {
+                    return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; font-size: 0.75rem;">🔑 ${act}</span>`;
+                } else if (a.includes('FAILED') || a.includes('DELETE')) {
+                    return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 700; font-size: 0.75rem;">⚠️ ${act}</span>`;
+                } else if (a.includes('CREATE') || a.includes('GENERATE')) {
+                    return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ade80; font-weight: 700; font-size: 0.75rem;">✨ ${act}</span>`;
+                } else if (a.includes('UPDATE') || a.includes('MOVE')) {
+                    return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; font-weight: 700; font-size: 0.75rem;">📝 ${act}</span>`;
+                } else if (a.includes('EMAIL')) {
+                    return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 700; font-size: 0.75rem;">✉️ ${act}</span>`;
+                }
+                return `<span style="padding: 3px 8px; border-radius: 6px; background: rgba(148, 163, 184, 0.15); border: 1px solid rgba(148, 163, 184, 0.35); color: #cbd5e1; font-weight: 700; font-size: 0.75rem;">📌 ${act}</span>`;
+            };
+
+            tableBody.innerHTML = logs.map(l => {
+                let detailsStr = '-';
+                if (l.details) {
+                    try {
+                        const parsed = typeof l.details === 'string' ? JSON.parse(l.details) : l.details;
+                        detailsStr = `<code style="background: rgba(0,0,0,0.4); padding: 3px 6px; border-radius: 4px; color: #a7f3d0; font-size: 0.76rem;">${JSON.stringify(parsed)}</code>`;
+                    } catch(e) {
+                        detailsStr = `<span style="color: #cbd5e1; font-size: 0.78rem;">${l.details}</span>`;
+                    }
+                }
+
+                const entityStr = (l.entity_type || l.entity_id) 
+                    ? `<span style="color: #94a3b8; font-size: 0.78rem;">${l.entity_type || ''}</span> ${l.entity_id ? `<strong style="color: #38bdf8;">#${l.entity_id}</strong>` : ''}`
+                    : '-';
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 10px 16px; color: #94a3b8; white-space: nowrap; font-family: monospace; font-size: 0.78rem;">${l.timestamp}</td>
+                        <td style="padding: 10px 16px; font-weight: 700; color: #fff;">👤 ${l.username || 'SYSTEM'}</td>
+                        <td style="padding: 10px 16px;">${getActionBadge(l.action)}</td>
+                        <td style="padding: 10px 16px;">${entityStr}</td>
+                        <td style="padding: 10px 16px; color: #64748b; font-family: monospace; font-size: 0.76rem;">${l.ip_address || '-'}</td>
+                        <td style="padding: 10px 16px; max-width: 320px; overflow: hidden; text-overflow: ellipsis;">${detailsStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function changeAuditPage(delta) {
+            const newPage = auditCurrentPage + delta;
+            if (newPage >= 1 && newPage <= auditTotalPages) {
+                loadAuditLogs(newPage);
+            }
+        }
+
+        function resetAuditFilters() {
+            if (document.getElementById('auditSearchInput')) document.getElementById('auditSearchInput').value = '';
+            if (document.getElementById('auditActionFilter')) document.getElementById('auditActionFilter').value = '';
+            if (document.getElementById('auditStartDate')) document.getElementById('auditStartDate').value = '';
+            if (document.getElementById('auditEndDate')) document.getElementById('auditEndDate').value = '';
+            loadAuditLogs(1);
+        }
+
+        function exportAuditLogsCsv() {
+            const search = document.getElementById('auditSearchInput')?.value || '';
+            const action = document.getElementById('auditActionFilter')?.value || '';
+            const startDate = document.getElementById('auditStartDate')?.value || '';
+            const endDate = document.getElementById('auditEndDate')?.value || '';
+
+            const params = new URLSearchParams({
+                search: search,
+                action: action,
+                start_date: startDate,
+                end_date: endDate
+            });
+
+            window.open(`/api/audit-logs/export?${params.toString()}`, '_blank');
         }
 
         // --- Helper to close all open app modals ---

@@ -26,7 +26,7 @@ import psycopg2
 import email.utils
 import re
 from psycopg2.extras import RealDictCursor
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -555,6 +555,50 @@ def get_db_connection(db_name: str = None):
     else:
         raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
     return psycopg2.connect(db_url, connect_timeout=5)
+
+def log_audit_event(
+    username: str | None = None,
+    action: str = "ACTION",
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    details: dict | str | None = None,
+    ip_address: str | None = None,
+    request: Request | None = None
+):
+    """
+    Logs an audit event directly into the VRT PostgreSQL database (`audit_logs` table).
+    Safely captures user IP and username if request object is provided.
+    Runs non-blockingly and swallows exceptions so core operations are never disrupted.
+    """
+    try:
+        if request:
+            if not username:
+                username = get_current_username(request)
+            if not ip_address:
+                ip_address = get_real_client_ip(request)
+
+        username = username or "SYSTEM"
+
+        import json
+        if isinstance(details, (dict, list)):
+            details_json = json.dumps(details)
+        elif isinstance(details, str):
+            details_json = details
+        else:
+            details_json = None
+
+        conn = get_db_connection("VRT")
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO audit_logs (username, action, entity_type, entity_id, details, ip_address, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP);
+        """, (username, str(action), entity_type, str(entity_id) if entity_id is not None else None, details_json, ip_address))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[AUDIT LOG WARNING] Failed to insert audit log '{action}': {e}")
+
 
 def sync_customer_parent_mapping(cur, parent_name: str, legal_name: str, display_name: str = None):
     """Ensure parent-client mapping exists in ParentClientMap using legal_name under parent_name."""
@@ -1960,6 +2004,7 @@ async def login_submit(
             user_agent = request.headers.get("user-agent", "")
             site_host = get_request_host(request)
             record_login(username_clean, site_host, client_ip, user_agent)
+            log_audit_event(username_clean, "USER_LOGIN", "User", username_clean, {"site": site_host, "user_agent": user_agent}, client_ip)
             
             response = RedirectResponse("/dashboard", status_code=302)
             response.set_cookie(
@@ -1994,6 +2039,7 @@ async def login_submit(
         user_agent = request.headers.get("user-agent", "")
         site_host = get_request_host(request)
         record_login(username_clean, site_host, client_ip, user_agent)
+        log_audit_event(username_clean, "USER_LOGIN", "User", username_clean, {"site": site_host, "user_agent": user_agent, "type": "env_admin"}, client_ip)
         
         response = RedirectResponse("/dashboard", status_code=302)
         response.set_cookie(
@@ -2009,6 +2055,8 @@ async def login_submit(
     terms_accepted = False
     if user:
         terms_accepted = bool(user.get("termsAccepted", False))
+
+    log_audit_event(username_clean, "LOGIN_FAILED", "User", username_clean, {"reason": "Invalid credentials"}, request=request)
 
     return templates.TemplateResponse(
         request=request,
@@ -2028,6 +2076,7 @@ async def logout(request: Request, reason: str = ""):
         sess = valid_sessions.pop(token, None)
         if sess and isinstance(sess, dict) and "username" in sess:
             username = sess["username"]
+            log_audit_event(username, "USER_LOGOUT", "User", username, {"reason": reason or "user_action"}, request=request)
             if active_user_tokens.get(username) == token:
                 active_user_tokens.pop(username, None)
                 
@@ -3388,6 +3437,8 @@ async def create_customer(request: Request):
                 new_record["created_at"] = str(new_record["created_at"])
             if new_record.get("updated_at"):
                 new_record["updated_at"] = str(new_record["updated_at"])
+
+            log_audit_event(username, "CREATE_CUSTOMER", "Customer", new_record["id"], {"custumer_number": custumer_number, "legal_name": legal_name, "customer_type": customer_type}, request=request)
             return {"message": "Customer created successfully", "customer": new_record}
     except psycopg2.IntegrityError:
         if conn: conn.rollback()
@@ -4720,6 +4771,7 @@ async def update_customer(customer_id: str, request: Request):
                 res["created_at"] = str(res["created_at"])
             if res.get("updated_at"):
                 res["updated_at"] = str(res["updated_at"])
+            log_audit_event(username, "UPDATE_CUSTOMER", "Customer", real_cust_id, {"custumer_number": custumer_number, "legal_name": legal_name}, request=request)
             return {"message": "Customer updated successfully", "customer": res}
     except psycopg2.IntegrityError:
         if conn: conn.rollback()
@@ -4804,6 +4856,7 @@ async def delete_customer(customer_id: str, request: Request, admin_password: st
             cur.execute("DELETE FROM customer WHERE id = %s;", (real_cust_id,))
 
             conn.commit()
+            log_audit_event(username, "DELETE_CUSTOMER", "Customer", real_cust_id, {"legal_name": customer.get("legal_name")}, request=request)
             return {"message": "Customer and associated client mappings, COA, and vendor rules deleted successfully", "id": real_cust_id}
     except HTTPException as he:
         if conn: conn.rollback()
@@ -7047,6 +7100,8 @@ async def send_customer_email(customer_id: str, request: Request):
             """, (real_cust_id, from_email, recipient_email, custom_reply_to, full_subject, message_text))
             conn.commit()
 
+        log_audit_event(username, "SEND_EMAIL", "Customer", real_cust_id, {"recipient": recipient_email, "subject": full_subject}, request=request)
+
         return {
             "success": True,
             "message": f"Email sent successfully to {recipient_email}",
@@ -7346,6 +7401,169 @@ async def mark_all_communications_read(request: Request):
     except Exception as e:
         print(f"Error marking all communications read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+# ── Audit Log Endpoints ────────────────────────────────────────────────────────
+@app.get("/api/audit-logs")
+async def get_audit_logs(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=200),
+    action: str = Query(None),
+    username: str = Query(None),
+    search: str = Query(None),
+    start_date: str = Query(None),
+    end_date: str = Query(None)
+):
+    require_auth(request)
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        where_clauses = ["1=1"]
+        params = []
+        
+        if action and action.strip():
+            where_clauses.append("action = %s")
+            params.append(action.strip())
+            
+        if username and username.strip():
+            where_clauses.append("LOWER(username) LIKE LOWER(%s)")
+            params.append(f"%{username.strip()}%")
+            
+        if search and search.strip():
+            where_clauses.append("(LOWER(action) LIKE LOWER(%s) OR LOWER(username) LIKE LOWER(%s) OR LOWER(COALESCE(entity_type, '')) LIKE LOWER(%s) OR LOWER(COALESCE(entity_id, '')) LIKE LOWER(%s) OR LOWER(COALESCE(details, '')) LIKE LOWER(%s))")
+            term = f"%{search.strip()}%"
+            params.extend([term, term, term, term, term])
+            
+        if start_date and start_date.strip():
+            where_clauses.append("timestamp >= %s::timestamp")
+            params.append(f"{start_date.strip()} 00:00:00")
+            
+        if end_date and end_date.strip():
+            where_clauses.append("timestamp <= %s::timestamp")
+            params.append(f"{end_date.strip()} 23:59:59")
+
+        where_sql = " AND ".join(where_clauses)
+        
+        count_query = f"SELECT COUNT(*) as total FROM audit_logs WHERE {where_sql}"
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()["total"]
+        
+        offset = (page - 1) * limit
+        fetch_query = f"""
+            SELECT id, username, action, entity_type, entity_id, details, ip_address, 
+                   to_char(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp
+            FROM audit_logs
+            WHERE {where_sql}
+            ORDER BY timestamp DESC, id DESC
+            LIMIT %s OFFSET %s
+        """
+        cur.execute(fetch_query, params + [limit, offset])
+        logs = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        
+        import math
+        total_pages = math.ceil(total_count / limit) if total_count > 0 else 1
+
+        return {
+            "success": True,
+            "logs": logs,
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "pages": total_pages
+        }
+    except Exception as e:
+        print(f"[AUDIT LOG FETCH ERROR] {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/api/audit-logs/export")
+async def export_audit_logs_csv(
+    request: Request,
+    action: str = Query(None),
+    username: str = Query(None),
+    search: str = Query(None),
+    start_date: str = Query(None),
+    end_date: str = Query(None)
+):
+    require_auth(request)
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        where_clauses = ["1=1"]
+        params = []
+        
+        if action and action.strip():
+            where_clauses.append("action = %s")
+            params.append(action.strip())
+            
+        if username and username.strip():
+            where_clauses.append("LOWER(username) LIKE LOWER(%s)")
+            params.append(f"%{username.strip()}%")
+            
+        if search and search.strip():
+            where_clauses.append("(LOWER(action) LIKE LOWER(%s) OR LOWER(username) LIKE LOWER(%s) OR LOWER(COALESCE(entity_type, '')) LIKE LOWER(%s) OR LOWER(COALESCE(entity_id, '')) LIKE LOWER(%s) OR LOWER(COALESCE(details, '')) LIKE LOWER(%s))")
+            term = f"%{search.strip()}%"
+            params.extend([term, term, term, term, term])
+            
+        if start_date and start_date.strip():
+            where_clauses.append("timestamp >= %s::timestamp")
+            params.append(f"{start_date.strip()} 00:00:00")
+            
+        if end_date and end_date.strip():
+            where_clauses.append("timestamp <= %s::timestamp")
+            params.append(f"{end_date.strip()} 23:59:59")
+
+        where_sql = " AND ".join(where_clauses)
+        
+        fetch_query = f"""
+            SELECT id, to_char(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+                   username, action, entity_type, entity_id, ip_address, details
+            FROM audit_logs
+            WHERE {where_sql}
+            ORDER BY timestamp DESC, id DESC
+            LIMIT 5000
+        """
+        cur.execute(fetch_query, params)
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Timestamp", "Username", "Action", "Entity Type", "Entity ID", "IP Address", "Details"])
+        
+        for r in rows:
+            writer.writerow([
+                r.get("id"),
+                r.get("timestamp"),
+                r.get("username"),
+                r.get("action"),
+                r.get("entity_type") or "",
+                r.get("entity_id") or "",
+                r.get("ip_address") or "",
+                r.get("details") or ""
+            ])
+            
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="vrt_audit_logs.csv"'}
+        )
+    except Exception as e:
+        print(f"[AUDIT EXPORT ERROR] {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
     finally:
         if conn:
             conn.close()
