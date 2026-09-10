@@ -3922,6 +3922,77 @@ async def get_esignature_signed_pdf(request_id: int):
             conn.close()
 
 
+@app.get("/api/esignature/requests/{request_id}/audit-pdf")
+@app.get("/portal/esignature/requests/{request_id}/audit-pdf")
+async def get_esignature_audit_pdf(request_id: int):
+    """
+    Returns or streams the official Audit Trail Certificate PDF (Envelope ID, SHA256 hashes, IP, session ID, event log) for an e-signature request.
+    """
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT er.*, c.legal_name, c.parent_name
+                FROM esignature_requests er
+                JOIN customer c ON er.customer_id = c.id
+                WHERE er.id = %s;
+            """, (request_id,))
+            req_rec = cur.fetchone()
+
+        if not req_rec:
+            raise HTTPException(status_code=404, detail="E-Signature request not found.")
+
+        s3_key = req_rec.get("do_spaces_cert_key")
+        pdf_bytes = None
+
+        # 1. Try to load from DigitalOcean Spaces if uploaded
+        if s3_key:
+            try:
+                s3_client, err = get_s3_client()
+                if s3_client:
+                    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                    obj = s3_client.get_object(Bucket=bucket, Key=s3_key)
+                    pdf_bytes = obj["Body"].read()
+            except Exception as s3_err:
+                print(f"[ESIGN AUDIT PDF] Error fetching from DO Spaces key {s3_key}: {s3_err}")
+
+        # 2. If not found in DO Spaces, fetch directly from DocuSeal API
+        if not pdf_bytes:
+            submit_id = req_rec.get("docuseal_submit_id")
+            if submit_id:
+                try:
+                    headers = get_docuseal_headers()
+                    sub_url = f"{DOCUSEAL_HOST}/submissions/{submit_id}"
+                    sub_req = urllib.request.Request(sub_url, headers=headers)
+                    with urllib.request.urlopen(sub_req) as sub_resp:
+                        sub_data = json.loads(sub_resp.read().decode("utf-8"))
+                        audit_url = sub_data.get("audit_log_url")
+                        if audit_url:
+                            audit_req = urllib.request.Request(audit_url, headers=headers)
+                            with urllib.request.urlopen(audit_req) as audit_resp:
+                                pdf_bytes = audit_resp.read()
+                except Exception as ds_dl_err:
+                    print(f"[ESIGN AUDIT PDF] Error downloading audit log from DocuSeal: {ds_dl_err}")
+
+        if not pdf_bytes:
+            raise HTTPException(status_code=404, detail="Audit Trail Certificate PDF is not available yet.")
+
+        signer = (req_rec.get("signer_name") or req_rec.get("legal_name") or "Signed").replace(" ", "_")
+        docname = (req_rec.get("document_name") or "Document").replace(" ", "_")
+        filename = f"{signer}_{docname}_Audit_Certificate.pdf"
+
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.post("/api/webhooks/docuseal")
 @app.post("/api/webhook/docuseal")
 async def docuseal_webhook_handler(request: Request):
@@ -4021,13 +4092,44 @@ async def docuseal_webhook_handler(request: Request):
                                         ACL="private"
                                     )
 
+                                    # Download Audit Trail Certificate PDF
+                                    audit_url = data.get("audit_log_url")
+                                    if not audit_url and submission_id:
+                                        try:
+                                            sub_req = urllib.request.Request(f"{DOCUSEAL_HOST}/submissions/{submission_id}", headers=headers)
+                                            with urllib.request.urlopen(sub_req) as sub_resp:
+                                                sub_info = json.loads(sub_resp.read().decode("utf-8"))
+                                                audit_url = sub_info.get("audit_log_url")
+                                        except Exception:
+                                            pass
+
+                                    s3_cert_key = ""
+                                    if audit_url:
+                                        try:
+                                            audit_req = urllib.request.Request(audit_url, headers=headers)
+                                            with urllib.request.urlopen(audit_req) as audit_resp:
+                                                audit_data = audit_resp.read()
+
+                                            if audit_data:
+                                                s3_cert_key = f"{root_folder}ESignatures/{safe_signer}_{safe_doc}_Audit_Certificate_{signed_date}.pdf"
+                                                s3_client.put_object(
+                                                    Bucket=bucket,
+                                                    Key=s3_cert_key,
+                                                    Body=audit_data,
+                                                    ContentType="application/pdf",
+                                                    ACL="private"
+                                                )
+                                                print(f"[DOCUSEAL WEBHOOK] Stored Audit Certificate PDF to DO Spaces key: {s3_cert_key}")
+                                        except Exception as cert_err:
+                                            print(f"[DOCUSEAL WEBHOOK WARNING] Could not download/upload Audit Certificate: {cert_err}")
+
                                     cur.execute("""
                                         UPDATE esignature_requests
-                                        SET do_spaces_pdf_key = %s, updated_at = NOW()
+                                        SET do_spaces_pdf_key = %s, do_spaces_cert_key = %s, updated_at = NOW()
                                         WHERE id = %s;
-                                    """, (s3_key, req_id))
+                                    """, (s3_key, s3_cert_key or "", req_id))
                                     conn.commit()
-                                    print(f"[DOCUSEAL WEBHOOK] Successfully stored signed PDF to DO Spaces key: {s3_key}")
+                                    print(f"[DOCUSEAL WEBHOOK] Successfully stored signed PDF & Audit Certificate to DO Spaces!")
                         except Exception as dl_err:
                             print(f"[DOCUSEAL WEBHOOK WARNING] Could not download/upload signed PDF: {dl_err}")
 
