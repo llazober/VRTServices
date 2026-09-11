@@ -9441,8 +9441,27 @@ def process_inbound_post_processing(
                     try:
                         upd_conn = get_db_connection()
                         with upd_conn.cursor() as cur:
+                            cur.execute("SELECT attachments_json FROM customer_communications WHERE id = %s;", (comm_id,))
+                            row = cur.fetchone()
+                            existing_atts = []
+                            if row and row[0]:
+                                try:
+                                    existing_atts = json.loads(row[0]) if isinstance(row[0], str) else (row[0] if isinstance(row[0], list) else [])
+                                except Exception:
+                                    existing_atts = []
+                            if not isinstance(existing_atts, list):
+                                existing_atts = []
+
+                            combined = [item for item in existing_atts if isinstance(item, dict)]
+                            if email_id and not any(isinstance(item, dict) and item.get("email_id") == str(email_id) for item in combined):
+                                combined.append({"email_id": str(email_id)})
+
+                            for s_att in saved_attachments:
+                                if s_att not in combined:
+                                    combined.append(s_att)
+
                             cur.execute("UPDATE customer_communications SET attachments_json = %s WHERE id = %s;",
-                                        (json.dumps(saved_attachments, default=str), comm_id))
+                                        (json.dumps(combined, default=str), comm_id))
                             upd_conn.commit()
                         upd_conn.close()
                     except Exception as e_upd:
@@ -9547,6 +9566,11 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
             data.get("email_id") or data.get("id") or 
             (raw_body.get("email_id") if isinstance(raw_body, dict) else None) or
             (raw_body.get("data", {}).get("email_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
+        )
+        message_id = (
+            data.get("message_id") or 
+            (raw_body.get("message_id") if isinstance(raw_body, dict) else None) or
+            (raw_body.get("data", {}).get("message_id") if isinstance(raw_body, dict) and isinstance(raw_body.get("data"), dict) else None)
         )
 
         # Connect to Postgres ONCE for the entire webhook processing lifecycle
@@ -9737,6 +9761,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
 
                 # ── Robust Deduplication Check with Process-Safe Lock ──
                 clean_eid = str(email_id).strip() if email_id and len(str(email_id).strip()) > 3 else None
+                clean_mid = str(message_id).strip() if message_id and len(str(message_id).strip()) > 3 else None
                 safe_sender = (sender_email or "").strip()
                 safe_subject = (subject or "").strip()
 
@@ -9748,37 +9773,60 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                 except Exception as e_lock:
                     print(f"[PG LOCK NOTICE]: {e_lock}")
 
-                init_atts = [{"email_id": str(email_id)}] if email_id else []
+                # Tier A: Check if email_id or message_id has already been successfully processed in webhook_debug_log
+                if clean_eid or clean_mid:
+                    cur.execute("""
+                        SELECT id FROM webhook_debug_log
+                        WHERE status = 'SUCCESS'
+                          AND (
+                            (%s::text IS NOT NULL AND payload_json::text LIKE %s)
+                            OR (%s::text IS NOT NULL AND payload_json::text LIKE %s)
+                          )
+                          AND (%s::integer IS NULL OR id != %s)
+                        LIMIT 1;
+                    """, (
+                        clean_eid, f'%{clean_eid}%' if clean_eid else '%__NONE__%',
+                        clean_mid, f'%{clean_mid}%' if clean_mid else '%__NONE__%',
+                        debug_log_id, debug_log_id or 0
+                    ))
+                    if cur.fetchone():
+                        print(f"[RESEND DUP IGNORED] Webhook already successfully processed in debug log (email_id='{clean_eid}', message_id='{clean_mid}')")
+                        if debug_log_id:
+                            cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
+                            conn.commit()
+                        return {"status": "ignored", "reason": "Duplicate webhook event"}
+
+                init_atts = []
+                if email_id: init_atts.append({"email_id": str(email_id)})
+                if message_id: init_atts.append({"message_id": str(message_id)})
                 final_body = body_text.strip() if body_text and isinstance(body_text, str) and body_text.strip() else f"Subject: {subject}"
                 safe_sender = (sender_email or "")[:199]
                 safe_recipient = (recipient_email or "")[:199]
                 safe_subject = (subject or "")[:299]
 
+                # Tier B: Check if email already recorded in customer_communications
                 cur.execute("""
                     SELECT id FROM customer_communications
                     WHERE direction = 'INBOUND'
                       AND (
                         (%s::text IS NOT NULL AND %s::text != '' AND attachments_json::text LIKE %s)
+                        OR (%s::text IS NOT NULL AND %s::text != '' AND attachments_json::text LIKE %s)
                         OR (
                             LENGTH(%s) > 0 
                             AND LOWER(sender_email) = LOWER(%s) 
                             AND subject = %s 
-                            AND body_text = %s
-                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '15 seconds'
+                            AND customer_id = %s
+                            AND created_at > CURRENT_TIMESTAMP - INTERVAL '15 minutes'
                         )
                       )
                     LIMIT 1;
                 """, (
-                    clean_eid,
-                    clean_eid,
-                    f'%{clean_eid}%' if clean_eid else '%__NONE__%',
-                    safe_sender,
-                    safe_sender,
-                    safe_subject,
-                    final_body
+                    clean_eid, clean_eid, f'%{clean_eid}%' if clean_eid else '%__NONE__%',
+                    clean_mid, clean_mid, f'%{clean_mid}%' if clean_mid else '%__NONE__%',
+                    safe_sender, safe_sender, safe_subject, customer_id
                 ))
                 if cur.fetchone():
-                    print(f"[RESEND DUP IGNORED] Duplicate email already saved (email_id='{clean_eid}', sender='{safe_sender}', subject='{safe_subject}')")
+                    print(f"[RESEND DUP IGNORED] Duplicate email already saved (email_id='{clean_eid}', message_id='{clean_mid}', sender='{safe_sender}', subject='{safe_subject}')")
                     if debug_log_id:
                         cur.execute("UPDATE webhook_debug_log SET status = 'IGNORED_DUP' WHERE id = %s;", (debug_log_id,))
                         conn.commit()
