@@ -3657,13 +3657,50 @@ async def public_esignature_page(request: Request, request_id: int):
             cur.execute("""
                 SELECT er.*, c.legal_name as customer_name, c.parent_name
                 FROM esignature_requests er
-                JOIN customer c ON er.customer_id = c.id
+                LEFT JOIN customer c ON er.customer_id = c.id
                 WHERE er.id = %s;
             """, (request_id,))
             req_rec = cur.fetchone()
 
         if not req_rec:
-            raise HTTPException(status_code=404, detail="E-Signature request not found.")
+            return HTMLResponse(content=f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>E-Signature Request Not Found — VRT Services</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+                <style>
+                    body {{
+                        margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
+                        background: #0b0c10; color: #f5f6fa;
+                        display: flex; flex-direction: column; min-height: 100vh;
+                        align-items: center; justify-content: center; text-align: center; padding: 40px 20px;
+                    }}
+                    .card {{
+                        background: #141722; border: 1px solid rgba(255,255,255,0.1);
+                        border-radius: 20px; max-width: 600px; width: 100%; padding: 48px;
+                        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+                    }}
+                    .icon {{ font-size: 3rem; margin-bottom: 16px; }}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div class="icon">🔍</div>
+                    <h2 style="margin: 0; font-size: 1.5rem; color: #f87171;">E-Signature Request Not Found</h2>
+                    <p style="color: #94a3b8; font-size: 1rem; margin-top: 14px;">
+                        The signature request link <strong>(ID: {request_id})</strong> is no longer available or may have been removed.
+                    </p>
+                    <p style="color: #64748b; font-size: 0.88rem; margin-top: 12px;">
+                        Please verify your link or check your email for an updated signature request.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """, status_code=404)
 
         embed_src = req_rec.get("embed_src") or ""
         if embed_src and ("docuseal.com" in embed_src or "api.docuseal.com" in embed_src):
@@ -3828,7 +3865,7 @@ async def list_esignature_requests(request: Request, customer_id: int = None, st
             sql = """
                 SELECT er.*, c.legal_name as customer_name, c.parent_name, c.email as customer_email
                 FROM esignature_requests er
-                JOIN customer c ON er.customer_id = c.id
+                LEFT JOIN customer c ON er.customer_id = c.id
                 WHERE 1=1
             """
             params = []
@@ -4001,7 +4038,7 @@ async def get_esignature_signed_pdf(request_id: int):
             cur.execute("""
                 SELECT er.*, c.legal_name, c.parent_name
                 FROM esignature_requests er
-                JOIN customer c ON er.customer_id = c.id
+                LEFT JOIN customer c ON er.customer_id = c.id
                 WHERE er.id = %s;
             """, (request_id,))
             req_rec = cur.fetchone()
@@ -4067,7 +4104,7 @@ async def get_esignature_audit_pdf(request_id: int):
             cur.execute("""
                 SELECT er.*, c.legal_name, c.parent_name
                 FROM esignature_requests er
-                JOIN customer c ON er.customer_id = c.id
+                LEFT JOIN customer c ON er.customer_id = c.id
                 WHERE er.id = %s;
             """, (request_id,))
             req_rec = cur.fetchone()
