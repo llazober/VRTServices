@@ -3692,7 +3692,6 @@ async def public_esignature_page(request: Request, request_id: int):
             <title>Sign {doc_name} — {parent_name}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-            <script src="{DOCUSEAL_HOST}/js/form.js"></script>
             <style>
                 body {{
                     margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
@@ -3711,7 +3710,6 @@ async def public_esignature_page(request: Request, request_id: int):
                     border-radius: 20px; width: 100%; max-width: 980px; height: 84vh;
                     box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;
                 }}
-                docuseal-form {{ width: 100%; height: 100%; display: block; }}
                 iframe {{ width: 100%; height: 100%; border: none; }}
             </style>
         </head>
@@ -3721,13 +3719,16 @@ async def public_esignature_page(request: Request, request_id: int):
                     <h1>✍️ {parent_name} Portal — E-Signature</h1>
                     <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;">📜 Please review all document details below before signing.</div>
                 </div>
-                <div style="font-size: 0.88rem; color: #38bdf8; font-weight: 700; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); padding: 8px 16px; border-radius: 12px;">
-                    📄 {doc_name} ({customer_name})
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="font-size: 0.88rem; color: #38bdf8; font-weight: 700; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); padding: 8px 16px; border-radius: 12px;">
+                        📄 {doc_name} ({customer_name})
+                    </div>
+                    {f'<a href="{embed_src}" target="_blank" style="background: #0284c7; color: #ffffff; padding: 8px 16px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 0.85rem; border: 1px solid #0369a1;">Open Full Screen ↗</a>' if embed_src else ''}
                 </div>
             </div>
             <div class="container">
                 <div class="card">
-                    {f'<docuseal-form data-src="{embed_src}" data-expand="true"><iframe src="{embed_src}{"?" if "?" not in embed_src else "&"}expand=true" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe></docuseal-form>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
+                    {f'<iframe src="{embed_src}" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
                 </div>
             </div>
         </body>
