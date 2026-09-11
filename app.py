@@ -3683,6 +3683,9 @@ async def public_esignature_page(request: Request, request_id: int):
             except Exception as auto_heal_err:
                 print(f"[DOCUSEAL AUTO-HEAL WARNING] Could not auto-heal request {request_id}: {auto_heal_err}")
 
+        if embed_src:
+            return RedirectResponse(url=embed_src, status_code=307)
+
         return HTMLResponse(content=f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -3697,39 +3700,28 @@ async def public_esignature_page(request: Request, request_id: int):
                     margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
                     background: #0b0c10; color: #f5f6fa;
                     display: flex; flex-direction: column; min-height: 100vh;
+                    align-items: center; justify-content: center; text-align: center; padding: 40px 20px;
                 }}
-                .header {{
-                    background: rgba(15, 18, 28, 0.95);
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                    padding: 16px 32px; display: flex; justify-content: space-between; align-items: center;
-                }}
-                .header h1 {{ font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; }}
-                .container {{ flex: 1; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
                 .card {{
                     background: #141722; border: 1px solid rgba(255,255,255,0.1);
-                    border-radius: 20px; width: 100%; max-width: 980px; height: 84vh;
-                    box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;
+                    border-radius: 20px; max-width: 600px; width: 100%; padding: 48px;
+                    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
                 }}
-                iframe {{ width: 100%; height: 100%; border: none; }}
+                .btn {{
+                    background: #0284c7; color: #ffffff; padding: 14px 28px; border-radius: 12px;
+                    text-decoration: none; font-weight: 700; font-size: 1rem; display: inline-block; margin-top: 24px;
+                }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <div>
-                    <h1>✍️ {parent_name} Portal — E-Signature</h1>
-                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;">📜 Please review all document details below before signing.</div>
-                </div>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <div style="font-size: 0.88rem; color: #38bdf8; font-weight: 700; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); padding: 8px 16px; border-radius: 12px;">
-                        📄 {doc_name} ({customer_name})
-                    </div>
-                    {f'<a href="{embed_src}" target="_blank" style="background: #0284c7; color: #ffffff; padding: 8px 16px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 0.85rem; border: 1px solid #0369a1;">Open Full Screen ↗</a>' if embed_src else ''}
-                </div>
-            </div>
-            <div class="container">
-                <div class="card">
-                    {f'<iframe src="{embed_src}" allow="camera; microphone; clipboard-read; clipboard-write;"></iframe>' if embed_src else '<div style="padding: 60px; text-align: center; color: #94a3b8;">Signature form is currently being processed. Please refresh or contact support.</div>'}
-                </div>
+            <div class="card">
+                <h2>✍️ {parent_name} Portal</h2>
+                <p style="color: #94a3b8; font-size: 1rem; margin-top: 12px;">
+                    Signature form for <strong>{doc_name}</strong> is currently being prepared.
+                </p>
+                <p style="color: #64748b; font-size: 0.9rem;">
+                    Please refresh this page in a few seconds or contact support if the issue persists.
+                </p>
             </div>
         </body>
         </html>
