@@ -3406,6 +3406,17 @@ async def get_compliance_events(
 DOCUSEAL_API_KEY = os.environ.get("DOCUSEAL_API_KEY", "")
 DOCUSEAL_HOST = os.environ.get("DOCUSEAL_HOST", "https://api.docuseal.com").rstrip("/")
 
+@app.get("/api/debug/docuseal-config")
+async def debug_docuseal_config():
+    host = (os.environ.get("DOCUSEAL_HOST") or DOCUSEAL_HOST or "https://api.docuseal.com").rstrip("/")
+    key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY or ""
+    masked_key = (key[:5] + "..." + key[-4:]) if len(key) > 9 else ("SET" if key else "MISSING")
+    return {
+        "DOCUSEAL_HOST": host,
+        "DOCUSEAL_API_KEY_MASKED": masked_key,
+        "is_self_hosted": "api.docuseal.com" not in host
+    }
+
 def get_docuseal_headers():
     api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
     return {
