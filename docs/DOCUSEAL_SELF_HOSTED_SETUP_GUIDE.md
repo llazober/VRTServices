@@ -24,13 +24,12 @@ This guide walks you through deploying **Self-Hosted DocuSeal** on a DigitalOcea
 Connect to your server via SSH and install Docker:
 
 ```bash
-# If logged in as root (root@server:~#):
+# If using Official Docker repo (Ubuntu 24.04 / Noble):
+apt update && apt install -y docker-compose-plugin
+
+# If standard Ubuntu repo:
 apt update && apt install -y docker.io docker-compose
 systemctl enable --now docker
-
-# If logged in as non-root user (e.g. ubuntu@server:~$):
-sudo apt update && sudo apt install -y docker.io docker-compose
-sudo systemctl enable --now docker
 ```
 
 ---
