@@ -3464,7 +3464,7 @@ def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str
     elif "engagement" in dn_lower:
         return f"""
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">2026 Tax Preparation Engagement Letter</h2>
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">Tax Preparation Engagement Letter</h2>
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
                 <p style="margin: 6px 0; font-size: 15px;"><strong>Client Name:</strong> <text-field name="Client Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
             </div>
