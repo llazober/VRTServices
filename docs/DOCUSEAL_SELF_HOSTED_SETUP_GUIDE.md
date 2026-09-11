@@ -15,7 +15,7 @@ This guide walks you through deploying **Self-Hosted DocuSeal** on a DigitalOcea
 ## System Requirements
 
 - **Server**: DigitalOcean Droplet / Ubuntu 22.04 LTS (1 vCPU, 1 GB or 2 GB RAM is sufficient).
-- **Domain / Subdomain**: e.g., `esign.vrt-services.com` or `esign.datalazo.com` pointing to your Droplet's public IP address.
+- **Domain / Subdomain**: e.g., `esign.vrtservices12.com` pointing to your Droplet's public IP address.
 
 ---
 
@@ -85,7 +85,7 @@ Paste:
 
 ```nginx
 server {
-    server_name esign.vrt-services.com;  # Replace with your actual domain
+    server_name esign.vrtservices12.com;  # Your DocuSeal subdomain
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -103,16 +103,16 @@ Enable site and issue SSL certificate:
 sudo ln -s /etc/nginx/sites-available/docuseal /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
-sudo certbot --nginx -d esign.vrt-services.com
+sudo certbot --nginx -d esign.vrtservices12.com
 ```
 
 ---
 
 ## Step 4: Initial Admin Setup & API Key Creation
 
-1. Open your domain in browser: `https://esign.vrt-services.com`
+1. Open your domain in browser: `https://esign.vrtservices12.com`
 2. Complete the initial admin signup (Email & Password).
-3. Navigate to **Settings ➔ API** from the left menu.
+3. Navigate to **Settings ➔ API** from the left menu (`https://esign.vrtservices12.com/settings/api`).
 4. Click **Create API Key** and copy the generated token.
 5. Navigate to **Settings ➔ Webhooks**:
    - **Target URL**: `https://vrtservices12.com/api/webhooks/docuseal`
@@ -126,7 +126,7 @@ Update your `d:\VRTServices\.env` file with your new self-hosted credentials:
 
 ```env
 DOCUSEAL_API_KEY=your_generated_api_key_here
-DOCUSEAL_HOST=https://esign.vrt-services.com
+DOCUSEAL_HOST=https://esign.vrtservices12.com
 ```
 
 ---
@@ -134,9 +134,9 @@ DOCUSEAL_HOST=https://esign.vrt-services.com
 ## How It Works end-to-end
 
 1. When you click **Send E-Signature Request** in VRTServices (`/management-tools` ➔ `E-Signatures` tab):
-   - `app.py` sends a request to `https://esign.vrt-services.com/submissions`.
+   - `app.py` sends a request to `https://esign.vrtservices12.com/submissions`.
 2. DocuSeal sends the email invitation to the client or generates the signature link for iframe embed.
-3. When the taxpayer signs, your self-hosted DocuSeal instance fires a webhook to `https://vrt-services.com/api/webhooks/docuseal`.
+3. When the taxpayer signs, your self-hosted DocuSeal instance fires a webhook to `https://vrtservices12.com/api/webhooks/docuseal`.
 4. VRTServices automatically downloads the signed PDF + audit trail certificate and stores it in DigitalOcean Spaces (`datalazocrm`) at:
    `${Parent Name}/${Customer Legal Name}/ESignatures/${Document}_Signed.pdf`
 5. VRTServices automatically updates `tax_client_signature = TRUE` on the customer's tax checklist.
