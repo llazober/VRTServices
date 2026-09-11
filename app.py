@@ -3597,6 +3597,13 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                 "file": pdf_base64
             }
         ]
+    else:
+        payload["documents"] = [
+            {
+                "name": document_name,
+                "html": docuseal_generate_html_template(document_name, signer_name)
+            }
+        ]
 
     url = get_docuseal_api_url("submissions")
     req_data = json.dumps(payload).encode("utf-8")
@@ -3720,10 +3727,17 @@ async def public_esignature_page(request: Request, request_id: int):
                     box-shadow: 0 25px 50px rgba(0,0,0,0.5);
                 }}
                 .btn {{
-                    background: #0284c7; color: #ffffff; padding: 14px 28px; border-radius: 12px;
-                    text-decoration: none; font-weight: 700; font-size: 1rem; display: inline-block; margin-top: 24px;
+                    background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 12px;
+                    text-decoration: none; font-weight: 700; font-size: 0.95rem; display: inline-block; margin-top: 20px;
+                    border: none; cursor: pointer; transition: all 0.2s ease;
                 }}
+                .btn:hover {{ background: #0369a1; transform: translateY(-1px); }}
             </style>
+            <script>
+                setTimeout(function() {{
+                    window.location.reload();
+                }}, 3000);
+            </script>
         </head>
         <body>
             <div class="card">
@@ -3732,8 +3746,9 @@ async def public_esignature_page(request: Request, request_id: int):
                     Signature form for <strong>{doc_name}</strong> is currently being prepared.
                 </p>
                 <p style="color: #64748b; font-size: 0.9rem;">
-                    Please refresh this page in a few seconds or contact support if the issue persists.
+                    Please wait a few seconds while we generate your document signature interface...
                 </p>
+                <button class="btn" onclick="window.location.reload();">🔄 Refresh Page</button>
             </div>
         </body>
         </html>
