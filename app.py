@@ -3530,6 +3530,8 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
     Uses target template_id if provided, or looks up existing templates from self-hosted instance.
     Returns parsed JSON response from DocuSeal.
     """
+    import urllib.request
+    import urllib.parse
     headers = get_docuseal_headers()
     today_str = datetime.datetime.now().strftime("%m/%d/%Y")
 
@@ -3742,6 +3744,9 @@ async def public_esignature_page(request: Request, request_id: int):
         if embed_src:
             return RedirectResponse(url=embed_src, status_code=307)
 
+        import urllib.parse
+        doc_html_content = docuseal_generate_html_template(doc_name, signer_name)
+
         return HTMLResponse(content=f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -3750,43 +3755,173 @@ async def public_esignature_page(request: Request, request_id: int):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Sign {doc_name} — {parent_name}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap" rel="stylesheet">
             <style>
+                * {{ box-sizing: border-box; }}
                 body {{
                     margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
-                    background: #0b0c10; color: #f5f6fa;
-                    display: flex; flex-direction: column; min-height: 100vh;
-                    align-items: center; justify-content: center; text-align: center; padding: 40px 20px;
+                    background: #0b0c10; color: #f5f6fa; min-height: 100vh;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 16px;
                 }}
-                .card {{
-                    background: #141722; border: 1px solid rgba(255,255,255,0.1);
-                    border-radius: 20px; max-width: 600px; width: 100%; padding: 48px;
-                    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+                .container {{
+                    max-width: 800px; width: 100%; background: #141722;
+                    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px;
+                    padding: 36px; box-shadow: 0 25px 60px rgba(0,0,0,0.6);
                 }}
-                .btn {{
-                    background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 12px;
-                    text-decoration: none; font-weight: 700; font-size: 0.95rem; display: inline-block; margin-top: 20px;
-                    border: none; cursor: pointer; transition: all 0.2s ease;
-                }}
-                .btn:hover {{ background: #0369a1; transform: translateY(-1px); }}
+                .header {{ text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 24px; }}
+                .header h2 {{ margin: 0; font-size: 1.6rem; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 10px; }}
+                .badge {{ display: inline-block; background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }}
+                .doc-box {{ background: #ffffff; color: #0f172a; border-radius: 12px; padding: 28px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }}
+                .form-group {{ margin-bottom: 20px; text-align: left; }}
+                .form-label {{ display: block; font-size: 0.9rem; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; }}
+                .form-input {{ width: 100%; padding: 12px 16px; background: #1a1e2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #ffffff; font-size: 1rem; font-family: 'Outfit', sans-serif; outline: none; }}
+                .form-input:focus {{ border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }}
+                .canvas-wrapper {{ background: #ffffff; border: 2px dashed #0284c7; border-radius: 12px; position: relative; margin-top: 8px; cursor: crosshair; overflow: hidden; }}
+                canvas {{ display: block; width: 100%; height: 140px; touch-action: none; }}
+                .clear-btn {{ position: absolute; top: 8px; right: 8px; background: #cbd5e1; color: #0f172a; border: none; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }}
+                .clear-btn:hover {{ background: #94a3b8; color: #ffffff; }}
+                .btn-submit {{ width: 100%; background: #0284c7; color: #ffffff; padding: 16px; border-radius: 12px; border: none; font-weight: 800; font-size: 1.05rem; cursor: pointer; margin-top: 24px; transition: all 0.2s ease; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); }}
+                .btn-submit:hover {{ background: #0369a1; transform: translateY(-2px); }}
+                .btn-submit:disabled {{ background: #475569; opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }}
+                .legal-check {{ display: flex; align-items: flex-start; gap: 12px; text-align: left; margin-top: 20px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }}
+                .legal-check input {{ margin-top: 3px; accent-color: #0284c7; width: 18px; height: 18px; cursor: pointer; }}
             </style>
-            <script>
-                setTimeout(function() {{
-                    window.location.reload();
-                }}, 3000);
-            </script>
         </head>
         <body>
-            <div class="card">
-                <h2>✍️ {parent_name} Portal</h2>
-                <p style="color: #94a3b8; font-size: 1rem; margin-top: 12px;">
-                    Signature form for <strong>{doc_name}</strong> is currently being prepared.
-                </p>
-                <p style="color: #64748b; font-size: 0.9rem;">
-                    Please wait a few seconds while we generate your document signature interface...
-                </p>
-                <button class="btn" onclick="window.location.reload();">🔄 Refresh Page</button>
+            <div class="container">
+                <div class="header">
+                    <h2>✍️ {parent_name} Portal</h2>
+                    <span class="badge">{doc_name}</span>
+                </div>
+
+                <div class="doc-box">
+                    {doc_html_content}
+                </div>
+
+                <form id="esignForm" onsubmit="event.preventDefault(); submitSignature();">
+                    <div class="form-group">
+                        <label class="form-label">Full Signer Legal Name</label>
+                        <input type="text" id="signerNameInput" class="form-input" value="{signer_name}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Draw Your E-Signature Below</label>
+                        <div class="canvas-wrapper">
+                            <button type="button" class="clear-btn" onclick="clearCanvas()">Clear</button>
+                            <canvas id="sigCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="legal-check">
+                        <input type="checkbox" id="consentCheck" required>
+                        <label for="consentCheck">
+                            I confirm that I am <strong>{signer_name}</strong> and agree that my drawn electronic signature above is legally binding under the Electronic Signatures in Global and National Commerce (ESIGN) Act.
+                        </label>
+                    </div>
+
+                    <button type="submit" id="submitBtn" class="btn-submit">✍️ Confirm & Submit E-Signature</button>
+                </form>
             </div>
+
+            <script>
+                const canvas = document.getElementById('sigCanvas');
+                const ctx = canvas.getContext('2d');
+                let isDrawing = false;
+                let hasSignature = false;
+
+                function resizeCanvas() {{
+                    const rect = canvas.getBoundingClientRect();
+                    canvas.width = rect.width * 2;
+                    canvas.height = rect.height * 2;
+                    ctx.scale(2, 2);
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 2.5;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                }}
+                window.addEventListener('resize', resizeCanvas);
+                setTimeout(resizeCanvas, 150);
+
+                function getPos(e) {{
+                    const rect = canvas.getBoundingClientRect();
+                    if (e.touches && e.touches[0]) {{
+                        return {{ x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }};
+                    }}
+                    return {{ x: e.clientX - rect.left, y: e.clientY - rect.top }};
+                }}
+
+                function startDrawing(e) {{
+                    isDrawing = true;
+                    hasSignature = true;
+                    const pos = getPos(e);
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                    e.preventDefault();
+                }}
+
+                function draw(e) {{
+                    if (!isDrawing) return;
+                    const pos = getPos(e);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                    e.preventDefault();
+                }}
+
+                function stopDrawing() {{
+                    isDrawing = false;
+                }}
+
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseleave', stopDrawing);
+
+                canvas.addEventListener('touchstart', startDrawing);
+                canvas.addEventListener('touchmove', draw);
+                canvas.addEventListener('touchend', stopDrawing);
+
+                function clearCanvas() {{
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    hasSignature = false;
+                }}
+
+                async function submitSignature() {{
+                    if (!hasSignature) {{
+                        alert('Please draw your signature in the signature box before submitting.');
+                        return;
+                    }}
+
+                    const btn = document.getElementById('submitBtn');
+                    btn.disabled = true;
+                    btn.innerText = '⌛ Processing Signature...';
+
+                    const sigData = canvas.toDataURL('image/png');
+                    const signerName = document.getElementById('signerNameInput').value;
+
+                    try {{
+                        const resp = await fetch('/api/esignature/requests/{request_id}/sign-inline', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{
+                                signer_name: signerName,
+                                signature_data: sigData
+                            }})
+                        }});
+                        const data = await resp.json();
+                        if (data.success) {{
+                            window.location.href = data.redirect || '/esign/completed?doc={urllib.parse.quote(doc_name)}';
+                        }} else {{
+                            alert('Error saving signature: ' + (data.detail || 'Unknown error'));
+                            btn.disabled = false;
+                            btn.innerText = '✍️ Confirm & Submit E-Signature';
+                        }}
+                    }} catch (err) {{
+                        alert('Network error submitting signature. Please try again.');
+                        btn.disabled = false;
+                        btn.innerText = '✍️ Confirm & Submit E-Signature';
+                    }}
+                }}
+            </script>
         </body>
         </html>
         """)
@@ -3797,6 +3932,64 @@ async def public_esignature_page(request: Request, request_id: int):
     finally:
         if conn:
             conn.close()
+
+
+@app.post("/api/esignature/requests/{request_id}/sign-inline")
+@app.post("/portal/esignature/requests/{request_id}/sign-inline")
+async def public_esignature_inline_submit(request_id: int, request: Request):
+    try:
+        body = await request.json()
+        signer_name = body.get("signer_name") or ""
+        signature_b64 = body.get("signature_data") or ""
+        ip_address = request.client.host if request.client else "127.0.0.1"
+
+        conn = None
+        try:
+            conn = get_db_connection("VRT")
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM esignature_requests WHERE id = %s;", (request_id,))
+                req_rec = cur.fetchone()
+                if not req_rec:
+                    raise HTTPException(status_code=404, detail="E-Signature request not found.")
+
+                doc_name = req_rec.get("document_name") or "Document"
+                cur.execute("""
+                    UPDATE esignature_requests
+                    SET status = 'completed', signed_at = NOW(), updated_at = NOW()
+                    WHERE id = %s;
+                """, (request_id,))
+
+                # Auto-update customer tax signature status
+                cust_id = req_rec.get("customer_id")
+                if cust_id:
+                    cur.execute("""
+                        UPDATE customer
+                        SET tax_client_signature = TRUE, updated_at = NOW()
+                        WHERE id = %s;
+                    """, (cust_id,))
+
+                conn.commit()
+
+                log_audit_event(
+                    username=signer_name or "Signer",
+                    action="E_SIGNATURE_COMPLETED_INLINE",
+                    entity_type="esignature_request",
+                    entity_id=str(request_id),
+                    details={"signer_name": signer_name, "doc": doc_name},
+                    ip_address=ip_address,
+                    request=request
+                )
+
+                import urllib.parse
+                return {"success": True, "redirect": f"/esign/completed?doc={urllib.parse.quote(doc_name)}"}
+        finally:
+            if conn:
+                conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[INLINE ESIGN ERROR]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/esign/completed", response_class=HTMLResponse)
