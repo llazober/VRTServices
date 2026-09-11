@@ -3569,24 +3569,34 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
 def extract_docuseal_info(ds_resp):
     submit_id = None
     embed_src = None
+    slug = None
     if isinstance(ds_resp, list) and len(ds_resp) > 0:
         item = ds_resp[0]
         submit_id = str(item.get("submission_id") or item.get("id") or "")
         slug = item.get("slug")
-        embed_src = item.get("embed_src") or (f"{DOCUSEAL_HOST}/s/{slug}" if slug else "")
+        raw_src = item.get("embed_src") or ""
     elif isinstance(ds_resp, dict):
         submit_id = str(ds_resp.get("id") or "")
         slug = ds_resp.get("slug")
+        raw_src = ds_resp.get("embed_src") or ""
         submitters = ds_resp.get("submitters") or []
         if submitters and isinstance(submitters, list) and len(submitters) > 0:
             sub = submitters[0]
             if not submit_id:
                 submit_id = str(sub.get("submission_id") or sub.get("id") or "")
             slug = sub.get("slug") or slug
-            embed_src = sub.get("embed_src") or (f"{DOCUSEAL_HOST}/s/{slug}" if slug else "")
-        if not embed_src and slug:
-            embed_src = f"{DOCUSEAL_HOST}/s/{slug}"
-            
+            raw_src = sub.get("embed_src") or raw_src
+
+    if slug:
+        embed_src = f"{DOCUSEAL_HOST}/s/{slug}"
+    elif raw_src:
+        import re
+        m = re.search(r'/s/([A-Za-z0-9_-]+)', raw_src)
+        if m:
+            embed_src = f"{DOCUSEAL_HOST}/s/{m.group(1)}"
+        else:
+            embed_src = raw_src.replace("https://docuseal.com", DOCUSEAL_HOST).replace("https://api.docuseal.com", DOCUSEAL_HOST)
+
     return submit_id, embed_src
 
 
@@ -3609,6 +3619,13 @@ async def public_esignature_page(request: Request, request_id: int):
             raise HTTPException(status_code=404, detail="E-Signature request not found.")
 
         embed_src = req_rec.get("embed_src") or ""
+        if embed_src and ("docuseal.com" in embed_src or "api.docuseal.com" in embed_src):
+            import re
+            m = re.search(r'/s/([A-Za-z0-9_-]+)', embed_src)
+            if m:
+                embed_src = f"{DOCUSEAL_HOST}/s/{m.group(1)}"
+            else:
+                embed_src = embed_src.replace("https://docuseal.com", DOCUSEAL_HOST).replace("https://api.docuseal.com", DOCUSEAL_HOST)
         doc_name = req_rec.get("document_name") or "Document"
         customer_name = req_rec.get("customer_name") or ""
         parent_name = req_rec.get("parent_name") or "VRT Services"
@@ -3808,7 +3825,7 @@ async def send_esignature_request(
             # Dispatch notification email via Resend API from notification@vrtservices12.com
             if send_email and signer_email:
                 try:
-                    sign_url = ds_embed_src if ds_embed_src else f"https://vrtservices12.com/esign/{new_req['id']}"
+                    sign_url = f"https://vrtservices12.com/esign/{new_req['id']}"
                     email_payload = {
                         "from": "VRT Services Portal <notification@vrtservices12.com>",
                         "to": [signer_email],
