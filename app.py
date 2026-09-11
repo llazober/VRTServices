@@ -3526,13 +3526,38 @@ def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str
 
 def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True):
     """
-    Calls DocuSeal API to create a signature submission. If no template_id or PDF file base64
-    is provided, dynamically attaches HTML document content directly in the submission payload
-    (compatible with both Community and Pro editions).
+    Calls DocuSeal API to create a signature submission.
+    Uses target template_id if provided, or looks up existing templates from self-hosted instance.
     Returns parsed JSON response from DocuSeal.
     """
     headers = get_docuseal_headers()
     today_str = datetime.datetime.now().strftime("%m/%d/%Y")
+
+    target_template_id = None
+    if template_id and str(template_id).strip():
+        try:
+            target_template_id = int(template_id)
+        except ValueError:
+            target_template_id = template_id
+
+    if not target_template_id and not pdf_base64:
+        try:
+            url_tpls = get_docuseal_api_url("templates")
+            req_tpls = urllib.request.Request(url_tpls, headers=headers)
+            with urllib.request.urlopen(req_tpls) as resp_tpls:
+                tpls_data = json.loads(resp_tpls.read().decode("utf-8"))
+                tpl_list = tpls_data.get("data") or []
+                if tpl_list and len(tpl_list) > 0:
+                    matched_tpl = None
+                    for tpl in tpl_list:
+                        if (document_name or "").lower() in (tpl.get("name") or "").lower():
+                            matched_tpl = tpl
+                            break
+                    if not matched_tpl:
+                        matched_tpl = tpl_list[0]
+                    target_template_id = matched_tpl.get("id")
+        except Exception as tpl_err:
+            print(f"[DOCUSEAL TEMPLATE LOOKUP WARNING]: {tpl_err}")
 
     payload = {
         "send_email": send_email,
@@ -3551,25 +3576,13 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         ]
     }
 
-    if template_id and str(template_id).strip():
-        try:
-            payload["template_id"] = int(template_id)
-        except ValueError:
-            payload["template_id"] = template_id
+    if target_template_id:
+        payload["template_id"] = target_template_id
     elif pdf_base64:
         payload["documents"] = [
             {
                 "name": document_name,
                 "file": pdf_base64
-            }
-        ]
-    else:
-        # Generate rich HTML template inline for DocuSeal Community & Pro editions
-        html_content = docuseal_generate_html_template(document_name, signer_name)
-        payload["documents"] = [
-            {
-                "name": document_name,
-                "html": html_content
             }
         ]
 
