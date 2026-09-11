@@ -3647,7 +3647,7 @@ async def public_esignature_page(request: Request, request_id: int):
             <title>Sign {doc_name} — {parent_name}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-            <script src="https://cdn.docuseal.com/js/form.js"></script>
+            <script src="{DOCUSEAL_HOST}/js/form.js"></script>
             <style>
                 body {{
                     margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
