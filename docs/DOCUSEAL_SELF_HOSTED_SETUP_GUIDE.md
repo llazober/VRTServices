@@ -161,3 +161,17 @@ DOCUSEAL_HOST=https://esign.vrtservices12.com
 4. VRTServices automatically downloads the signed PDF + audit trail certificate and stores it in DigitalOcean Spaces (`datalazocrm`) at:
    `${Parent Name}/${Customer Legal Name}/ESignatures/${Document}_Signed.pdf`
 5. VRTServices automatically updates `tax_client_signature = TRUE` on the customer's tax checklist.
+
+---
+
+## Multi-Domain & Multi-Client Setup (Option 1: Single Instance Reuse)
+
+If you need to support additional domains or client portals in the future, **you do NOT need a new server**:
+
+### Recommended Approach (Option 1: Reuse Existing Instance)
+- **Single Shared Instance (`https://esign.vrtservices12.com`)**: One self-hosted DocuSeal instance can serve multiple domains and client portals simultaneously.
+- **Multiple Webhooks**: Under **Settings ➔ Webhooks**, click **Add Webhook** to register distinct webhook endpoints for each domain (e.g., `https://vrtservices12.com/api/webhooks/docuseal`, `https://client2domain.com/api/webhooks/docuseal`).
+- **Organizations & Workspaces**: Create separate users, teams, and template workspaces inside the same admin dashboard.
+
+### Alternative (Option 2: 2nd Container on Same Server in EasyPanel)
+- If a client requires a completely isolated admin panel or separate database, deploy a 2nd App service in EasyPanel on the **same DigitalOcean server** (e.g., service name `docuseal-client2`, domain `esign.client2domain.com`). EasyPanel handles Traefik routing and SSL certificates automatically without needing new server hardware.
