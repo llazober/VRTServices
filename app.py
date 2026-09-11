@@ -3549,8 +3549,16 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                 tpl_list = tpls_data.get("data") or []
                 if tpl_list and len(tpl_list) > 0:
                     matched_tpl = None
+                    doc_lower = (document_name or "").lower()
                     for tpl in tpl_list:
-                        if (document_name or "").lower() in (tpl.get("name") or "").lower():
+                        tpl_name = (tpl.get("name") or "").lower()
+                        # Direct match or substring match
+                        if doc_lower in tpl_name or tpl_name in doc_lower:
+                            matched_tpl = tpl
+                            break
+                        # Keyword sub-matching for 8879, 7216 / consent, organizer, engagement
+                        keywords = ["8879", "7216", "consent", "organizer", "engagement"]
+                        if any(kw in doc_lower and kw in tpl_name for kw in keywords):
                             matched_tpl = tpl
                             break
                     if not matched_tpl:
@@ -3559,13 +3567,17 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         except Exception as tpl_err:
             print(f"[DOCUSEAL TEMPLATE LOOKUP WARNING]: {tpl_err}")
 
+    import urllib.parse
+    redirect_target = f"https://vrtservices12.com/esign/completed?doc={urllib.parse.quote(document_name)}"
     payload = {
         "send_email": send_email,
+        "redirect_url": redirect_target,
         "submitters": [
             {
                 "name": signer_name,
                 "email": signer_email,
                 "role": "First Party",
+                "redirect_url": redirect_target,
                 "values": {
                     "Taxpayer Name": signer_name,
                     "Client Name": signer_name,
@@ -3733,6 +3745,58 @@ async def public_esignature_page(request: Request, request_id: int):
     finally:
         if conn:
             conn.close()
+
+
+@app.get("/esign/completed", response_class=HTMLResponse)
+@app.get("/portal/esign/completed", response_class=HTMLResponse)
+async def esignature_completed_page(doc: str = "Document"):
+    return HTMLResponse(content=f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document Signed Successfully — VRT Services</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+        <style>
+            body {{
+                margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
+                background: #0b0c10; color: #f5f6fa;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                min-height: 100vh; text-align: center; padding: 24px;
+            }}
+            .card {{
+                background: #141722; border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 24px; max-width: 540px; width: 100%; padding: 48px 36px;
+                box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            }}
+            .icon {{
+                width: 80px; height: 80px; background: rgba(34, 197, 94, 0.15);
+                border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                margin: 0 auto 24px; font-size: 36px; color: #4ade80;
+            }}
+            h1 {{ font-size: 1.6rem; font-weight: 800; color: #ffffff; margin: 0 0 12px; }}
+            p {{ color: #94a3b8; font-size: 0.98rem; line-height: 1.6; margin: 0 0 28px; }}
+            .btn {{
+                background: #0284c7; color: #ffffff; padding: 14px 32px; border-radius: 12px;
+                text-decoration: none; font-weight: 700; font-size: 1rem; display: inline-block;
+                box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4); transition: all 0.2s ease;
+            }}
+            .btn:hover {{ background: #0369a1; transform: translateY(-2px); }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="icon">✓</div>
+            <h1>Document Signed Successfully!</h1>
+            <p>Thank you for signing <strong>{doc}</strong> with VRT Services. Your signed copy and official audit trail certificate have been stored securely in your client folder.</p>
+            <a href="https://vrtservices12.com/portal" class="btn">Return to VRT Services Portal 🏠</a>
+        </div>
+    </body>
+    </html>
+    """)
 
 
 @app.get("/api/esignature/requests")
