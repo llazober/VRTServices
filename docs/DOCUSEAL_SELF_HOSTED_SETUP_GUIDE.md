@@ -19,7 +19,25 @@ This guide walks you through deploying **Self-Hosted DocuSeal** on a DigitalOcea
 
 ---
 
-## Step 1: Install Docker & Docker Compose on your Server
+## EasyPanel Deployment (Recommended if using EasyPanel)
+
+If your server runs **EasyPanel** (with built-in Traefik reverse proxy), you can deploy DocuSeal in 1 minute directly from your EasyPanel Dashboard:
+
+1. In EasyPanel, open your project (e.g., `datalazo`).
+2. Click **+ Service** ➔ Select **App**.
+3. **Service Name**: `docuseal`
+4. **Source**: **Docker Image** ➔ Set image to `docuseal/docuseal:latest`
+5. **Environment Variables**:
+   - `PORT=3000`
+   - `DATABASE_URL=sqlite3:/data/docuseal.sqlite3`
+6. **Mounts / Volumes**:
+   - Volume Name: `docuseal_data` ➔ Mount Path: `/data`
+7. **Domains**: Add `esign.vrtservices12.com` (Target Container Port: `3000`).
+8. Click **Deploy**. EasyPanel will automatically configure Traefik routing and issue free SSL certificates!
+
+---
+
+## Standalone Docker / VPS Deployment
 
 Connect to your server via SSH and install Docker:
 
