@@ -3417,11 +3417,22 @@ async def debug_docuseal_config():
         "is_self_hosted": "api.docuseal.com" not in host
     }
 
+def get_docuseal_api_url(path: str) -> str:
+    host = (os.environ.get("DOCUSEAL_HOST") or DOCUSEAL_HOST or "https://api.docuseal.com").rstrip("/")
+    clean_path = path.lstrip("/")
+    if "api.docuseal.com" in host:
+        return f"{host}/{clean_path}"
+    else:
+        if host.endswith("/api"):
+            return f"{host}/{clean_path}"
+        return f"{host}/api/{clean_path}"
+
 def get_docuseal_headers():
     api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
     return {
         "X-Auth-Token": api_key,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
 def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str:
@@ -3516,33 +3527,13 @@ def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str
 def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True):
     """
     Calls DocuSeal API to create a signature submission. If no template_id or PDF file base64
-    is provided, automatically generates a rich HTML e-signature template on DocuSeal Cloud via POST /templates/html.
+    is provided, dynamically attaches HTML document content directly in the submission payload
+    (compatible with both Community and Pro editions).
     Returns parsed JSON response from DocuSeal.
     """
     headers = get_docuseal_headers()
-    target_template_id = None
-
-    if template_id and str(template_id).strip():
-        try:
-            target_template_id = int(template_id)
-        except ValueError:
-            target_template_id = template_id
-    elif not pdf_base64:
-        # Create HTML template dynamically on DocuSeal Cloud
-        html_content = docuseal_generate_html_template(document_name, signer_name)
-        url_tpl = f"{DOCUSEAL_HOST}/templates/html"
-        tpl_payload = {
-            "name": f"{document_name} Template",
-            "html": html_content
-        }
-        req_tpl_data = json.dumps(tpl_payload).encode("utf-8")
-        req_tpl = urllib.request.Request(url_tpl, data=req_tpl_data, headers=headers, method="POST")
-        with urllib.request.urlopen(req_tpl) as resp_tpl:
-            tpl_res = json.loads(resp_tpl.read().decode("utf-8"))
-            target_template_id = tpl_res.get("id")
-
-    url = f"{DOCUSEAL_HOST}/submissions"
     today_str = datetime.datetime.now().strftime("%m/%d/%Y")
+
     payload = {
         "send_email": send_email,
         "submitters": [
@@ -3560,8 +3551,11 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         ]
     }
 
-    if target_template_id:
-        payload["template_id"] = target_template_id
+    if template_id and str(template_id).strip():
+        try:
+            payload["template_id"] = int(template_id)
+        except ValueError:
+            payload["template_id"] = template_id
     elif pdf_base64:
         payload["documents"] = [
             {
@@ -3569,7 +3563,17 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                 "file": pdf_base64
             }
         ]
+    else:
+        # Generate rich HTML template inline for DocuSeal Community & Pro editions
+        html_content = docuseal_generate_html_template(document_name, signer_name)
+        payload["documents"] = [
+            {
+                "name": document_name,
+                "html": html_content
+            }
+        ]
 
+    url = get_docuseal_api_url("submissions")
     req_data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
     
@@ -3940,7 +3944,7 @@ async def get_esignature_signed_pdf(request_id: int):
             if submit_id:
                 try:
                     headers = get_docuseal_headers()
-                    pdf_url = f"{DOCUSEAL_HOST}/submissions/{submit_id}/download"
+                    pdf_url = get_docuseal_api_url(f"submissions/{submit_id}/download")
                     pdf_req = urllib.request.Request(pdf_url, headers=headers)
                     with urllib.request.urlopen(pdf_req) as pdf_resp:
                         pdf_bytes = pdf_resp.read()
@@ -4006,7 +4010,7 @@ async def get_esignature_audit_pdf(request_id: int):
             if submit_id:
                 try:
                     headers = get_docuseal_headers()
-                    sub_url = f"{DOCUSEAL_HOST}/submissions/{submit_id}"
+                    sub_url = get_docuseal_api_url(f"submissions/{submit_id}")
                     sub_req = urllib.request.Request(sub_url, headers=headers)
                     with urllib.request.urlopen(sub_req) as sub_resp:
                         sub_data = json.loads(sub_resp.read().decode("utf-8"))
@@ -4106,7 +4110,7 @@ async def docuseal_webhook_handler(request: Request):
                         pdf_url = documents[0].get("url") or documents[0].get("download_url")
 
                     if not pdf_url and submission_id:
-                        pdf_url = f"{DOCUSEAL_HOST}/submissions/{submission_id}/download"
+                        pdf_url = get_docuseal_api_url(f"submissions/{submission_id}/download")
 
                     if pdf_url:
                         try:
@@ -4139,7 +4143,7 @@ async def docuseal_webhook_handler(request: Request):
                                     audit_url = data.get("audit_log_url")
                                     if not audit_url and submission_id:
                                         try:
-                                            sub_req = urllib.request.Request(f"{DOCUSEAL_HOST}/submissions/{submission_id}", headers=headers)
+                                            sub_req = urllib.request.Request(get_docuseal_api_url(f"submissions/{submission_id}"), headers=headers)
                                             with urllib.request.urlopen(sub_req) as sub_resp:
                                                 sub_info = json.loads(sub_resp.read().decode("utf-8"))
                                                 audit_url = sub_info.get("audit_log_url")
