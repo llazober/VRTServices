@@ -46,14 +46,13 @@ nano docker-compose.yml
 Paste the following configuration:
 
 ```yaml
-version: '3'
 services:
   docuseal:
     image: docuseal/docuseal:latest
     container_name: docuseal
     restart: always
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - PORT=3000
       - DATABASE_URL=sqlite3:/data/docuseal.sqlite3
@@ -64,10 +63,10 @@ services:
 Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`), then start the container:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-DocuSeal is now running locally on port `3000`.
+DocuSeal is now running locally on port `3001`.
 
 ---
 
@@ -76,13 +75,13 @@ DocuSeal is now running locally on port `3000`.
 Install Nginx and Certbot for free HTTPS certificates:
 
 ```bash
-sudo apt install -y nginx certbot python3-certbot-nginx
+apt install -y nginx certbot python3-certbot-nginx
 ```
 
 Create Nginx site configuration:
 
 ```bash
-sudo nano /etc/nginx/sites-available/docuseal
+nano /etc/nginx/sites-available/docuseal
 ```
 
 Paste:
@@ -92,7 +91,7 @@ server {
     server_name esign.vrtservices12.com;  # Your DocuSeal subdomain
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
