@@ -29,7 +29,7 @@ If your server runs **EasyPanel** (with built-in Traefik reverse proxy), you can
 4. **Source**: **Docker Image** ➔ Set image to `docuseal/docuseal:latest`
 5. **Environment Variables**:
    - `PORT=3000`
-   - `DATABASE_URL=sqlite3:/data/docuseal.sqlite3`
+   - `DATABASE_URL=sqlite3:/data/docuseal.sqlite3`  *(Default: zero-config SQLite. Alternatively for Postgres: `postgres://postgres:password@postgres:5432/docuseal`)*
 6. **Mounts / Volumes**:
    - Volume Name: `docuseal_data` ➔ Mount Path: `/data`
 7. **Domains**: Add `esign.vrtservices12.com` (Target Container Port: `3000`).
