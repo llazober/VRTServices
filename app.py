@@ -5540,10 +5540,10 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
             req_rec = cur.fetchone()
 
             if not req_rec and "/" in clean_key:
-                # Fallback: Find matching customer by folder name in clean_key path
+                # Fallback Strategy 2: Find matching customer by folder name in clean_key path
                 parts = [p.strip() for p in clean_key.split("/") if p.strip()]
                 for part in parts:
-                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"]:
+                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"] and not part.lower().endswith(".pdf"):
                         cur.execute("""
                             SELECT er.*, c.legal_name, c.parent_name, c.email as customer_email,
                                    c.identity_verified, c.verification_method as cust_verification_method,
@@ -5554,11 +5554,14 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
                             ORDER BY er.id DESC LIMIT 1;
                         """, (f"%{part}%", f"%{part}%"))
                         req_rec = cur.fetchone()
-            # Strategy 3: Fall back to direct customer table lookup by folder name if no esignature request record was matched
+                        if req_rec:
+                            break
+
+            # Fallback Strategy 3: Fall back to direct customer table lookup by folder name if no esignature request record was matched
             if not req_rec and "/" in clean_key:
                 parts = [p.strip() for p in clean_key.split("/") if p.strip()]
                 for part in parts:
-                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"]:
+                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"] and not part.lower().endswith(".pdf"):
                         cur.execute("""
                             SELECT c.id as customer_id, c.legal_name, c.parent_name, c.email as customer_email,
                                    c.identity_verified, c.verification_method as cust_verification_method,
@@ -5674,7 +5677,9 @@ async def view_pdf_proxy(key: str, request: Request):
 
         headers = {
             "Content-Disposition": f'inline; filename="{filename}"',
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "X-Frame-Options": "SAMEORIGIN",
             "Access-Control-Allow-Origin": "*"
         }
@@ -5763,7 +5768,9 @@ async def download_file_proxy(key: str, request: Request):
         filename = os.path.basename(actual_key or clean_key)
         headers = {
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "public, max-age=3600"
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
         }
         return StreamingResponse(
             io.BytesIO(body_bytes),
