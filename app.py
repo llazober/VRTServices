@@ -4324,12 +4324,23 @@ async def get_esignature_signed_pdf(request_id: int):
 def generate_irs_audit_cert_page(doc_bytes: bytes, req_rec: dict) -> bytes:
     """
     Prepends an official IRS Publication 1345 Compliance Certificate Page to the DocuSeal Audit PDF using PyMuPDF (fitz).
+    Deduplicates to prevent prepending duplicate cover pages.
     """
     try:
         import fitz
         import datetime
 
-        existing_pdf = fitz.open(stream=doc_bytes, filetype="pdf") if (doc_bytes and len(doc_bytes) > 0) else None
+        if doc_bytes and len(doc_bytes) > 0:
+            existing_pdf = fitz.open(stream=doc_bytes, filetype="pdf")
+            if len(existing_pdf) > 0:
+                first_page_text = existing_pdf[0].get_text()
+                if "IRS PUBLICATION 1345 COMPLIANCE AUDIT CERTIFICATE" in first_page_text:
+                    # Deduplication: Cover page is already present!
+                    existing_pdf.close()
+                    return doc_bytes
+        else:
+            existing_pdf = None
+
         new_pdf = fitz.open()
         page = new_pdf.new_page(-1, width=612, height=792)
 
@@ -4471,9 +4482,24 @@ async def get_esignature_audit_pdf(request_id: int):
         if not pdf_bytes:
             raise HTTPException(status_code=404, detail="Audit Trail Certificate PDF is not available yet.")
 
-        # Dynamically prepend IRS Publication 1345 Compliance Certificate Page 1
+        # Dynamically prepend IRS Publication 1345 Compliance Certificate Page 1 (Idempotent)
         try:
             pdf_bytes = generate_irs_audit_cert_page(pdf_bytes, req_rec)
+            # Sync back to DO Spaces if s3_key is configured so Customer Storage is always updated
+            if s3_key:
+                try:
+                    s3_client, _ = get_s3_client()
+                    if s3_client:
+                        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                        s3_client.put_object(
+                            Bucket=bucket,
+                            Key=s3_key,
+                            Body=pdf_bytes,
+                            ContentType="application/pdf",
+                            ACL="private"
+                        )
+                except Exception as sync_ex:
+                    print(f"[S3 UPDATE WARNING] {sync_ex}")
         except Exception as pdf_gen_err:
             print(f"[PDF GEN WARNING] Failed to prepend IRS Pub 1345 page: {pdf_gen_err}")
 
@@ -5474,6 +5500,68 @@ def clean_s3_key(raw_key: str) -> str:
         s = s.split("?", 1)[0]
     return s.lstrip("/")
 
+def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes:
+    """
+    If a stored PDF in DO Spaces is an Audit Certificate (or in ESignatures folder) and is missing the IRS Pub 1345 Cover Page,
+    dynamically attaches the cover page using database metadata and updates DO Spaces.
+    """
+    if not body_bytes or len(body_bytes) < 100 or not clean_key:
+        return body_bytes
+
+    if "audit_certificate" not in clean_key.lower() and "esignatures" not in clean_key.lower():
+        return body_bytes
+
+    try:
+        import fitz
+        pdf_check = fitz.open(stream=body_bytes, filetype="pdf")
+        if len(pdf_check) > 0 and "IRS PUBLICATION 1345 COMPLIANCE AUDIT CERTIFICATE" in pdf_check[0].get_text():
+            pdf_check.close()
+            return body_bytes
+        pdf_check.close()
+    except Exception:
+        return body_bytes
+
+    # Fetch matching esignature_requests record
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            filename = os.path.basename(clean_key)
+            cur.execute("""
+                SELECT er.*, c.legal_name, c.parent_name, c.email as customer_email,
+                       c.identity_verified, c.verification_method as cust_verification_method,
+                       c.id_type, c.id_state_issuer, c.id_expiration, c.id_last4, c.verified_by_user, c.verified_at
+                FROM esignature_requests er
+                LEFT JOIN customer c ON er.customer_id = c.id
+                WHERE er.do_spaces_cert_key = %s OR er.do_spaces_cert_key ILIKE %s OR er.do_spaces_pdf_key = %s
+                ORDER BY er.id DESC LIMIT 1;
+            """, (clean_key, f"%{filename}", clean_key))
+            req_rec = cur.fetchone()
+        conn.close()
+
+        if req_rec:
+            updated_bytes = generate_irs_audit_cert_page(body_bytes, dict(req_rec))
+            if updated_bytes and len(updated_bytes) > len(body_bytes):
+                # Update DO Spaces in background
+                try:
+                    s3_client, _ = get_s3_client()
+                    if s3_client:
+                        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                        s3_client.put_object(
+                            Bucket=bucket,
+                            Key=clean_key,
+                            Body=updated_bytes,
+                            ContentType="application/pdf",
+                            ACL="private"
+                        )
+                except Exception:
+                    pass
+                return updated_bytes
+    except Exception as ex:
+        print(f"[STORAGE COMPLIANCE CHECK WARNING]: {ex}")
+
+    return body_bytes
+
+
 @app.get("/api/storage/view-pdf")
 async def view_pdf_proxy(key: str, request: Request):
     """Streams a PDF document from DigitalOcean Spaces with inline Content-Disposition for in-app modal previewing."""
@@ -5531,6 +5619,9 @@ async def view_pdf_proxy(key: str, request: Request):
                     print(f"[DYNAMIC RECOVERY REPAIRED S3] Key '{actual_key or clean_key}' ({len(body_bytes)} bytes)")
                 except Exception as e_rep:
                     print(f"[DYNAMIC RECOVERY S3 UPDATE ERROR] {e_rep}")
+
+        # Ensure Audit Certificate PDF has IRS Pub 1345 Cover Page attached
+        body_bytes = ensure_storage_pdf_has_irs_cover(actual_key or clean_key, body_bytes)
 
         filename = os.path.basename(actual_key or clean_key)
         content_type = s3_obj.get("ContentType") or "application/pdf"
@@ -5626,6 +5717,9 @@ async def download_file_proxy(key: str, request: Request):
                 try:
                     client.put_object(Bucket=bucket, Key=actual_key or clean_key, Body=body_bytes)
                 except Exception: pass
+
+        # Ensure Audit Certificate PDF has IRS Pub 1345 Cover Page attached
+        body_bytes = ensure_storage_pdf_has_irs_cover(actual_key or clean_key, body_bytes)
 
         filename = os.path.basename(actual_key or clean_key)
         headers = {
