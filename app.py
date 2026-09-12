@@ -3748,6 +3748,12 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         "Company Name": signer_name,
         "S-Corporation Name": signer_name,
         "Partnership Name": signer_name,
+        "taxpayer_name": signer_name,
+        "client_name": signer_name,
+        "signer_name": signer_name,
+        "Taxpayer": signer_name,
+        "Client": signer_name,
+        "Signer": signer_name,
         "Date Signed": today_str,
         "Date": today_str
     }
@@ -3760,7 +3766,18 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
             "Spouse's Name": s2_name,
             "Spouse Full Name": s2_name,
             "Spouse Taxpayer Name": s2_name,
-            "Spouse/Second Signer": s2_name
+            "Spouse/Second Signer": s2_name,
+            "spouse_name": s2_name,
+            "spouse": s2_name,
+            "second_signer_name": s2_name,
+            "second_signer": s2_name,
+            "Spouse Name:": s2_name,
+            "Spouse:": s2_name,
+            "Second Signer Name:": s2_name,
+            "Spouse_Name": s2_name,
+            "Spouse_Full_Name": s2_name,
+            "Spouse 1": s2_name,
+            "Spouse 2": s2_name
         })
 
     sub1 = {
@@ -3777,35 +3794,30 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
     submitters = [sub1]
 
     if s2_email:
-        sub2_values = {
-            "Spouse Name": s2_name,
-            "Second Signer Name": s2_name,
-            "Spouse": s2_name,
-            "Second Signer": s2_name,
-            "Spouse's Name": s2_name,
-            "Spouse Full Name": s2_name,
-            "Spouse Taxpayer Name": s2_name,
-            "Spouse/Second Signer": s2_name,
-            "Taxpayer Name": signer_name,
-            "Client Name": signer_name,
-            "Signer Name": signer_name,
-            "Legal Name": signer_name,
-            "Spouse Date Signed": today_str,
-            "Date Signed": today_str,
-            "Date": today_str
-        }
-        sub2 = {
-            "name": s2_name,
-            "email": s2_email,
-            "redirect_url": redirect_target,
-            "values": sub2_values
-        }
-        if template_roles and len(template_roles) > 1:
-            sub2["role"] = template_roles[1]
+        can_add_sub2 = False
+        sub2_role = None
+        if template_roles and len(template_roles) >= 2:
+            can_add_sub2 = True
+            sub2_role = template_roles[1]
         elif not target_template_id:
-            sub2["role"] = "Spouse"
+            can_add_sub2 = True
+            sub2_role = "Spouse"
 
-        submitters.append(sub2)
+        if can_add_sub2:
+            sub2_values = dict(sub1_values)
+            sub2_values.update({
+                "Spouse Date Signed": today_str,
+                "Date Signed": today_str,
+                "Date": today_str
+            })
+            sub2 = {
+                "name": s2_name,
+                "email": s2_email,
+                "role": sub2_role,
+                "redirect_url": redirect_target,
+                "values": sub2_values
+            }
+            submitters.append(sub2)
 
     payload = {
         "send_email": send_email,
@@ -3880,7 +3892,7 @@ async def public_esignature_page(request: Request, request_id: int):
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT er.*, c.legal_name as customer_name, c.parent_name
+                SELECT er.*, c.legal_name as customer_name, c.parent_name, c.customer_type, c.second_signer_name, c.second_signer_email
                 FROM esignature_requests er
                 LEFT JOIN customer c ON er.customer_id = c.id
                 WHERE er.id = %s;
@@ -3949,7 +3961,11 @@ async def public_esignature_page(request: Request, request_id: int):
                     document_name=doc_name,
                     signer_name=signer_name,
                     signer_email=signer_email,
-                    send_email=False
+                    template_id=req_rec.get("docuseal_template_id"),
+                    send_email=False,
+                    second_signer_name=req_rec.get("second_signer_name"),
+                    second_signer_email=req_rec.get("second_signer_email"),
+                    customer_type=req_rec.get("customer_type")
                 )
                 sub_id, new_embed_src = extract_docuseal_info(ds_resp)
                 if new_embed_src:
