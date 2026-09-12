@@ -3671,9 +3671,18 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                             matched_tpl = tpl
                             break
 
-                    # 2. Specific Variant match (8879-c, 8879-s, 8879-pe, 8879-f, 8879-eo, 8878)
+                    # 2. Joint Account / 8879J match
+                    c_type_str = (customer_type or "").lower().strip()
+                    if not matched_tpl and ("joint" in c_type_str or "joint" in doc_lower or "8879j" in doc_lower):
+                        for tpl in tpl_list:
+                            tpl_name = (tpl.get("name") or "").lower()
+                            if "8879j" in tpl_name or "8879-j" in tpl_name or "joint" in tpl_name:
+                                matched_tpl = tpl
+                                break
+
+                    # 3. Specific Variant match (8879-c, 8879-s, 8879-pe, 8879-f, 8879-eo, 8878)
                     if not matched_tpl:
-                        variants = ["8879-c", "8879-s", "8879-pe", "8879-f", "8879-eo", "8878"]
+                        variants = ["8879j", "8879-j", "8879-c", "8879-s", "8879-pe", "8879-f", "8879-eo", "8878"]
                         req_variant = next((v for v in variants if v in doc_lower), None)
                         if req_variant:
                             for tpl in tpl_list:
@@ -3682,7 +3691,7 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                                     matched_tpl = tpl
                                     break
 
-                    # 3. Substring match if no specific variant matched
+                    # 4. Substring match if no specific variant matched
                     if not matched_tpl:
                         for tpl in tpl_list:
                             tpl_name = (tpl.get("name") or "").lower()
@@ -3690,7 +3699,7 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                                 matched_tpl = tpl
                                 break
 
-                    # 4. Keyword match fallback (only if non-variant 8879 or general)
+                    # 5. Keyword match fallback (only if non-variant 8879 or general)
                     if not matched_tpl:
                         keywords = ["8879", "7216", "consent", "organizer", "engagement"]
                         for tpl in tpl_list:
@@ -3699,7 +3708,7 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                                 matched_tpl = tpl
                                 break
 
-                    # 5. Fallback to first template if list is non-empty
+                    # 6. Fallback to first template if list is non-empty
                     if not matched_tpl and tpl_list:
                         matched_tpl = tpl_list[0]
 

@@ -1048,6 +1048,7 @@
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">Default IRS Form 8879 Variant *</label>
                         <select id="customerPageFormForm8879Type" style="width: 100%; background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
                             <option value="Form 8879 (Individual 1040)">Form 8879 (Individual 1040)</option>
+                            <option value="Form 8879J (Joint Account 1040)">Form 8879J (Joint Account 1040)</option>
                             <option value="Form 8879-C (Corporation 1120)">Form 8879-C (Corporation 1120)</option>
                             <option value="Form 8879-S (S-Corporation 1120-S)">Form 8879-S (S-Corporation 1120-S)</option>
                             <option value="Form 8879-PE (Partnership 1065)">Form 8879-PE (Partnership 1065)</option>
@@ -2373,6 +2374,7 @@
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Default IRS Form 8879 Variant *</label>
                     <select id="customerFormForm8879Type" style="width: 100%; background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
                         <option value="Form 8879 (Individual 1040)">Form 8879 (Individual 1040)</option>
+                        <option value="Form 8879J (Joint Account 1040)">Form 8879J (Joint Account 1040)</option>
                         <option value="Form 8879-C (Corporation 1120)">Form 8879-C (Corporation 1120)</option>
                         <option value="Form 8879-S (S-Corporation 1120-S)">Form 8879-S (S-Corporation 1120-S)</option>
                         <option value="Form 8879-PE (Partnership 1065)">Form 8879-PE (Partnership 1065)</option>
@@ -2697,7 +2699,7 @@
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Document Preset / Title *</label>
                     <select id="esignDocPresetSelect" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;" onchange="onEsignDocPresetChange()">
                         <option value="Form 8879 (IRS e-File Signature Authorization)">Form 8879 (IRS e-File Signature Authorization)</option>
-                        <option value="Form 8879 (Joint Account - Dual Signatures)">Form 8879 (Joint Account - Dual Signatures)</option>
+                        <option value="Form 8879J (Joint Account - Dual Signatures)">Form 8879J (Joint Account - Dual Signatures)</option>
                         <option value="Form 8879-C (IRS e-File Corporate Tax Return)">Form 8879-C (IRS e-File Corporate Tax Return - 1120)</option>
                         <option value="Form 8879-S (IRS e-File S-Corporation Tax Return)">Form 8879-S (IRS e-File S-Corporation - 1120-S)</option>
                         <option value="Form 8879-PE (IRS e-File Partnership Tax Return)">Form 8879-PE (IRS e-File Partnership - 1065)</option>
@@ -5750,7 +5752,9 @@
                     return;
                 }
             }
-            if (str.includes('8879-c') || (str.includes('1120') && !str.includes('1120-s')) || str.includes('corp')) {
+            if (str.includes('8879j') || str.includes('8879-j') || (str.includes('8879') && str.includes('joint'))) {
+                el.value = "Form 8879J (Joint Account 1040)";
+            } else if (str.includes('8879-c') || (str.includes('1120') && !str.includes('1120-s')) || str.includes('corp')) {
                 el.value = "Form 8879-C (Corporation 1120)";
             } else if (str.includes('8879-s') || str.includes('1120-s') || str.includes('s-corp')) {
                 el.value = "Form 8879-S (S-Corporation 1120-S)";
@@ -5776,7 +5780,9 @@
             if (autoSetForm8879) {
                 const form8879Select = document.getElementById(`${prefix}Form8879Type`);
                 if (form8879Select && typeVal) {
-                    if (typeVal === 'Joint Account' || typeVal === 'Individual') {
+                    if (typeVal === 'Joint Account') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879J (Joint Account 1040)');
+                    } else if (typeVal === 'Individual') {
                         setForm8879SelectValue(form8879Select, 'Form 8879 (Individual 1040)');
                     } else if (typeVal === 'S-Corporation') {
                         setForm8879SelectValue(form8879Select, 'Form 8879-S (S-Corporation 1120-S)');
@@ -8550,8 +8556,8 @@
                 const presetSelect = document.getElementById('esignDocPresetSelect');
                 if (presetSelect) {
                     const fType = String(cust.form_8879_type || '').toLowerCase();
-                    if (cust.customer_type === 'Joint Account') {
-                        presetSelect.value = 'Form 8879 (Joint Account - Dual Signatures)';
+                    if (cust.customer_type === 'Joint Account' || fType.includes('8879j') || fType.includes('joint')) {
+                        presetSelect.value = 'Form 8879J (Joint Account - Dual Signatures)';
                     } else if (fType.includes('8879-c') || (fType.includes('1120') && !fType.includes('1120-s')) || fType.includes('corp')) {
                         presetSelect.value = 'Form 8879-C (IRS e-File Corporate Tax Return)';
                     } else if (fType.includes('8879-s') || fType.includes('1120-s') || fType.includes('s-corp')) {
