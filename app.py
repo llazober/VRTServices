@@ -3708,36 +3708,60 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         except Exception as tpl_err:
             print(f"[DOCUSEAL TEMPLATE LOOKUP WARNING]: {tpl_err}")
 
+    # Fetch template role schema if target_template_id is present
+    template_roles = []
+    if target_template_id:
+        try:
+            url_single_tpl = get_docuseal_api_url(f"templates/{target_template_id}")
+            req_s = urllib.request.Request(url_single_tpl, headers=headers)
+            with urllib.request.urlopen(req_s) as resp_s:
+                stpl_data = json.loads(resp_s.read().decode("utf-8"))
+                s_submitters = stpl_data.get("submitters") or []
+                if isinstance(s_submitters, list):
+                    for sub_info in s_submitters:
+                        if isinstance(sub_info, dict) and sub_info.get("name"):
+                            template_roles.append(sub_info.get("name"))
+        except Exception as tpl_info_err:
+            print(f"[DOCUSEAL TPL ROLE LOOKUP WARNING]: {tpl_info_err}")
+
     redirect_target = f"https://vrtservices12.com/esign/completed?doc={urllib.parse.quote(document_name)}"
     
-    submitters = [
-        {
-            "name": signer_name,
-            "email": signer_email,
-            "role": "Taxpayer",
-            "redirect_url": redirect_target,
-            "values": {
-                "Taxpayer Name": signer_name,
-                "Client Name": signer_name,
-                "Signer Name": signer_name,
-                "Date Signed": today_str
-            }
+    sub1 = {
+        "name": signer_name,
+        "email": signer_email,
+        "redirect_url": redirect_target,
+        "values": {
+            "Taxpayer Name": signer_name,
+            "Client Name": signer_name,
+            "Signer Name": signer_name,
+            "Date Signed": today_str
         }
-    ]
+    }
+    if template_roles and len(template_roles) > 0:
+        sub1["role"] = template_roles[0]
+    elif not target_template_id:
+        sub1["role"] = "Taxpayer"
+
+    submitters = [sub1]
 
     if second_signer_email and str(second_signer_email).strip():
         s2_name = second_signer_name or "Spouse"
-        submitters.append({
+        sub2 = {
             "name": s2_name,
             "email": str(second_signer_email).strip(),
-            "role": "Spouse",
             "redirect_url": redirect_target,
             "values": {
                 "Spouse Name": s2_name,
                 "Second Signer Name": s2_name,
                 "Spouse Date Signed": today_str
             }
-        })
+        }
+        if template_roles and len(template_roles) > 1:
+            sub2["role"] = template_roles[1]
+        elif not target_template_id:
+            sub2["role"] = "Spouse"
+
+        submitters.append(sub2)
 
     payload = {
         "send_email": send_email,
