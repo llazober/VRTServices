@@ -2805,6 +2805,43 @@
                     </div>
                 </div>
 
+                <!-- Spouse / Second Signer Verification Container (Joint Account) -->
+                <div id="vIdSecondSignerContainer" style="display: none; flex-direction: column; gap: 12px; margin-top: 6px; padding-top: 14px; border-top: 1px dashed rgba(56, 189, 248, 0.3);">
+                    <div style="font-size: 0.82rem; font-weight: 800; color: #34d399; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                        👥 Second Verification Name (Joint Account)
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Second Signer / Spouse Name</label>
+                        <input type="text" id="vIdSecondCustomerName" readonly style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #cbd5e1; outline: none;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Spouse Photo ID Type</label>
+                            <select id="vIdSecondType" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+                                <option value="Driver's License">Driver's License</option>
+                                <option value="State ID">State Issued Photo ID</option>
+                                <option value="US Passport">US Passport / Passport Card</option>
+                                <option value="Military ID">US Military Photo ID</option>
+                                <option value="Foreign Passport">Foreign Passport</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Spouse State / Issuer Agency</label>
+                            <input type="text" id="vIdSecondStateIssuer" placeholder="e.g. FL, NY, US Dept of State" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Spouse ID Expiration Date</label>
+                            <input type="date" id="vIdSecondExpiration" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Spouse ID Last 4 Digits</label>
+                            <input type="text" id="vIdSecondLast4" maxlength="10" placeholder="e.g. 5678" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Verification Notes (Optional)</label>
                     <textarea id="vIdNotes" rows="2" placeholder="e.g. Photo ID inspected in office during client tax intake." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; color: #fff; outline: none;"></textarea>
@@ -8638,10 +8675,27 @@
             document.getElementById('vIdLast4').value = '';
             document.getElementById('vIdNotes').value = '';
 
+            if (document.getElementById('vIdSecondCustomerName')) document.getElementById('vIdSecondCustomerName').value = '';
+            if (document.getElementById('vIdSecondType')) document.getElementById('vIdSecondType').value = "Driver's License";
+            if (document.getElementById('vIdSecondStateIssuer')) document.getElementById('vIdSecondStateIssuer').value = '';
+            if (document.getElementById('vIdSecondExpiration')) document.getElementById('vIdSecondExpiration').value = '';
+            if (document.getElementById('vIdSecondLast4')) document.getElementById('vIdSecondLast4').value = '';
+            if (document.getElementById('vIdSecondSignerContainer')) document.getElementById('vIdSecondSignerContainer').style.display = 'none';
+
             try {
                 const res = await fetch(`/api/customers/${customerId}/identity-status`);
                 if (res.ok) {
                     const data = await res.json();
+
+                    const isJoint = data.customer_type === 'Joint Account' || Boolean(data.second_signer_name);
+                    const secContainer = document.getElementById('vIdSecondSignerContainer');
+                    if (secContainer) {
+                        secContainer.style.display = isJoint ? 'flex' : 'none';
+                    }
+                    if (isJoint && document.getElementById('vIdSecondCustomerName')) {
+                        document.getElementById('vIdSecondCustomerName').value = data.second_signer_name || 'Spouse / Second Signer';
+                    }
+
                     if (data.identity_verified) {
                         document.getElementById('vIdType').value = data.id_type || "Driver's License";
                         document.getElementById('vIdStateIssuer').value = data.id_state_issuer || '';
@@ -8649,6 +8703,13 @@
                         document.getElementById('vIdLast4').value = data.id_last4 || '';
                         document.getElementById('vIdNotes').value = data.identity_notes || '';
                         document.getElementById('vIdRevokeBtn').style.display = 'inline-block';
+
+                        if (isJoint) {
+                            if (document.getElementById('vIdSecondType')) document.getElementById('vIdSecondType').value = data.second_signer_id_type || "Driver's License";
+                            if (document.getElementById('vIdSecondStateIssuer')) document.getElementById('vIdSecondStateIssuer').value = data.second_signer_id_state || '';
+                            if (document.getElementById('vIdSecondExpiration')) document.getElementById('vIdSecondExpiration').value = data.second_signer_id_expiration ? data.second_signer_id_expiration.split('T')[0] : '';
+                            if (document.getElementById('vIdSecondLast4')) document.getElementById('vIdSecondLast4').value = data.second_signer_id_last4 || '';
+                        }
                     }
                 }
             } catch (err) {
@@ -8679,6 +8740,10 @@
                 formData.append('id_state_issuer', document.getElementById('vIdStateIssuer').value);
                 formData.append('id_expiration', document.getElementById('vIdExpiration').value || '');
                 formData.append('id_last4', document.getElementById('vIdLast4').value);
+                formData.append('second_signer_id_type', document.getElementById('vIdSecondType')?.value || '');
+                formData.append('second_signer_id_state', document.getElementById('vIdSecondStateIssuer')?.value || '');
+                formData.append('second_signer_id_expiration', document.getElementById('vIdSecondExpiration')?.value || '');
+                formData.append('second_signer_id_last4', document.getElementById('vIdSecondLast4')?.value || '');
                 formData.append('identity_notes', document.getElementById('vIdNotes').value || '');
 
                 const res = await fetch(`/api/customers/${customerId}/verify-identity`, {

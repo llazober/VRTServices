@@ -7095,6 +7095,10 @@ async def verify_customer_identity(
     id_state_issuer: str = Form(...),
     id_expiration: str = Form(""),
     id_last4: str = Form(...),
+    second_signer_id_type: str = Form(""),
+    second_signer_id_state: str = Form(""),
+    second_signer_id_expiration: str = Form(""),
+    second_signer_id_last4: str = Form(""),
     identity_notes: str = Form("")
 ):
     username = get_current_username(request)
@@ -7112,6 +7116,7 @@ async def verify_customer_identity(
 
             real_cust_id = customer["id"]
             exp_date = id_expiration.strip() if id_expiration and id_expiration.strip() else None
+            sec_exp_date = second_signer_id_expiration.strip() if second_signer_id_expiration and second_signer_id_expiration.strip() else None
 
             cur.execute("""
                 UPDATE customer
@@ -7121,25 +7126,31 @@ async def verify_customer_identity(
                     id_state_issuer = %s,
                     id_expiration = %s,
                     id_last4 = %s,
+                    second_signer_id_type = %s,
+                    second_signer_id_state = %s,
+                    second_signer_id_expiration = %s,
+                    second_signer_id_last4 = %s,
                     verified_by_user = %s,
                     verified_at = CURRENT_TIMESTAMP,
                     identity_notes = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 RETURNING *;
-            """, (id_type, id_state_issuer, exp_date, id_last4, username, identity_notes, real_cust_id))
+            """, (id_type, id_state_issuer, exp_date, id_last4,
+                  second_signer_id_type or None, second_signer_id_state or None, sec_exp_date, second_signer_id_last4 or None,
+                  username, identity_notes, real_cust_id))
             updated_cust = dict(cur.fetchone())
 
             log_body = (
                 f"🛡️ IN-PERSON IDENTITY VERIFICATION RECORDED\n\n"
                 f"Verified By (ERO): {username}\n"
-                f"Document Type: {id_type}\n"
-                f"Issuing State/Agency: {id_state_issuer}\n"
-                f"ID Expiration Date: {id_expiration or 'N/A'}\n"
-                f"ID Number (Last 4): {id_last4}\n"
-                f"Notes: {identity_notes or 'None'}\n\n"
-                f"IRS Publication 1345 Compliance: In-Person verification recorded. KBA Waived for e-signatures."
+                f"Primary Signer Document: {id_type} ({id_state_issuer} #{id_last4}, Exp: {id_expiration or 'N/A'})\n"
             )
+            if customer.get("customer_type") == "Joint Account" or customer.get("second_signer_name") or second_signer_id_last4:
+                sec_name = customer.get("second_signer_name") or "Spouse / Second Signer"
+                log_body += f"Second Signer ({sec_name}): {second_signer_id_type or 'N/A'} ({second_signer_id_state or 'N/A'} #{second_signer_id_last4 or 'N/A'}, Exp: {second_signer_id_expiration or 'N/A'})\n"
+            log_body += f"Notes: {identity_notes or 'None'}\n\nIRS Publication 1345 Compliance: In-Person verification recorded. KBA Waived for e-signatures."
+
             cust_email = customer.get("email") or "notification@vrtservices12.com"
             try:
                 cur.execute("""
@@ -7156,6 +7167,7 @@ async def verify_customer_identity(
             if updated_cust.get("updated_at"): updated_cust["updated_at"] = str(updated_cust["updated_at"])
             if updated_cust.get("verified_at"): updated_cust["verified_at"] = str(updated_cust["verified_at"])
             if updated_cust.get("id_expiration"): updated_cust["id_expiration"] = str(updated_cust["id_expiration"])
+            if updated_cust.get("second_signer_id_expiration"): updated_cust["second_signer_id_expiration"] = str(updated_cust["second_signer_id_expiration"])
 
             return {
                 "message": "In-Person identity verification recorded successfully.",
@@ -7197,6 +7209,10 @@ async def revoke_customer_identity(customer_id: str, request: Request):
                     id_state_issuer = NULL,
                     id_expiration = NULL,
                     id_last4 = NULL,
+                    second_signer_id_type = NULL,
+                    second_signer_id_state = NULL,
+                    second_signer_id_expiration = NULL,
+                    second_signer_id_last4 = NULL,
                     verified_by_user = NULL,
                     verified_at = NULL,
                     identity_notes = NULL,
@@ -7248,7 +7264,13 @@ async def get_customer_identity_status(customer_id: str, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, legal_name, email, identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4, verified_by_user, verified_at, identity_notes FROM customer WHERE id::text = %s OR custumer_number = %s;", (customer_id, customer_id))
+            cur.execute("""
+                SELECT id, legal_name, email, customer_type, second_signer_name, second_signer_email,
+                       identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4,
+                       second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4,
+                       verified_by_user, verified_at, identity_notes
+                FROM customer WHERE id::text = %s OR custumer_number = %s;
+            """, (customer_id, customer_id))
             customer = cur.fetchone()
             if not customer:
                 raise HTTPException(status_code=404, detail="Customer not found")
@@ -7256,6 +7278,7 @@ async def get_customer_identity_status(customer_id: str, request: Request):
             cust = dict(customer)
             if cust.get("verified_at"): cust["verified_at"] = str(cust["verified_at"])
             if cust.get("id_expiration"): cust["id_expiration"] = str(cust["id_expiration"])
+            if cust.get("second_signer_id_expiration"): cust["second_signer_id_expiration"] = str(cust["second_signer_id_expiration"])
             return cust
     except HTTPException as he:
         raise he
