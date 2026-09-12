@@ -5508,7 +5508,8 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
     if not body_bytes or len(body_bytes) < 100 or not clean_key:
         return body_bytes
 
-    if "audit_certificate" not in clean_key.lower() and "esignatures" not in clean_key.lower():
+    lower_key = clean_key.lower()
+    if "audit_certificate" not in lower_key and "esignatures" not in lower_key and "8879" not in lower_key and "8878" not in lower_key:
         return body_bytes
 
     try:
@@ -5532,16 +5533,36 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
                        c.id_type, c.id_state_issuer, c.id_expiration, c.id_last4, c.verified_by_user, c.verified_at
                 FROM esignature_requests er
                 LEFT JOIN customer c ON er.customer_id = c.id
-                WHERE er.do_spaces_cert_key = %s OR er.do_spaces_cert_key ILIKE %s OR er.do_spaces_pdf_key = %s
+                WHERE er.do_spaces_cert_key = %s OR er.do_spaces_cert_key ILIKE %s
+                   OR er.do_spaces_pdf_key = %s OR er.do_spaces_pdf_key ILIKE %s
                 ORDER BY er.id DESC LIMIT 1;
-            """, (clean_key, f"%{filename}", clean_key))
+            """, (clean_key, f"%{filename}%", clean_key, f"%{filename}%"))
             req_rec = cur.fetchone()
+
+            if not req_rec and "/" in clean_key:
+                # Fallback: Find matching customer by folder name in clean_key path
+                parts = [p.strip() for p in clean_key.split("/") if p.strip()]
+                for part in parts:
+                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"]:
+                        cur.execute("""
+                            SELECT er.*, c.legal_name, c.parent_name, c.email as customer_email,
+                                   c.identity_verified, c.verification_method as cust_verification_method,
+                                   c.id_type, c.id_state_issuer, c.id_expiration, c.id_last4, c.verified_by_user, c.verified_at
+                            FROM esignature_requests er
+                            LEFT JOIN customer c ON er.customer_id = c.id
+                            WHERE c.legal_name ILIKE %s OR c.parent_name ILIKE %s
+                            ORDER BY er.id DESC LIMIT 1;
+                        """, (f"%{part}%", f"%{part}%"))
+                        req_rec = cur.fetchone()
+                        if req_rec:
+                            break
         conn.close()
 
         if req_rec:
             updated_bytes = generate_irs_audit_cert_page(body_bytes, dict(req_rec))
-            if updated_bytes and len(updated_bytes) > len(body_bytes):
-                # Update DO Spaces in background
+            if updated_bytes and len(updated_bytes) > 0:
+                print(f"[STORAGE COMPLIANCE SUCCESS] Successfully attached IRS Pub 1345 Cover Page to '{clean_key}' ({len(updated_bytes)} bytes)")
+                # Update DO Spaces so future previews use the updated PDF directly
                 try:
                     s3_client, _ = get_s3_client()
                     if s3_client:
@@ -5553,8 +5574,8 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
                             ContentType="application/pdf",
                             ACL="private"
                         )
-                except Exception:
-                    pass
+                except Exception as s3_upd_err:
+                    print(f"[STORAGE COMPLIANCE S3 UPDATE WARNING]: {s3_upd_err}")
                 return updated_bytes
     except Exception as ex:
         print(f"[STORAGE COMPLIANCE CHECK WARNING]: {ex}")
