@@ -5736,26 +5736,59 @@
             }
         }
 
-        function onCustomerTypeChange(prefix) {
+        function setForm8879SelectValue(target, val) {
+            const el = typeof target === 'string' ? document.getElementById(target) : target;
+            if (!el) return;
+            const str = String(val || '').toLowerCase().trim();
+            if (!str) {
+                el.value = "Form 8879 (Individual 1040)";
+                return;
+            }
+            for (let i = 0; i < el.options.length; i++) {
+                if (el.options[i].value === val) {
+                    el.value = val;
+                    return;
+                }
+            }
+            if (str.includes('8879-c') || (str.includes('1120') && !str.includes('1120-s')) || str.includes('corp')) {
+                el.value = "Form 8879-C (Corporation 1120)";
+            } else if (str.includes('8879-s') || str.includes('1120-s') || str.includes('s-corp')) {
+                el.value = "Form 8879-S (S-Corporation 1120-S)";
+            } else if (str.includes('8879-pe') || str.includes('1065') || str.includes('partner')) {
+                el.value = "Form 8879-PE (Partnership 1065)";
+            } else if (str.includes('8879-f') || str.includes('1041') || str.includes('fiduc')) {
+                el.value = "Form 8879-F (Fiduciary 1041)";
+            } else if (str.includes('8879-eo') || str.includes('990') || str.includes('exempt')) {
+                el.value = "Form 8879-EO (Exempt Org 990)";
+            } else if (str.includes('8878') || str.includes('exten')) {
+                el.value = "Form 8878 (Extension Authorization)";
+            } else {
+                el.value = "Form 8879 (Individual 1040)";
+            }
+        }
+
+        function onCustomerTypeChange(prefix, autoSetForm8879 = true) {
             const typeVal = document.getElementById(`${prefix}Type`)?.value;
             const jointFields = document.getElementById(`${prefix}JointFields`);
             if (jointFields) {
                 jointFields.style.display = (typeVal === 'Joint Account') ? 'block' : 'none';
             }
-            const form8879Select = document.getElementById(`${prefix}Form8879Type`);
-            if (form8879Select && typeVal) {
-                if (typeVal === 'Joint Account' || typeVal === 'Individual') {
-                    form8879Select.value = 'Form 8879 (Individual)';
-                } else if (typeVal === 'S-Corporation') {
-                    form8879Select.value = '8879-S';
-                } else if (typeVal === 'C-Corporation') {
-                    form8879Select.value = '8879-C';
-                } else if (typeVal === 'Partnership') {
-                    form8879Select.value = '8879-PE';
-                } else if (typeVal === 'Estate/Trust') {
-                    form8879Select.value = '8879-F';
-                } else if (typeVal === 'Non-Profit / Exempt Org') {
-                    form8879Select.value = '8879-EO';
+            if (autoSetForm8879) {
+                const form8879Select = document.getElementById(`${prefix}Form8879Type`);
+                if (form8879Select && typeVal) {
+                    if (typeVal === 'Joint Account' || typeVal === 'Individual') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879 (Individual 1040)');
+                    } else if (typeVal === 'S-Corporation') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879-S (S-Corporation 1120-S)');
+                    } else if (typeVal === 'C-Corporation' || typeVal === 'Business') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879-C (Corporation 1120)');
+                    } else if (typeVal === 'Partnership') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879-PE (Partnership 1065)');
+                    } else if (typeVal === 'Estate/Trust') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879-F (Fiduciary 1041)');
+                    } else if (typeVal === 'Non-Profit / Exempt Org') {
+                        setForm8879SelectValue(form8879Select, 'Form 8879-EO (Exempt Org 990)');
+                    }
                 }
             }
         }
@@ -5769,7 +5802,7 @@
                 setVal('customerFormId', '');
                 setVal('customerFormNumber', getNextCustomerNumber());
                 setVal('customerFormType', 'Business');
-                setVal('customerFormForm8879Type', 'Form 8879 (Individual)');
+                setForm8879SelectValue('customerFormForm8879Type', 'Form 8879 (Individual 1040)');
                 setVal('customerFormSecondSignerName', '');
                 setVal('customerFormSecondSignerEmail', '');
                 setVal('customerFormSecondSignerPhone', '');
@@ -5782,7 +5815,7 @@
                 setVal('customerFormEmail', '');
                 setVal('customerFormWebsite', '');
                 setVal('customerFormNotes', '');
-                onCustomerTypeChange('customerForm');
+                onCustomerTypeChange('customerForm', true);
                 const schedCb = document.getElementById('customerFormPresetSchedule');
                 if (schedCb) schedCb.checked = true;
                 const schedCont = document.getElementById('customerFormPresetScheduleContainer');
@@ -5806,7 +5839,7 @@
                 setVal('customerPageFormId', '');
                 setVal('customerPageFormNumber', getNextCustomerNumber());
                 setVal('customerPageFormType', 'Business');
-                setVal('customerPageFormForm8879Type', 'Form 8879 (Individual)');
+                setForm8879SelectValue('customerPageFormForm8879Type', 'Form 8879 (Individual 1040)');
                 setVal('customerPageFormSecondSignerName', '');
                 setVal('customerPageFormSecondSignerEmail', '');
                 setVal('customerPageFormSecondSignerPhone', '');
@@ -5819,7 +5852,7 @@
                 setVal('customerPageFormEmail', '');
                 setVal('customerPageFormWebsite', '');
                 setVal('customerPageFormNotes', '');
-                onCustomerTypeChange('customerPageForm');
+                onCustomerTypeChange('customerPageForm', true);
                 const schedCb = document.getElementById('customerPageFormPresetSchedule');
                 if (schedCb) schedCb.checked = true;
                 const schedCont = document.getElementById('customerPageFormPresetScheduleContainer');
@@ -5845,7 +5878,7 @@
                 setVal('Id', rec.id);
                 setVal('Number', rec.custumer_number || '');
                 setVal('Type', rec.customer_type || 'Business');
-                setVal('Form8879Type', rec.form_8879_type || 'Form 8879 (Individual)');
+                setForm8879SelectValue(`${prefix}Form8879Type`, rec.form_8879_type || 'Form 8879 (Individual 1040)');
                 setVal('SecondSignerName', rec.second_signer_name || '');
                 setVal('SecondSignerEmail', rec.second_signer_email || '');
                 setVal('SecondSignerPhone', rec.second_signer_phone || '');
@@ -5858,7 +5891,7 @@
                 setVal('Email', rec.email || '');
                 setVal('Website', rec.website || '');
                 setVal('Notes', rec.notes || '');
-                onCustomerTypeChange(prefix);
+                onCustomerTypeChange(prefix, false);
                 const schedCont = document.getElementById(`${prefix}PresetScheduleContainer`);
                 if (schedCont) schedCont.style.display = 'none';
                 setLegalNameReadOnly(prefix, true);
@@ -5880,7 +5913,7 @@
             const payload = {
                 custumer_number: getVal('Number'),
                 customer_type: getVal('Type') || 'Business',
-                form_8879_type: getVal('Form8879Type') || 'Form 8879 (Individual)',
+                form_8879_type: getVal('Form8879Type') || 'Form 8879 (Individual 1040)',
                 second_signer_name: getVal('SecondSignerName'),
                 second_signer_email: getVal('SecondSignerEmail'),
                 second_signer_phone: getVal('SecondSignerPhone'),
@@ -8516,21 +8549,22 @@
                 // Automatic Document Preset Selection based on Customer Setup
                 const presetSelect = document.getElementById('esignDocPresetSelect');
                 if (presetSelect) {
+                    const fType = String(cust.form_8879_type || '').toLowerCase();
                     if (cust.customer_type === 'Joint Account') {
                         presetSelect.value = 'Form 8879 (Joint Account - Dual Signatures)';
-                    } else if (cust.form_8879_type === '8879-C') {
+                    } else if (fType.includes('8879-c') || (fType.includes('1120') && !fType.includes('1120-s')) || fType.includes('corp')) {
                         presetSelect.value = 'Form 8879-C (IRS e-File Corporate Tax Return)';
-                    } else if (cust.form_8879_type === '8879-S') {
+                    } else if (fType.includes('8879-s') || fType.includes('1120-s') || fType.includes('s-corp')) {
                         presetSelect.value = 'Form 8879-S (IRS e-File S-Corporation Tax Return)';
-                    } else if (cust.form_8879_type === '8879-PE') {
+                    } else if (fType.includes('8879-pe') || fType.includes('1065') || fType.includes('partner')) {
                         presetSelect.value = 'Form 8879-PE (IRS e-File Partnership Tax Return)';
-                    } else if (cust.form_8879_type === '8879-F') {
+                    } else if (fType.includes('8879-f') || fType.includes('1041') || fType.includes('fiduc')) {
                         presetSelect.value = 'Form 8879-F (IRS e-File Fiduciary Tax Return)';
-                    } else if (cust.form_8879_type === '8879-EO') {
+                    } else if (fType.includes('8879-eo') || fType.includes('990') || fType.includes('exempt')) {
                         presetSelect.value = 'Form 8879-EO (IRS e-File Exempt Organization Return)';
-                    } else if (cust.form_8879_type === '8878') {
+                    } else if (fType.includes('8878') || fType.includes('exten')) {
                         presetSelect.value = 'Form 8878 (IRS e-File Extension Authorization)';
-                    } else if (cust.form_8879_type === 'Form 8879 (Individual)' || cust.customer_type === 'Individual') {
+                    } else {
                         presetSelect.value = 'Form 8879 (IRS e-File Signature Authorization)';
                     }
                     onEsignDocPresetChange();
