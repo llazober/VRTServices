@@ -8573,7 +8573,7 @@
                 const presetSelect = document.getElementById('esignDocPresetSelect');
                 if (presetSelect) {
                     const fType = String(cust.form_8879_type || '').toLowerCase();
-                    if (cust.customer_type === 'Joint Account' || fType.includes('8879j') || fType.includes('joint')) {
+                    if (fType.includes('8879j')) {
                         presetSelect.value = 'Form 8879J (Joint Account - Dual Signatures)';
                     } else if (fType.includes('8879-c') || (fType.includes('1120') && !fType.includes('1120-s')) || fType.includes('corp')) {
                         presetSelect.value = 'Form 8879-C (IRS e-File Corporate Tax Return)';
