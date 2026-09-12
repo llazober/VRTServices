@@ -3734,7 +3734,13 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
             "Taxpayer Name": signer_name,
             "Client Name": signer_name,
             "Signer Name": signer_name,
-            "Date Signed": today_str
+            "Legal Name": signer_name,
+            "Corporation Name": signer_name,
+            "Company Name": signer_name,
+            "S-Corporation Name": signer_name,
+            "Partnership Name": signer_name,
+            "Date Signed": today_str,
+            "Date": today_str
         }
     }
     if template_roles and len(template_roles) > 0:
@@ -3753,7 +3759,9 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
             "values": {
                 "Spouse Name": s2_name,
                 "Second Signer Name": s2_name,
-                "Spouse Date Signed": today_str
+                "Spouse Date Signed": today_str,
+                "Date Signed": today_str,
+                "Date": today_str
             }
         }
         if template_roles and len(template_roles) > 1:
