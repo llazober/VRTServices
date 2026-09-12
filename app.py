@@ -3662,19 +3662,49 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                 tpl_list = tpls_data.get("data") or []
                 if tpl_list and len(tpl_list) > 0:
                     matched_tpl = None
-                    doc_lower = (document_name or "").lower()
+                    doc_lower = (document_name or "").lower().strip()
+
+                    # 1. Exact string match first
                     for tpl in tpl_list:
-                        tpl_name = (tpl.get("name") or "").lower()
-                        if doc_lower in tpl_name or tpl_name in doc_lower:
+                        tpl_name = (tpl.get("name") or "").lower().strip()
+                        if doc_lower == tpl_name:
                             matched_tpl = tpl
                             break
-                        keywords = ["8879", "7216", "consent", "organizer", "engagement"]
-                        if any(kw in doc_lower and kw in tpl_name for kw in keywords):
-                            matched_tpl = tpl
-                            break
+
+                    # 2. Specific Variant match (8879-c, 8879-s, 8879-pe, 8879-f, 8879-eo, 8878)
                     if not matched_tpl:
+                        variants = ["8879-c", "8879-s", "8879-pe", "8879-f", "8879-eo", "8878"]
+                        req_variant = next((v for v in variants if v in doc_lower), None)
+                        if req_variant:
+                            for tpl in tpl_list:
+                                tpl_name = (tpl.get("name") or "").lower()
+                                if req_variant in tpl_name:
+                                    matched_tpl = tpl
+                                    break
+
+                    # 3. Substring match if no specific variant matched
+                    if not matched_tpl:
+                        for tpl in tpl_list:
+                            tpl_name = (tpl.get("name") or "").lower()
+                            if doc_lower in tpl_name or tpl_name in doc_lower:
+                                matched_tpl = tpl
+                                break
+
+                    # 4. Keyword match fallback (only if non-variant 8879 or general)
+                    if not matched_tpl:
+                        keywords = ["8879", "7216", "consent", "organizer", "engagement"]
+                        for tpl in tpl_list:
+                            tpl_name = (tpl.get("name") or "").lower()
+                            if any(kw in doc_lower and kw in tpl_name for kw in keywords):
+                                matched_tpl = tpl
+                                break
+
+                    # 5. Fallback to first template if list is non-empty
+                    if not matched_tpl and tpl_list:
                         matched_tpl = tpl_list[0]
-                    target_template_id = matched_tpl.get("id")
+
+                    if matched_tpl:
+                        target_template_id = matched_tpl.get("id")
         except Exception as tpl_err:
             print(f"[DOCUSEAL TEMPLATE LOOKUP WARNING]: {tpl_err}")
 
@@ -4162,11 +4192,38 @@ async def esignature_completed_page(doc: str = "Document"):
             <div class="icon">✓</div>
             <h1>Document Signed Successfully!</h1>
             <p>Thank you for signing <strong>{doc}</strong> with VRT Services. Your signed copy and official audit trail certificate have been stored securely in your client folder.</p>
-            <a href="https://vrtservices12.com/portal" class="btn">Return to VRT Services Portal 🏠</a>
-        </div>
     </body>
     </html>
     """)
+
+
+@app.get("/api/esignature/docuseal-templates")
+async def list_docuseal_templates(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    headers = get_docuseal_headers()
+    api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
+    if not api_key:
+        return {"templates": [], "error": "DOCUSEAL_API_KEY is not configured"}
+
+    try:
+        import urllib.request
+        url = get_docuseal_api_url("templates")
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            tpl_list = data.get("data") or []
+            return {
+                "templates": [
+                    {"id": t.get("id"), "name": t.get("name"), "schema": t.get("schema")}
+                    for t in tpl_list
+                ]
+            }
+    except Exception as e:
+        print(f"[DOCUSEAL TEMPLATES FETCH ERROR]: {e}")
+        return {"templates": [], "error": str(e)}
 
 
 @app.get("/api/esignature/requests")
