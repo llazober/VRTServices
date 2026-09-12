@@ -675,6 +675,15 @@ def init_customer_table():
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS assigned_user_id VARCHAR(100);
                 ALTER TABLE customer ALTER COLUMN assigned_user_id TYPE VARCHAR(100) USING assigned_user_id::text;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS identity_verified BOOLEAN DEFAULT FALSE;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS verification_method VARCHAR(50);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS id_type VARCHAR(100);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS id_state_issuer VARCHAR(50);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS id_expiration DATE;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS id_last4 VARCHAR(20);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS verified_by_user VARCHAR(100);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS identity_notes TEXT;
                 CREATE INDEX IF NOT EXISTS idx_customer_email_lower ON customer (LOWER(email));
                 UPDATE customer SET parent_name = 'VRT Services' WHERE parent_name IS NULL OR parent_name = '';
 
@@ -1117,6 +1126,10 @@ def init_esignature_tables():
 
                 CREATE INDEX IF NOT EXISTS idx_esign_cust_id ON esignature_requests(customer_id);
                 CREATE INDEX IF NOT EXISTS idx_esign_submit_id ON esignature_requests(docuseal_submit_id);
+                ALTER TABLE esignature_requests ADD COLUMN IF NOT EXISTS is_tax_form BOOLEAN DEFAULT FALSE;
+                ALTER TABLE esignature_requests ADD COLUMN IF NOT EXISTS verification_method VARCHAR(50);
+                ALTER TABLE esignature_requests ADD COLUMN IF NOT EXISTS verification_snapshot TEXT;
+                ALTER TABLE esignature_requests ADD COLUMN IF NOT EXISTS kba_status VARCHAR(50) DEFAULT 'EXEMPT';
             """)
             conn.commit()
             print("E-Signature tables initialized successfully in VRT database.")
@@ -4100,6 +4113,7 @@ async def send_esignature_request(
     signer_name: str = Form(...),
     signer_email: str = Form(...),
     template_id: str = Form(""),
+    is_tax_form: bool = Form(False),
     send_email: bool = Form(True),
     pdf_file: UploadFile = File(None)
 ):
@@ -4138,12 +4152,35 @@ async def send_esignature_request(
     try:
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Query Customer Identity Status for IRS Pub 1345 Compliance
+            cur.execute("""
+                SELECT identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4, verified_by_user, verified_at
+                FROM customer WHERE id = %s;
+            """, (customer_id,))
+            cust_row = cur.fetchone()
+
+            v_method = "STANDARD"
+            v_snapshot = "Standard document request."
+            k_status = "EXEMPT"
+
+            if cust_row and cust_row.get("identity_verified") and cust_row.get("verification_method") == "IN_PERSON":
+                v_method = "IN_PERSON"
+                v_snapshot = (
+                    f"IRS Pub 1345 In-Person Verification: Photo ID inspected by ERO '{cust_row.get('verified_by_user')}' "
+                    f"on {cust_row.get('verified_at')} ({cust_row.get('id_type')} {cust_row.get('id_state_issuer')} ending in {cust_row.get('id_last4')}). KBA Exempt."
+                )
+                k_status = "EXEMPT_IN_PERSON"
+            elif is_tax_form:
+                v_method = "TAX_FORM_UNVERIFIED"
+                v_snapshot = "IRS Tax Form request issued without prior In-Person ID verification. Requires ID check or KBA prior to submission."
+                k_status = "PENDING_KBA"
+
             cur.execute("""
                 INSERT INTO esignature_requests
-                (docuseal_submit_id, docuseal_template_id, customer_id, document_name, signer_name, signer_email, status, embed_src)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (docuseal_submit_id, docuseal_template_id, customer_id, document_name, signer_name, signer_email, status, embed_src, is_tax_form, verification_method, verification_snapshot, kba_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *;
-            """, (ds_submit_id, template_id, customer_id, document_name, signer_name, signer_email, ds_status, ds_embed_src or ""))
+            """, (ds_submit_id, template_id, customer_id, document_name, signer_name, signer_email, ds_status, ds_embed_src or "", is_tax_form, v_method, v_snapshot, k_status))
             new_req = dict(cur.fetchone())
             conn.commit()
 
@@ -6499,6 +6536,187 @@ async def delete_customer(customer_id: str, request: Request, admin_password: st
     finally:
         if conn:
             conn.close()
+
+# ── IRS In-Person Identity Verification API Routes ─────────────────────────────
+@app.post("/api/customers/{customer_id}/verify-identity")
+async def verify_customer_identity(
+    customer_id: str,
+    request: Request,
+    id_type: str = Form(...),
+    id_state_issuer: str = Form(...),
+    id_expiration: str = Form(""),
+    id_last4: str = Form(...),
+    identity_notes: str = Form("")
+):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id::text = %s OR custumer_number = %s;", (customer_id, customer_id))
+            customer = cur.fetchone()
+            if not customer:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+            real_cust_id = customer["id"]
+            exp_date = id_expiration.strip() if id_expiration and id_expiration.strip() else None
+
+            cur.execute("""
+                UPDATE customer
+                SET identity_verified = TRUE,
+                    verification_method = 'IN_PERSON',
+                    id_type = %s,
+                    id_state_issuer = %s,
+                    id_expiration = %s,
+                    id_last4 = %s,
+                    verified_by_user = %s,
+                    verified_at = CURRENT_TIMESTAMP,
+                    identity_notes = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING *;
+            """, (id_type, id_state_issuer, exp_date, id_last4, username, identity_notes, real_cust_id))
+            updated_cust = dict(cur.fetchone())
+
+            log_body = (
+                f"🛡️ IN-PERSON IDENTITY VERIFICATION RECORDED\n\n"
+                f"Verified By (ERO): {username}\n"
+                f"Document Type: {id_type}\n"
+                f"Issuing State/Agency: {id_state_issuer}\n"
+                f"ID Expiration Date: {id_expiration or 'N/A'}\n"
+                f"ID Number (Last 4): {id_last4}\n"
+                f"Notes: {identity_notes or 'None'}\n\n"
+                f"IRS Publication 1345 Compliance: In-Person verification recorded. KBA Waived for e-signatures."
+            )
+            cust_email = customer.get("email") or "notification@vrtservices12.com"
+            try:
+                cur.execute("""
+                    INSERT INTO customer_communications (customer_id, direction, sender_email, recipient_email, subject, body_text, status, is_read)
+                    VALUES (%s, 'SYSTEM', %s, %s, %s, %s, 'COMPLETED', TRUE);
+                """, (real_cust_id, f"{username}@vrtservices12.com", cust_email, f"🛡️ In-Person Identity Verification Recorded: {id_type} ({id_last4})", log_body))
+            except Exception as comm_err:
+                print(f"[COMM LOG WARNING] Identity verification log warning: {comm_err}")
+
+            conn.commit()
+            log_audit_event(username, "VERIFY_CUSTOMER_IDENTITY", "Customer", real_cust_id, {"id_type": id_type, "id_last4": id_last4}, request=request)
+
+            if updated_cust.get("created_at"): updated_cust["created_at"] = str(updated_cust["created_at"])
+            if updated_cust.get("updated_at"): updated_cust["updated_at"] = str(updated_cust["updated_at"])
+            if updated_cust.get("verified_at"): updated_cust["verified_at"] = str(updated_cust["verified_at"])
+            if updated_cust.get("id_expiration"): updated_cust["id_expiration"] = str(updated_cust["id_expiration"])
+
+            return {
+                "message": "In-Person identity verification recorded successfully.",
+                "customer": updated_cust
+            }
+    except HTTPException as he:
+        if conn: conn.rollback()
+        raise he
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error verifying customer identity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/customers/{customer_id}/revoke-identity")
+async def revoke_customer_identity(customer_id: str, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id::text = %s OR custumer_number = %s;", (customer_id, customer_id))
+            customer = cur.fetchone()
+            if not customer:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+            real_cust_id = customer["id"]
+            cur.execute("""
+                UPDATE customer
+                SET identity_verified = FALSE,
+                    verification_method = NULL,
+                    id_type = NULL,
+                    id_state_issuer = NULL,
+                    id_expiration = NULL,
+                    id_last4 = NULL,
+                    verified_by_user = NULL,
+                    verified_at = NULL,
+                    identity_notes = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING *;
+            """, (real_cust_id,))
+            updated_cust = dict(cur.fetchone())
+
+            log_body = f"⚠️ Identity Verification Revoked by {username} on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}. IRS Form 8879 will now require Remote KBA or a new In-Person ID Check."
+            cust_email = customer.get("email") or "notification@vrtservices12.com"
+            try:
+                cur.execute("""
+                    INSERT INTO customer_communications (customer_id, direction, sender_email, recipient_email, subject, body_text, status, is_read)
+                    VALUES (%s, 'SYSTEM', %s, %s, %s, %s, 'COMPLETED', TRUE);
+                """, (real_cust_id, f"{username}@vrtservices12.com", cust_email, "⚠️ Identity Verification Revoked", log_body))
+            except Exception as comm_err:
+                print(f"[COMM LOG WARNING] Identity revocation log warning: {comm_err}")
+
+            conn.commit()
+            log_audit_event(username, "REVOKE_CUSTOMER_IDENTITY", "Customer", real_cust_id, {}, request=request)
+
+            if updated_cust.get("created_at"): updated_cust["created_at"] = str(updated_cust["created_at"])
+            if updated_cust.get("updated_at"): updated_cust["updated_at"] = str(updated_cust["updated_at"])
+
+            return {
+                "message": "Customer identity verification revoked.",
+                "customer": updated_cust
+            }
+    except HTTPException as he:
+        if conn: conn.rollback()
+        raise he
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error revoking customer identity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/customers/{customer_id}/identity-status")
+async def get_customer_identity_status(customer_id: str, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, legal_name, email, identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4, verified_by_user, verified_at, identity_notes FROM customer WHERE id::text = %s OR custumer_number = %s;", (customer_id, customer_id))
+            customer = cur.fetchone()
+            if not customer:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+            cust = dict(customer)
+            if cust.get("verified_at"): cust["verified_at"] = str(cust["verified_at"])
+            if cust.get("id_expiration"): cust["id_expiration"] = str(cust["id_expiration"])
+            return cust
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error fetching identity status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 
 # ── QBO OAuth & Export API Routes ──────────────────────────────────────────────
 @app.get("/auth/qbo/login")
