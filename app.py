@@ -4529,7 +4529,9 @@ async def docuseal_webhook_handler(request: Request):
             conn = get_db_connection("VRT")
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT er.*, c.legal_name, c.parent_name
+                    SELECT er.*, c.legal_name, c.parent_name, c.email as customer_email,
+                           c.identity_verified, c.verification_method as cust_verification_method,
+                           c.id_type, c.id_state_issuer, c.id_expiration, c.id_last4, c.verified_by_user, c.verified_at
                     FROM esignature_requests er
                     JOIN customer c ON er.customer_id = c.id
                     WHERE er.docuseal_submit_id = %s OR (LOWER(er.signer_email) = LOWER(%s) AND er.status = 'pending')
@@ -4610,6 +4612,12 @@ async def docuseal_webhook_handler(request: Request):
                                                 audit_data = audit_resp.read()
 
                                             if audit_data:
+                                                # Prepend IRS Publication 1345 Compliance Cover Page to the stored Audit Certificate PDF
+                                                try:
+                                                    audit_data = generate_irs_audit_cert_page(audit_data, dict(req_rec))
+                                                except Exception as pdf_prep_err:
+                                                    print(f"[DOCUSEAL WEBHOOK WARNING] Could not prepend IRS Pub 1345 cover page: {pdf_prep_err}")
+
                                                 s3_cert_key = f"{root_folder}ESignatures/{safe_signer}_{safe_doc}_Audit_Certificate_{signed_date}.pdf"
                                                 s3_client.put_object(
                                                     Bucket=bucket,
@@ -4618,7 +4626,7 @@ async def docuseal_webhook_handler(request: Request):
                                                     ContentType="application/pdf",
                                                     ACL="private"
                                                 )
-                                                print(f"[DOCUSEAL WEBHOOK] Stored Audit Certificate PDF to DO Spaces key: {s3_cert_key}")
+                                                print(f"[DOCUSEAL WEBHOOK] Stored IRS Pub 1345 Audit Certificate PDF to DO Spaces key: {s3_cert_key}")
                                         except Exception as cert_err:
                                             print(f"[DOCUSEAL WEBHOOK WARNING] Could not download/upload Audit Certificate: {cert_err}")
 
