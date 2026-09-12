@@ -4360,9 +4360,9 @@ def generate_irs_audit_cert_page(doc_bytes: bytes, req_rec: dict) -> bytes:
 
         y += 25
         # Status Banner
-        is_in_person = req_rec.get("verification_method") == "IN_PERSON" or "In-Person" in (req_rec.get("verification_snapshot") or "")
+        is_in_person = req_rec.get("verification_method") == "IN_PERSON" or req_rec.get("cust_verification_method") == "IN_PERSON" or req_rec.get("identity_verified") or "In-Person" in (req_rec.get("verification_snapshot") or "")
         badge_bg = (16/255, 185/255, 129/255) if is_in_person else (245/255, 158/255, 11/255)
-        badge_text = "VERIFIED IN-PERSON — IRS PUB 1345 COMPLIANT (KBA WAIVED)" if is_in_person else "REMOTE KBA PENDING / UNVERIFIED"
+        badge_text = "VERIFIED IN-PERSON - IRS PUB 1345 COMPLIANT (KBA WAIVED)" if is_in_person else "REMOTE KBA PENDING / UNVERIFIED"
         
         status_rect = fitz.Rect(30, y, 582, y + 36)
         page.draw_rect(status_rect, color=badge_bg, fill=(badge_bg[0]*0.15, badge_bg[1]*0.15, badge_bg[2]*0.15))
@@ -4403,13 +4403,13 @@ def generate_irs_audit_cert_page(doc_bytes: bytes, req_rec: dict) -> bytes:
         page.insert_text((42, y + 20), "OFFICIAL ERO AUDIT SNAPSHOT DECLARATION:", fontsize=9, color=(15/255, 23/255, 42/255))
         
         snap_text = req_rec.get("verification_snapshot") or "IRS Pub 1345 In-Person Verification recorded. Photo ID inspected in office by ERO. KBA Waived."
-        page.insert_text((42, y + 42), snap_text[:110], fontsize=8.5, color=(71/255, 85/255, 105/255))
+        page.insert_text((42, y + 42), str(snap_text)[:110], fontsize=8.5, color=(71/255, 85/255, 105/255))
 
         y += 90
         page.draw_line((30, y), (582, y), color=(226/255, 232/255, 240/255), width=1)
         y += 18
         page.insert_text((30, y), "This Audit Certificate is legally bound to the attached DocuSeal digital signature audit log.", fontsize=8, color=(148/255, 163/255, 184/255))
-        page.insert_text((30, y + 14), "VRT Services • 100% Self-Hosted SSL Secured Node • SHA256 Tamper-Evident Sealed", fontsize=8, color=(148/255, 163/255, 184/255))
+        page.insert_text((30, y + 14), "VRT Services * 100% Self-Hosted SSL Secured Node * SHA256 Tamper-Evident Sealed", fontsize=8, color=(148/255, 163/255, 184/255))
 
         if existing_pdf:
             new_pdf.insert_pdf(existing_pdf)
@@ -5554,7 +5554,25 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
                             ORDER BY er.id DESC LIMIT 1;
                         """, (f"%{part}%", f"%{part}%"))
                         req_rec = cur.fetchone()
-                        if req_rec:
+            # Strategy 3: Fall back to direct customer table lookup by folder name if no esignature request record was matched
+            if not req_rec and "/" in clean_key:
+                parts = [p.strip() for p in clean_key.split("/") if p.strip()]
+                for part in parts:
+                    if part.lower() not in ["vrt services", "esignatures", "storage", "documents"]:
+                        cur.execute("""
+                            SELECT c.id as customer_id, c.legal_name, c.parent_name, c.email as customer_email,
+                                   c.identity_verified, c.verification_method as cust_verification_method,
+                                   c.id_type, c.id_state_issuer, c.id_expiration, c.id_last4, c.verified_by_user, c.verified_at
+                            FROM customer c
+                            WHERE c.legal_name ILIKE %s OR c.parent_name ILIKE %s
+                            LIMIT 1;
+                        """, (f"%{part}%", f"%{part}%"))
+                        cust_rec = cur.fetchone()
+                        if cust_rec:
+                            req_rec = dict(cust_rec)
+                            req_rec["signer_name"] = cust_rec.get("legal_name")
+                            req_rec["document_name"] = filename.replace("_Audit_Certificate", "").replace("_Signed", "").replace(".pdf", "")
+                            req_rec["is_tax_form"] = True
                             break
         conn.close()
 
