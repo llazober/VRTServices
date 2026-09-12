@@ -5916,12 +5916,15 @@ async def view_pdf_proxy(key: str, request: Request):
                         actual_key = item_key
                         break
             if not actual_key:
-                list_all = client.list_objects_v2(Bucket=bucket)
-                for item in list_all.get('Contents', []):
-                    item_key = item['Key']
-                    if os.path.basename(item_key).lower() == filename.lower():
-                        actual_key = item_key
-                        break
+                try:
+                    list_all = client.list_objects_v2(Bucket=bucket, Prefix="VRT Services/", MaxKeys=200)
+                    for item in list_all.get('Contents', []):
+                        item_key = item['Key']
+                        if os.path.basename(item_key).lower() == filename.lower():
+                            actual_key = item_key
+                            break
+                except Exception as list_err:
+                    print(f"[PDF FALLBACK SCAN WARNING]: {list_err}")
             if actual_key:
                 print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
                 s3_obj = client.get_object(Bucket=bucket, Key=actual_key)

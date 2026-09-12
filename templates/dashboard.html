@@ -5215,10 +5215,12 @@
         function closeCustomerStorageModal() {
             const modal = document.getElementById('customerStorageModal');
             if (!modal) return;
-            modal.style.display = 'none';
             modal.style.opacity = '0';
+            setTimeout(() => { modal.style.display = 'none'; }, 150);
             currentStorageCustomerId = null;
             currentStorageData = null;
+            const spinner = document.getElementById('storageLoadingSpinner');
+            if (spinner) spinner.style.display = 'none';
         }
 
         async function loadStorageFolder(customerId, prefix) {
@@ -6176,15 +6178,19 @@
             if (extBtn) extBtn.href = inlineViewUrl;
             if (dlBtn) dlBtn.href = downloadUrl;
 
-            document.body.appendChild(modal);
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
             modal.style.zIndex = '2147483649';
             modal.style.display = 'flex';
+            modal.style.opacity = '1';
         }
 
         function closePdfViewerModal() {
             const modal = document.getElementById('pdfViewerModal');
             if (!modal) return;
-            modal.style.display = 'none';
+            modal.style.opacity = '0';
+            setTimeout(() => { modal.style.display = 'none'; }, 150);
             const iframeEl = document.getElementById('pdfViewerIframe');
             if (iframeEl) iframeEl.src = '';
         }
@@ -7197,23 +7203,50 @@
             }
         }
 
-        // Close modals when clicking backdrop
-        ['coaModal', 'mappingsModal', 'historyModal', 'supportModal', 'customerModal', 'customerStorageModal', 'pdfViewerModal', 'customerChecklistModal'].forEach(id => {
-            const modal = document.getElementById(id);
-            if (modal) {
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) {
-                        if (id === 'coaModal') closeCoaModal();
-                        if (id === 'mappingsModal') closeMappingsModal();
-                        if (id === 'historyModal') closeHistoryModal();
-                        if (id === 'supportModal') closeSupportModal();
-                        if (id === 'customerModal') closeCustomerModal();
-                        if (id === 'customerStorageModal') closeCustomerStorageModal();
-                        if (id === 'pdfViewerModal') closePdfViewerModal();
-                        if (id === 'customerChecklistModal') closeCustomerChecklistModal();
-                    }
-                });
+        // --- Global Keyboard & Backdrop Event Delegation for All Modals ---
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const pdfModal = document.getElementById('pdfViewerModal');
+                if (pdfModal && pdfModal.style.display !== 'none') {
+                    closePdfViewerModal();
+                    return;
+                }
+                const storageModal = document.getElementById('customerStorageModal');
+                if (storageModal && storageModal.style.display !== 'none') {
+                    closeCustomerStorageModal();
+                    return;
+                }
+                closeAllAppModals();
             }
+        });
+
+        document.addEventListener('click', function(e) {
+            const allModalIds = [
+                'pdfViewerModal', 'customerStorageModal', 'customerChecklistModal',
+                'customerModal', 'coaModal', 'mappingsModal', 'historyModal',
+                'supportModal', 'sendCustomerEmailModal', 'customerCommsHistoryModal',
+                'esignatureModal', 'verifyIdentityModal', 'esignatureViewModal'
+            ];
+            allModalIds.forEach(id => {
+                const modal = document.getElementById(id);
+                if (modal && modal.style.display !== 'none' && e.target === modal) {
+                    if (id === 'pdfViewerModal') closePdfViewerModal();
+                    else if (id === 'customerStorageModal') closeCustomerStorageModal();
+                    else if (id === 'customerChecklistModal') closeCustomerChecklistModal();
+                    else if (id === 'customerModal') closeCustomerModal();
+                    else if (id === 'coaModal') closeCoaModal();
+                    else if (id === 'mappingsModal') closeMappingsModal();
+                    else if (id === 'historyModal') closeHistoryModal();
+                    else if (id === 'supportModal') closeSupportModal();
+                    else if (id === 'esignatureModal') closeCreateEsignatureModal();
+                    else if (id === 'verifyIdentityModal') closeVerifyIdentityModal();
+                    else if (id === 'esignatureViewModal') closeEsignatureViewModal();
+                    else {
+                        modal.style.display = 'none';
+                        modal.style.opacity = '0';
+                    }
+                }
+            });
         });
 
         // --- Move customerStorageModal, pdfViewerModal & customerChecklistModal to body root ---
