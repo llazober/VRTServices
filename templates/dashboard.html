@@ -2695,6 +2695,16 @@
                         <input type="email" id="esignSignerEmailInput" required placeholder="e.g. john@example.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
                     </div>
                 </div>
+                <div id="esignSecondSignerGroup" style="display: none; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">Spouse / Second Signer Name</label>
+                        <input type="text" id="esignSecondSignerNameInput" placeholder="e.g. Martha Lazo" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">Spouse / Second Signer Email</label>
+                        <input type="email" id="esignSecondSignerEmailInput" placeholder="e.g. spouse@example.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                </div>
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Document Preset / Title *</label>
                     <select id="esignDocPresetSelect" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;" onchange="onEsignDocPresetChange()">
@@ -8541,6 +8551,7 @@
             const custId = document.getElementById('esignCustomerSelect')?.value;
             if (!custId) {
                 updateEsignIdentityBadge(null);
+                if (document.getElementById('esignSecondSignerGroup')) document.getElementById('esignSecondSignerGroup').style.display = 'none';
                 return;
             }
             const cust = (allCustomersCache || []).find(c => String(c.id) === String(custId));
@@ -8550,6 +8561,12 @@
                 }
                 if (document.getElementById('esignSignerEmailInput')) {
                     document.getElementById('esignSignerEmailInput').value = cust.email || '';
+                }
+                if (document.getElementById('esignSecondSignerNameInput')) {
+                    document.getElementById('esignSecondSignerNameInput').value = cust.second_signer_name || '';
+                }
+                if (document.getElementById('esignSecondSignerEmailInput')) {
+                    document.getElementById('esignSecondSignerEmailInput').value = cust.second_signer_email || '';
                 }
 
                 // Automatic Document Preset Selection based on Customer Setup
@@ -8584,6 +8601,9 @@
             const nameInput = document.getElementById('esignDocNameInput');
             const fileGroup = document.getElementById('esignFileUploadGroup');
             const isTaxCheck = document.getElementById('esignIsTaxFormCheck');
+            const secGroup = document.getElementById('esignSecondSignerGroup');
+            const custId = document.getElementById('esignCustomerSelect')?.value;
+            const cust = (allCustomersCache || []).find(c => String(c.id) === String(custId));
 
             if (val === 'Custom Document') {
                 if (fileGroup) fileGroup.style.display = 'block';
@@ -8594,6 +8614,12 @@
                 if (nameInput) nameInput.value = val;
                 if (isTaxCheck) isTaxCheck.checked = val.includes('8879') || val.includes('8878') || val.includes('7216') || val.includes('Tax');
             }
+
+            const isJoint = (cust && cust.customer_type === 'Joint Account') || (val && (val.includes('Joint') || val.includes('8879J'))) || (cust && Boolean(cust.second_signer_name)) || Boolean(document.getElementById('esignSecondSignerNameInput')?.value);
+            if (secGroup) {
+                secGroup.style.display = isJoint ? 'grid' : 'none';
+            }
+
             onEsignTaxFormToggle();
         }
 
@@ -8708,6 +8734,8 @@
                 formData.append('document_name', document.getElementById('esignDocNameInput').value);
                 formData.append('signer_name', document.getElementById('esignSignerNameInput').value);
                 formData.append('signer_email', document.getElementById('esignSignerEmailInput').value);
+                formData.append('second_signer_name', document.getElementById('esignSecondSignerNameInput')?.value || '');
+                formData.append('second_signer_email', document.getElementById('esignSecondSignerEmailInput')?.value || '');
                 formData.append('template_id', document.getElementById('esignTemplateIdInput').value || '');
                 formData.append('is_tax_form', document.getElementById('esignIsTaxFormCheck')?.checked || false);
                 formData.append('send_email', document.getElementById('esignSendEmailCheck').checked);

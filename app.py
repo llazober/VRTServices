@@ -3735,22 +3735,48 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
 
     redirect_target = f"https://vrtservices12.com/esign/completed?doc={urllib.parse.quote(document_name)}"
     
+    s2_name = (second_signer_name or "").strip()
+    s2_email = (second_signer_email or "").strip()
+    c_type_str = (customer_type or "").lower().strip()
+    doc_lower = (document_name or "").lower().strip()
+
+    is_joint_context = "joint" in c_type_str or "joint" in doc_lower or "8879j" in doc_lower or "8879-j" in doc_lower or bool(s2_name)
+
+    if is_joint_context:
+        if not s2_name:
+            s2_name = "Spouse"
+        if not s2_email:
+            s2_email = signer_email
+
+    sub1_values = {
+        "Taxpayer Name": signer_name,
+        "Client Name": signer_name,
+        "Signer Name": signer_name,
+        "Legal Name": signer_name,
+        "Corporation Name": signer_name,
+        "Company Name": signer_name,
+        "S-Corporation Name": signer_name,
+        "Partnership Name": signer_name,
+        "Date Signed": today_str,
+        "Date": today_str
+    }
+    if s2_name or is_joint_context:
+        sub1_values.update({
+            "Spouse Name": s2_name,
+            "Second Signer Name": s2_name,
+            "Spouse": s2_name,
+            "Second Signer": s2_name,
+            "Spouse's Name": s2_name,
+            "Spouse Full Name": s2_name,
+            "Spouse Taxpayer Name": s2_name,
+            "Spouse/Second Signer": s2_name
+        })
+
     sub1 = {
         "name": signer_name,
         "email": signer_email,
         "redirect_url": redirect_target,
-        "values": {
-            "Taxpayer Name": signer_name,
-            "Client Name": signer_name,
-            "Signer Name": signer_name,
-            "Legal Name": signer_name,
-            "Corporation Name": signer_name,
-            "Company Name": signer_name,
-            "S-Corporation Name": signer_name,
-            "Partnership Name": signer_name,
-            "Date Signed": today_str,
-            "Date": today_str
-        }
+        "values": sub1_values
     }
     if template_roles and len(template_roles) > 0:
         sub1["role"] = template_roles[0]
@@ -3759,19 +3785,29 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
 
     submitters = [sub1]
 
-    if second_signer_email and str(second_signer_email).strip():
-        s2_name = second_signer_name or "Spouse"
+    if s2_email:
+        sub2_values = {
+            "Spouse Name": s2_name,
+            "Second Signer Name": s2_name,
+            "Spouse": s2_name,
+            "Second Signer": s2_name,
+            "Spouse's Name": s2_name,
+            "Spouse Full Name": s2_name,
+            "Spouse Taxpayer Name": s2_name,
+            "Spouse/Second Signer": s2_name,
+            "Taxpayer Name": signer_name,
+            "Client Name": signer_name,
+            "Signer Name": signer_name,
+            "Legal Name": signer_name,
+            "Spouse Date Signed": today_str,
+            "Date Signed": today_str,
+            "Date": today_str
+        }
         sub2 = {
             "name": s2_name,
-            "email": str(second_signer_email).strip(),
+            "email": s2_email,
             "redirect_url": redirect_target,
-            "values": {
-                "Spouse Name": s2_name,
-                "Second Signer Name": s2_name,
-                "Spouse Date Signed": today_str,
-                "Date Signed": today_str,
-                "Date": today_str
-            }
+            "values": sub2_values
         }
         if template_roles and len(template_roles) > 1:
             sub2["role"] = template_roles[1]
@@ -4325,6 +4361,8 @@ async def send_esignature_request(
     template_id: str = Form(""),
     is_tax_form: bool = Form(False),
     send_email: bool = Form(True),
+    second_signer_name: str = Form(""),
+    second_signer_email: str = Form(""),
     pdf_file: UploadFile = File(None)
 ):
     username = get_current_username(request)
@@ -4352,8 +4390,8 @@ async def send_esignature_request(
             """, (customer_id,))
             cust_row = cur.fetchone()
 
-            sec_name = cust_row.get("second_signer_name") if cust_row else None
-            sec_email = cust_row.get("second_signer_email") if cust_row else None
+            sec_name = (second_signer_name or "").strip() or (cust_row.get("second_signer_name") if cust_row else None)
+            sec_email = (second_signer_email or "").strip() or (cust_row.get("second_signer_email") if cust_row else None)
             c_type = cust_row.get("customer_type") if cust_row else None
 
             api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
