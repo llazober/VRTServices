@@ -1036,11 +1036,24 @@
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Customer Type *</label>
-                        <select id="customerPageFormType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                        <select id="customerPageFormType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;" onchange="onCustomerTypeChange('customerPageForm')">
                             <option value="Business">Business</option>
                             <option value="Individual">Individual</option>
+                            <option value="Joint Account">Joint Account</option>
                             <option value="Partner">Partner</option>
                             <option value="Government">Government</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">Default IRS Form 8879 Variant *</label>
+                        <select id="customerPageFormForm8879Type" style="width: 100%; background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                            <option value="Form 8879 (Individual 1040)">Form 8879 (Individual 1040)</option>
+                            <option value="Form 8879-C (Corporation 1120)">Form 8879-C (Corporation 1120)</option>
+                            <option value="Form 8879-S (S-Corporation 1120-S)">Form 8879-S (S-Corporation 1120-S)</option>
+                            <option value="Form 8879-PE (Partnership 1065)">Form 8879-PE (Partnership 1065)</option>
+                            <option value="Form 8879-F (Fiduciary 1041)">Form 8879-F (Fiduciary 1041)</option>
+                            <option value="Form 8879-EO (Exempt Org 990)">Form 8879-EO (Exempt Org 990)</option>
+                            <option value="Form 8878 (Extension Authorization)">Form 8878 (Extension Authorization)</option>
                         </select>
                     </div>
                     <div>
@@ -1081,6 +1094,25 @@
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Website</label>
                         <input type="url" id="customerPageFormWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                    </div>
+                    <div id="customerPageFormJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px; margin-top: 4px;">
+                        <div style="font-size: 0.84rem; font-weight: 800; color: #34d399; margin-bottom: 10px; text-transform: uppercase;">
+                            👥 Joint Account — Second Signer / Spouse Information
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer / Spouse Full Name</label>
+                                <input type="text" id="customerPageFormSecondSignerName" placeholder="e.g. Jane Doe" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer / Spouse Email</label>
+                                <input type="email" id="customerPageFormSecondSignerEmail" placeholder="e.g. jane.doe@example.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer Phone</label>
+                                <input type="text" id="customerPageFormSecondSignerPhone" placeholder="e.g. (555) 987-6543" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                            </div>
+                        </div>
                     </div>
                     <div style="grid-column: 1 / -1;">
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Notes & Comments</label>
@@ -2329,11 +2361,24 @@
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Customer Type *</label>
-                    <select id="customerFormType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <select id="customerFormType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;" onchange="onCustomerTypeChange('customerForm')">
                         <option value="Business">Business</option>
                         <option value="Individual">Individual</option>
+                        <option value="Joint Account">Joint Account</option>
                         <option value="Partner">Partner</option>
                         <option value="Government">Government</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Default IRS Form 8879 Variant *</label>
+                    <select id="customerFormForm8879Type" style="width: 100%; background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                        <option value="Form 8879 (Individual 1040)">Form 8879 (Individual 1040)</option>
+                        <option value="Form 8879-C (Corporation 1120)">Form 8879-C (Corporation 1120)</option>
+                        <option value="Form 8879-S (S-Corporation 1120-S)">Form 8879-S (S-Corporation 1120-S)</option>
+                        <option value="Form 8879-PE (Partnership 1065)">Form 8879-PE (Partnership 1065)</option>
+                        <option value="Form 8879-F (Fiduciary 1041)">Form 8879-F (Fiduciary 1041)</option>
+                        <option value="Form 8879-EO (Exempt Org 990)">Form 8879-EO (Exempt Org 990)</option>
+                        <option value="Form 8878 (Extension Authorization)">Form 8878 (Extension Authorization)</option>
                     </select>
                 </div>
                 <div>
@@ -2374,6 +2419,25 @@
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Website</label>
                     <input type="url" id="customerFormWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                </div>
+                <div id="customerFormJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 14px; margin-top: 4px;">
+                    <div style="font-size: 0.82rem; font-weight: 800; color: #34d399; margin-bottom: 8px; text-transform: uppercase;">
+                        👥 Joint Account — Second Signer / Spouse Information
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer / Spouse Full Name</label>
+                            <input type="text" id="customerFormSecondSignerName" placeholder="e.g. Jane Doe" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer / Spouse Email</label>
+                            <input type="email" id="customerFormSecondSignerEmail" placeholder="e.g. jane.doe@example.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">Second Signer Phone</label>
+                            <input type="text" id="customerFormSecondSignerPhone" placeholder="e.g. (555) 987-6543" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                        </div>
+                    </div>
                 </div>
                 <div style="grid-column: 1 / -1;">
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Notes & Comments</label>
@@ -2633,6 +2697,13 @@
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Document Preset / Title *</label>
                     <select id="esignDocPresetSelect" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;" onchange="onEsignDocPresetChange()">
                         <option value="Form 8879 (IRS e-File Signature Authorization)">Form 8879 (IRS e-File Signature Authorization)</option>
+                        <option value="Form 8879 (Joint Account - Dual Signatures)">Form 8879 (Joint Account - Dual Signatures)</option>
+                        <option value="Form 8879-C (IRS e-File Corporate Tax Return)">Form 8879-C (IRS e-File Corporate Tax Return - 1120)</option>
+                        <option value="Form 8879-S (IRS e-File S-Corporation Tax Return)">Form 8879-S (IRS e-File S-Corporation - 1120-S)</option>
+                        <option value="Form 8879-PE (IRS e-File Partnership Tax Return)">Form 8879-PE (IRS e-File Partnership - 1065)</option>
+                        <option value="Form 8879-F (IRS e-File Fiduciary Tax Return)">Form 8879-F (IRS e-File Fiduciary / Estate / Trust - 1041)</option>
+                        <option value="Form 8879-EO (IRS e-File Exempt Organization Return)">Form 8879-EO (IRS e-File Exempt Org - 990)</option>
+                        <option value="Form 8878 (IRS e-File Extension Authorization)">Form 8878 (IRS e-File Extension Authorization)</option>
                         <option value="Engagement Letter">Engagement Letter</option>
                         <option value="Tax Organizer & Consent (IRC § 7216)">Tax Organizer & Consent (IRC § 7216)</option>
                         <option value="Custom Document">Custom Document Upload</option>
@@ -5665,6 +5736,30 @@
             }
         }
 
+        function onCustomerTypeChange(prefix) {
+            const typeVal = document.getElementById(`${prefix}Type`)?.value;
+            const jointFields = document.getElementById(`${prefix}JointFields`);
+            if (jointFields) {
+                jointFields.style.display = (typeVal === 'Joint Account') ? 'block' : 'none';
+            }
+            const form8879Select = document.getElementById(`${prefix}Form8879Type`);
+            if (form8879Select && typeVal) {
+                if (typeVal === 'Joint Account' || typeVal === 'Individual') {
+                    form8879Select.value = 'Form 8879 (Individual)';
+                } else if (typeVal === 'S-Corporation') {
+                    form8879Select.value = '8879-S';
+                } else if (typeVal === 'C-Corporation') {
+                    form8879Select.value = '8879-C';
+                } else if (typeVal === 'Partnership') {
+                    form8879Select.value = '8879-PE';
+                } else if (typeVal === 'Estate/Trust') {
+                    form8879Select.value = '8879-F';
+                } else if (typeVal === 'Non-Profit / Exempt Org') {
+                    form8879Select.value = '8879-EO';
+                }
+            }
+        }
+
         function toggleCustomerForm() {
             const form = document.getElementById('customerForm');
             const btn = document.getElementById('toggleCustomerFormBtn');
@@ -5674,6 +5769,10 @@
                 setVal('customerFormId', '');
                 setVal('customerFormNumber', getNextCustomerNumber());
                 setVal('customerFormType', 'Business');
+                setVal('customerFormForm8879Type', 'Form 8879 (Individual)');
+                setVal('customerFormSecondSignerName', '');
+                setVal('customerFormSecondSignerEmail', '');
+                setVal('customerFormSecondSignerPhone', '');
                 setVal('customerFormLegalName', '');
                 setVal('customerFormDisplayName', '');
                 setVal('customerFormTaxId', '');
@@ -5683,6 +5782,7 @@
                 setVal('customerFormEmail', '');
                 setVal('customerFormWebsite', '');
                 setVal('customerFormNotes', '');
+                onCustomerTypeChange('customerForm');
                 const schedCb = document.getElementById('customerFormPresetSchedule');
                 if (schedCb) schedCb.checked = true;
                 const schedCont = document.getElementById('customerFormPresetScheduleContainer');
@@ -5706,6 +5806,10 @@
                 setVal('customerPageFormId', '');
                 setVal('customerPageFormNumber', getNextCustomerNumber());
                 setVal('customerPageFormType', 'Business');
+                setVal('customerPageFormForm8879Type', 'Form 8879 (Individual)');
+                setVal('customerPageFormSecondSignerName', '');
+                setVal('customerPageFormSecondSignerEmail', '');
+                setVal('customerPageFormSecondSignerPhone', '');
                 setVal('customerPageFormLegalName', '');
                 setVal('customerPageFormDisplayName', '');
                 setVal('customerPageFormTaxId', '');
@@ -5715,6 +5819,7 @@
                 setVal('customerPageFormEmail', '');
                 setVal('customerPageFormWebsite', '');
                 setVal('customerPageFormNotes', '');
+                onCustomerTypeChange('customerPageForm');
                 const schedCb = document.getElementById('customerPageFormPresetSchedule');
                 if (schedCb) schedCb.checked = true;
                 const schedCont = document.getElementById('customerPageFormPresetScheduleContainer');
@@ -5740,6 +5845,10 @@
                 setVal('Id', rec.id);
                 setVal('Number', rec.custumer_number || '');
                 setVal('Type', rec.customer_type || 'Business');
+                setVal('Form8879Type', rec.form_8879_type || 'Form 8879 (Individual)');
+                setVal('SecondSignerName', rec.second_signer_name || '');
+                setVal('SecondSignerEmail', rec.second_signer_email || '');
+                setVal('SecondSignerPhone', rec.second_signer_phone || '');
                 setVal('LegalName', rec.legal_name || '');
                 setVal('DisplayName', rec.display_name || '');
                 setVal('TaxId', rec.tax_id || '');
@@ -5749,6 +5858,7 @@
                 setVal('Email', rec.email || '');
                 setVal('Website', rec.website || '');
                 setVal('Notes', rec.notes || '');
+                onCustomerTypeChange(prefix);
                 const schedCont = document.getElementById(`${prefix}PresetScheduleContainer`);
                 if (schedCont) schedCont.style.display = 'none';
                 setLegalNameReadOnly(prefix, true);
@@ -5770,6 +5880,10 @@
             const payload = {
                 custumer_number: getVal('Number'),
                 customer_type: getVal('Type') || 'Business',
+                form_8879_type: getVal('Form8879Type') || 'Form 8879 (Individual)',
+                second_signer_name: getVal('SecondSignerName'),
+                second_signer_email: getVal('SecondSignerEmail'),
+                second_signer_phone: getVal('SecondSignerPhone'),
                 legal_name: getVal('LegalName'),
                 display_name: getVal('DisplayName'),
                 tax_id: getVal('TaxId'),
@@ -8308,7 +8422,7 @@
             }).join('');
         }
 
-        async function openCreateEsignatureModal() {
+        async function openCreateEsignatureModal(preselectCustomerId = null) {
             closeAllAppModals();
             const modal = document.getElementById('esignatureModal');
             if (!modal) return;
@@ -8322,10 +8436,17 @@
                     if (select) {
                         select.innerHTML = '<option value="">-- Select Customer --</option>' + 
                             allCustomersCache.map(c => `<option value="${c.id}">${escapeHtml(c.legal_name)} (${c.parent_name || 'No Parent'})</option>`).join('');
+                        if (preselectCustomerId) {
+                            select.value = preselectCustomerId;
+                        }
                     }
                 }
             } catch (err) {
                 console.error('Error fetching customers for e-signature modal:', err);
+            }
+
+            if (preselectCustomerId || document.getElementById('esignCustomerSelect')?.value) {
+                onEsignCustomerChange();
             }
 
             modal.style.display = 'flex';
@@ -8385,11 +8506,34 @@
             }
             const cust = (allCustomersCache || []).find(c => String(c.id) === String(custId));
             if (cust) {
-                if (document.getElementById('esignSignerNameInput') && !document.getElementById('esignSignerNameInput').value) {
+                if (document.getElementById('esignSignerNameInput')) {
                     document.getElementById('esignSignerNameInput').value = cust.primary_contact || cust.legal_name || '';
                 }
-                if (document.getElementById('esignSignerEmailInput') && !document.getElementById('esignSignerEmailInput').value) {
+                if (document.getElementById('esignSignerEmailInput')) {
                     document.getElementById('esignSignerEmailInput').value = cust.email || '';
+                }
+
+                // Automatic Document Preset Selection based on Customer Setup
+                const presetSelect = document.getElementById('esignDocPresetSelect');
+                if (presetSelect) {
+                    if (cust.customer_type === 'Joint Account') {
+                        presetSelect.value = 'Form 8879 (Joint Account - Dual Signatures)';
+                    } else if (cust.form_8879_type === '8879-C') {
+                        presetSelect.value = 'Form 8879-C (IRS e-File Corporate Tax Return)';
+                    } else if (cust.form_8879_type === '8879-S') {
+                        presetSelect.value = 'Form 8879-S (IRS e-File S-Corporation Tax Return)';
+                    } else if (cust.form_8879_type === '8879-PE') {
+                        presetSelect.value = 'Form 8879-PE (IRS e-File Partnership Tax Return)';
+                    } else if (cust.form_8879_type === '8879-F') {
+                        presetSelect.value = 'Form 8879-F (IRS e-File Fiduciary Tax Return)';
+                    } else if (cust.form_8879_type === '8879-EO') {
+                        presetSelect.value = 'Form 8879-EO (IRS e-File Exempt Organization Return)';
+                    } else if (cust.form_8879_type === '8878') {
+                        presetSelect.value = 'Form 8878 (IRS e-File Extension Authorization)';
+                    } else if (cust.form_8879_type === 'Form 8879 (Individual)' || cust.customer_type === 'Individual') {
+                        presetSelect.value = 'Form 8879 (IRS e-File Signature Authorization)';
+                    }
+                    onEsignDocPresetChange();
                 }
             }
             updateEsignIdentityBadge(cust);
@@ -8408,7 +8552,7 @@
             } else {
                 if (fileGroup) fileGroup.style.display = 'none';
                 if (nameInput) nameInput.value = val;
-                if (isTaxCheck) isTaxCheck.checked = val.includes('8879') || val.includes('7216') || val.includes('Tax');
+                if (isTaxCheck) isTaxCheck.checked = val.includes('8879') || val.includes('8878') || val.includes('7216') || val.includes('Tax');
             }
             onEsignTaxFormToggle();
         }

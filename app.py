@@ -684,6 +684,14 @@ def init_customer_table():
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS verified_by_user VARCHAR(100);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS identity_notes TEXT;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS form_8879_type VARCHAR(50) DEFAULT 'Form 8879 (Individual 1040)';
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_name VARCHAR(200);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_email VARCHAR(200);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_phone VARCHAR(50);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_id_type VARCHAR(100);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_id_state VARCHAR(50);
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_id_expiration DATE;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS second_signer_id_last4 VARCHAR(20);
                 CREATE INDEX IF NOT EXISTS idx_customer_email_lower ON customer (LOWER(email));
                 UPDATE customer SET parent_name = 'VRT Services' WHERE parent_name IS NULL OR parent_name = '';
 
@@ -3448,21 +3456,111 @@ def get_docuseal_headers():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str:
+def docuseal_generate_html_template(doc_name: str, signer_name: str = "", second_signer_name: str = "", customer_type: str = "") -> str:
     dn_lower = (doc_name or "").lower()
     sname = signer_name or "Taxpayer"
-    
-    if "8879" in dn_lower:
+    second_sname = second_signer_name or "Spouse"
+    c_type_lower = (customer_type or "").lower()
+    is_joint = "joint" in c_type_lower or "joint" in dn_lower or bool(second_signer_name and second_signer_name.strip())
+
+    if "8879-c" in dn_lower or ("8879" in dn_lower and "corp" in dn_lower and "s-corp" not in dn_lower):
         return f"""
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879 — e-File Signature Authorization</h2>
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879-C — Corp e-File Signature Authorization (Form 1120)</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Corporation Name:</strong> <text-field name="Corporation Name" required="true" default_value="{sname}" style="width: 340px; display: inline-block; font-weight: bold;"></text-field></p>
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Corporate Officer Title:</strong> <text-field name="Officer Title" required="true" default_value="President" style="width: 200px; display: inline-block;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Corporate Authorization Declaration</h4>
+            <p style="font-size: 15px; color: #334155;">
+                As an officer of the corporation, I authorize <strong>VRT Services</strong> to enter the corporation's Self-Select PIN on its electronically filed Form 1120 corporate income tax return.
+            </p>
+            <div style="margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Corporate Officer E-Signature:</strong></p>
+                <signature-field name="Officer Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif "8879-s" in dn_lower or ("8879" in dn_lower and "s-corp" in dn_lower):
+        return f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879-S — S-Corp e-File Signature Authorization (Form 1120-S)</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>S-Corporation Name:</strong> <text-field name="S-Corporation Name" required="true" default_value="{sname}" style="width: 340px; display: inline-block; font-weight: bold;"></text-field></p>
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Officer Title:</strong> <text-field name="Officer Title" required="true" default_value="President" style="width: 200px; display: inline-block;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Authorization Declaration</h4>
+            <p style="font-size: 15px; color: #334155;">
+                As an officer of the S-corporation, I authorize <strong>VRT Services</strong> to enter the corporation's Self-Select PIN on its electronically filed Form 1120-S income tax return.
+            </p>
+            <div style="margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>Officer E-Signature:</strong></p>
+                <signature-field name="Officer Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif "8879-pe" in dn_lower or ("8879" in dn_lower and "partner" in dn_lower):
+        return f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879-PE — Partnership e-File Signature Authorization (Form 1065)</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Partnership Name:</strong> <text-field name="Partnership Name" required="true" default_value="{sname}" style="width: 340px; display: inline-block; font-weight: bold;"></text-field></p>
+                <p style="margin: 6px 0; font-size: 15px;"><strong>General Partner Title:</strong> <text-field name="Partner Title" required="true" default_value="General Partner" style="width: 200px; display: inline-block;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Authorization Declaration</h4>
+            <p style="font-size: 15px; color: #334155;">
+                As a general partner or managing member, I authorize <strong>VRT Services</strong> to enter the partnership's Self-Select PIN on its electronically filed Form 1065 return.
+            </p>
+            <div style="margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <p style="margin-bottom: 12px; font-size: 15px;"><strong>General Partner E-Signature:</strong></p>
+                <signature-field name="Partner Signature" required="true" style="width: 360px; height: 95px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
+            </div>
+            <div style="margin-top: 24px;">
+                <p style="font-size: 15px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 200px; display: inline-block; font-weight: bold;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif is_joint:
+        return f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">IRS Form 8879 — Joint e-File Signature Authorization (1040)</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Taxpayer (Spouse 1):</strong> <text-field name="Taxpayer Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+                <p style="margin: 6px 0; font-size: 15px;"><strong>Spouse (Spouse 2):</strong> <text-field name="Spouse Name" required="true" default_value="{second_sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
+            </div>
+            <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Joint Authorization Agreement</h4>
+            <p style="font-size: 15px; color: #334155;">
+                We authorize <strong>VRT Services</strong> to enter our Self-Select PINs as our signatures on our electronically filed joint income tax return.
+                We confirm that we have reviewed a copy of our joint tax return and that the information shown is true, correct, and complete to the best of our knowledge.
+            </p>
+            <div style="margin-top: 36px; border-top: 2px solid #e2e8f0; padding-top: 20px;">
+                <p style="margin-bottom: 8px; font-size: 15px;"><strong>Taxpayer E-Signature (Spouse 1):</strong></p>
+                <signature-field name="Taxpayer Signature" required="true" style="width: 360px; height: 90px; display: block; border: 2px dashed #0284c7; padding: 8px; background: #f0f9ff; border-radius: 8px;"></signature-field>
+                <p style="font-size: 14px; margin-top: 8px;"><strong>Date Signed:</strong> <date-field name="Date Signed" required="true" style="width: 180px; display: inline-block; font-weight: bold;"></date-field></p>
+            </div>
+            <div style="margin-top: 28px; border-top: 1px dashed #cbd5e1; padding-top: 20px;">
+                <p style="margin-bottom: 8px; font-size: 15px;"><strong>Spouse E-Signature (Spouse 2):</strong></p>
+                <signature-field name="Spouse Signature" required="true" style="width: 360px; height: 90px; display: block; border: 2px dashed #10b981; padding: 8px; background: #ecfdf5; border-radius: 8px;"></signature-field>
+                <p style="font-size: 14px; margin-top: 8px;"><strong>Spouse Date Signed:</strong> <date-field name="Spouse Date Signed" required="true" style="width: 180px; display: inline-block; font-weight: bold;"></date-field></p>
+            </div>
+        </div>
+        """
+    elif "8879" in dn_lower or "8878" in dn_lower:
+        return f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 48px; color: #0f172a; background: #ffffff; border-radius: 12px; max-width: 840px; margin: 0 auto; line-height: 1.7; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <h2 style="text-align: center; color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 16px; margin-bottom: 28px; font-size: 22px; font-weight: 800;">{doc_name}</h2>
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;">
                 <p style="margin: 6px 0; font-size: 15px;"><strong>Taxpayer Name:</strong> <text-field name="Taxpayer Name" required="true" default_value="{sname}" style="width: 300px; display: inline-block; font-weight: bold;"></text-field></p>
-                <p style="margin: 6px 0; font-size: 15px;"><strong>Spouse Name (if filing jointly):</strong> <text-field name="Spouse Name" required="false" style="width: 300px; display: inline-block;"></text-field></p>
             </div>
             <h4 style="color: #0369a1; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Authorization Agreement</h4>
             <p style="font-size: 15px; color: #334155;">
-                I authorize <strong>VRT Services</strong> to enter my Self-Select PIN as my signature on my electronically filed income tax return.
+                I authorize <strong>VRT Services</strong> to enter my Self-Select PIN as my signature on my electronically filed tax return.
                 I confirm that I have reviewed a copy of my tax return and that the information shown is true, correct, and complete to the best of my knowledge.
             </p>
             <div style="margin-top: 48px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
@@ -3537,11 +3635,11 @@ def docuseal_generate_html_template(doc_name: str, signer_name: str = "") -> str
         </div>
         """
 
-def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True):
+
+def docuseal_create_submission(customer_id: int, document_name: str, signer_name: str, signer_email: str, template_id: str = None, pdf_base64: str = None, send_email: bool = True, second_signer_name: str = None, second_signer_email: str = None, customer_type: str = None):
     """
     Calls DocuSeal API to create a signature submission.
-    Uses target template_id if provided, or looks up existing templates from self-hosted instance.
-    Returns parsed JSON response from DocuSeal.
+    Supports dual submitters for Joint Accounts (Taxpayer & Spouse).
     """
     import urllib.request
     import urllib.parse
@@ -3567,11 +3665,9 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
                     doc_lower = (document_name or "").lower()
                     for tpl in tpl_list:
                         tpl_name = (tpl.get("name") or "").lower()
-                        # Direct match or substring match
                         if doc_lower in tpl_name or tpl_name in doc_lower:
                             matched_tpl = tpl
                             break
-                        # Keyword sub-matching for 8879, 7216 / consent, organizer, engagement
                         keywords = ["8879", "7216", "consent", "organizer", "engagement"]
                         if any(kw in doc_lower and kw in tpl_name for kw in keywords):
                             matched_tpl = tpl
@@ -3582,25 +3678,41 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         except Exception as tpl_err:
             print(f"[DOCUSEAL TEMPLATE LOOKUP WARNING]: {tpl_err}")
 
-    import urllib.parse
     redirect_target = f"https://vrtservices12.com/esign/completed?doc={urllib.parse.quote(document_name)}"
+    
+    submitters = [
+        {
+            "name": signer_name,
+            "email": signer_email,
+            "role": "Taxpayer",
+            "redirect_url": redirect_target,
+            "values": {
+                "Taxpayer Name": signer_name,
+                "Client Name": signer_name,
+                "Signer Name": signer_name,
+                "Date Signed": today_str
+            }
+        }
+    ]
+
+    if second_signer_email and str(second_signer_email).strip():
+        s2_name = second_signer_name or "Spouse"
+        submitters.append({
+            "name": s2_name,
+            "email": str(second_signer_email).strip(),
+            "role": "Spouse",
+            "redirect_url": redirect_target,
+            "values": {
+                "Spouse Name": s2_name,
+                "Second Signer Name": s2_name,
+                "Spouse Date Signed": today_str
+            }
+        })
+
     payload = {
         "send_email": send_email,
         "redirect_url": redirect_target,
-        "submitters": [
-            {
-                "name": signer_name,
-                "email": signer_email,
-                "role": "First Party",
-                "redirect_url": redirect_target,
-                "values": {
-                    "Taxpayer Name": signer_name,
-                    "Client Name": signer_name,
-                    "Signer Name": signer_name,
-                    "Date Signed": today_str
-                }
-            }
-        ]
+        "submitters": submitters
     }
 
     if target_template_id:
@@ -3616,7 +3728,7 @@ def docuseal_create_submission(customer_id: int, document_name: str, signer_name
         payload["documents"] = [
             {
                 "name": document_name,
-                "html": docuseal_generate_html_template(document_name, signer_name)
+                "html": docuseal_generate_html_template(document_name, signer_name, second_signer_name=second_signer_name, customer_type=customer_type)
             }
         ]
 
@@ -4131,33 +4243,40 @@ async def send_esignature_request(
     ds_embed_src = None
     ds_status = "pending"
 
-    api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
-    if api_key:
-        try:
-            ds_resp = docuseal_create_submission(
-                customer_id=customer_id,
-                document_name=document_name,
-                signer_name=signer_name,
-                signer_email=signer_email,
-                template_id=template_id,
-                pdf_base64=pdf_b64,
-                send_email=False
-            )
-            ds_submit_id, ds_embed_src = extract_docuseal_info(ds_resp)
-        except Exception as ds_err:
-            print(f"[DOCUSEAL WARNING] Error issuing DocuSeal submission: {ds_err}")
-            ds_status = "pending"
-
     conn = None
     try:
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Query Customer Identity Status for IRS Pub 1345 Compliance
+            # Query Customer Identity & Dual Signer Status
             cur.execute("""
-                SELECT identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4, verified_by_user, verified_at
+                SELECT customer_type, second_signer_name, second_signer_email, identity_verified, verification_method, id_type, id_state_issuer, id_expiration, id_last4, verified_by_user, verified_at
                 FROM customer WHERE id = %s;
             """, (customer_id,))
             cust_row = cur.fetchone()
+
+            sec_name = cust_row.get("second_signer_name") if cust_row else None
+            sec_email = cust_row.get("second_signer_email") if cust_row else None
+            c_type = cust_row.get("customer_type") if cust_row else None
+
+            api_key = os.environ.get("DOCUSEAL_API_KEY") or DOCUSEAL_API_KEY
+            if api_key:
+                try:
+                    ds_resp = docuseal_create_submission(
+                        customer_id=customer_id,
+                        document_name=document_name,
+                        signer_name=signer_name,
+                        signer_email=signer_email,
+                        template_id=template_id,
+                        pdf_base64=pdf_b64,
+                        send_email=False,
+                        second_signer_name=sec_name,
+                        second_signer_email=sec_email,
+                        customer_type=c_type
+                    )
+                    ds_submit_id, ds_embed_src = extract_docuseal_info(ds_resp)
+                except Exception as ds_err:
+                    print(f"[DOCUSEAL WARNING] Error issuing DocuSeal submission: {ds_err}")
+                    ds_status = "pending"
 
             v_method = "STANDARD"
             v_snapshot = "Standard document request."
@@ -5188,6 +5307,14 @@ async def create_customer(request: Request):
     website = (data.get("website") or "").strip() or None
     notes = (data.get("notes") or "").strip() or None
     parent_name = (data.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
+    form_8879_type = (data.get("form_8879_type") or "Form 8879 (Individual 1040)").strip()
+    second_signer_name = (data.get("second_signer_name") or "").strip() or None
+    second_signer_email = (data.get("second_signer_email") or "").strip() or None
+    second_signer_phone = (data.get("second_signer_phone") or "").strip() or None
+    second_signer_id_type = (data.get("second_signer_id_type") or "").strip() or None
+    second_signer_id_state = (data.get("second_signer_id_state") or "").strip() or None
+    second_signer_id_expiration = data.get("second_signer_id_expiration") or None
+    second_signer_id_last4 = (data.get("second_signer_id_last4") or "").strip() or None
     create_preset_schedule_raw = data.get("create_preset_schedule")
     create_preset_schedule = True if create_preset_schedule_raw is None else bool(create_preset_schedule_raw)
 
@@ -5204,11 +5331,20 @@ async def create_customer(request: Request):
                 INSERT INTO customer (
                     custumer_number, customer_type, legal_name, display_name,
                     tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                    form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
+                    second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4,
                     created_at, updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING *;
-            """, (custumer_number, customer_type, legal_name, display_name, tax_id, status, assigned_user_id, phone, email, website, notes, parent_name))
+            """, (
+                custumer_number, customer_type, legal_name, display_name,
+                tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
+                second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4
+            ))
             new_record = dict(cur.fetchone())
 
             # Auto-create parent mapping for the new customer
@@ -6624,6 +6760,14 @@ async def update_customer(customer_id: str, request: Request):
     website = (data.get("website") or "").strip() or None
     notes = (data.get("notes") or "").strip() or None
     parent_name = (data.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
+    form_8879_type = (data.get("form_8879_type") or "Form 8879 (Individual 1040)").strip()
+    second_signer_name = (data.get("second_signer_name") or "").strip() or None
+    second_signer_email = (data.get("second_signer_email") or "").strip() or None
+    second_signer_phone = (data.get("second_signer_phone") or "").strip() or None
+    second_signer_id_type = (data.get("second_signer_id_type") or "").strip() or None
+    second_signer_id_state = (data.get("second_signer_id_state") or "").strip() or None
+    second_signer_id_expiration = data.get("second_signer_id_expiration") or None
+    second_signer_id_last4 = (data.get("second_signer_id_last4") or "").strip() or None
 
     if not custumer_number:
         raise HTTPException(status_code=400, detail="Customer Number is required")
@@ -6656,10 +6800,24 @@ async def update_customer(customer_id: str, request: Request):
                     website = %s,
                     notes = %s,
                     parent_name = %s,
+                    form_8879_type = %s,
+                    second_signer_name = %s,
+                    second_signer_email = %s,
+                    second_signer_phone = %s,
+                    second_signer_id_type = %s,
+                    second_signer_id_state = %s,
+                    second_signer_id_expiration = %s,
+                    second_signer_id_last4 = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 RETURNING *;
-            """, (custumer_number, customer_type, legal_name, display_name, tax_id, status, assigned_user_id, phone, email, website, notes, parent_name, real_cust_id))
+            """, (
+                custumer_number, customer_type, legal_name, display_name,
+                tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
+                second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4,
+                real_cust_id
+            ))
             updated_record = cur.fetchone()
             if not updated_record:
                 raise HTTPException(status_code=404, detail="Customer not found")
