@@ -2771,37 +2771,18 @@ async def logout(request: Request, reason: str = ""):
     return response
 
 def get_user_email(username: str) -> str:
-    """Fetch the email address for the logged in user or parent client organization."""
+    """Fetch the email address for the logged in user."""
     if not username:
         return get_resend_to_email()
 
     user = get_client_user(username)
-    if user:
-        if user.get("email") and "@" in str(user.get("email")):
-            return str(user["email"]).strip()
-        client_id = user.get("clientId")
-        if client_id:
-            conn = None
-            try:
-                conn = get_db_connection("datalazo")
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    try:
-                        cur.execute('SELECT email FROM "Client" WHERE id = %s;', (client_id,))
-                        c = cur.fetchone()
-                        if c and c.get("email") and "@" in str(c.get("email")):
-                            return str(c["email"]).strip()
-                    except Exception:
-                        pass
-            except Exception as e:
-                print(f"Error fetching email for client_id {client_id}: {e}")
-            finally:
-                if conn:
-                    conn.close()
+    if user and user.get("email") and "@" in str(user.get("email")):
+        return str(user["email"]).strip()
+    
+    if "@" in username:
+        return username.strip()
 
-    if "@" in str(username):
-        return str(username).strip()
-
-    return get_resend_to_email()
+    return username
 
 # ── Protected routes ───────────────────────────────────────────────────────────
 def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
@@ -2825,14 +2806,14 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
 
         company_name = None
         software_name = None
-        user_email = None
+        company_email = None
+        user_email = username if (username and "@" in username) else None
 
         user = get_client_user(username)
         client_id_key = str(user.get("clientId")) if (user and user.get("clientId")) else username
 
-        if user:
-            if user.get("email") and "@" in str(user.get("email")):
-                user_email = str(user.get("email")).strip()
+        if user and user.get("email") and "@" in str(user.get("email")):
+            user_email = str(user.get("email")).strip()
 
         conn_dlz = None
         try:
@@ -2845,8 +2826,8 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
                         if client:
                             company_name = (client.get("company") or client.get("name") or "").strip()
                             software_name = (client.get("software") or client.get("Software") or "").strip()
-                            if not user_email and client.get("email") and "@" in str(client.get("email")):
-                                user_email = str(client.get("email")).strip()
+                            if client.get("email") and "@" in str(client.get("email")):
+                                company_email = str(client.get("email")).strip()
                     except Exception as e_c:
                         conn_dlz.rollback()
 
@@ -2950,6 +2931,7 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "client_config": client_conf,
             "username": username,
             "user_email": user_email,
+            "company_email": company_email,
             "company_name": company_name or "Datalazo Partner",
             "parent_name": user_parent_name,
             "software_name": software_name or "",
