@@ -433,6 +433,39 @@
             </div>
             {% endif %}
 
+            {% if mfa_required %}
+            <form method="POST" action="/login/mfa-verify">
+                <input type="hidden" name="challenge_token" value="{{ challenge_token }}">
+                <input type="hidden" name="username" value="{{ username }}">
+                <div style="margin-bottom: 20px;">
+                    <div style="width: 52px; height: 52px; background: rgba(127, 0, 255, 0.15); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; border: 1px solid rgba(127, 0, 255, 0.3);">
+                        <svg width="26" height="26" fill="none" stroke="#e100ff" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="5" y="11" width="14" height="10" rx="2" ry="2"/>
+                            <path d="M8 11V7a4 4 0 018 0v4"/>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.25rem; color: #fff; margin-bottom: 6px; font-weight: 700;">Two-Factor Verification</h3>
+                    <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.4;">Enter the 6-digit code from your authenticator app or an 8-character emergency backup code.</p>
+                </div>
+                <div class="field">
+                    <label for="mfa_code">Security / Recovery Code</label>
+                    <input
+                        type="text"
+                        id="mfa_code"
+                        name="mfa_code"
+                        placeholder="123456 or XXXX-XXXX"
+                        autocomplete="one-time-code"
+                        autofocus
+                        required
+                        style="letter-spacing: 2px; font-size: 1.15rem; text-align: center; font-weight: 700;"
+                    >
+                </div>
+                <button type="submit" class="btn-login" id="mfaVerifyBtn">Verify & Sign In</button>
+                <div style="margin-top: 16px;">
+                    <a href="/login" style="color: var(--text-muted); font-size: 0.82rem; text-decoration: none; transition: color 0.2s;">&larr; Back to login</a>
+                </div>
+            </form>
+            {% else %}
             <form method="POST" action="/login" autocomplete="on">
                 <div class="field">
                     <label for="username">Email address</label>
@@ -472,6 +505,7 @@
                 </div>
                 <button type="submit" class="btn-login" id="loginBtn">Sign In</button>
             </form>
+            {% endif %}
         </div>
 
         <footer>&copy; 2026 VRTServices. All rights reserved.</footer>

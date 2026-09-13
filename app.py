@@ -32,6 +32,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 import traceback
+import pyotp
+import qrcode
 from extractor import run_extraction, extract_check_images
 
 app = FastAPI(title="Bank Statement OCR Extractor")
@@ -525,6 +527,126 @@ def is_user_allowed_on_site(username: str, request: Request) -> tuple[bool, str]
         return True, assigned_subdomain
 
     return False, assigned_subdomain
+
+# ── ROLE-BASED ACCESS CONTROL (RBAC) & MULTI-FACTOR AUTH (TOTP) ─────────────
+ROLE_SUPER_ADMIN = "SUPER_ADMIN"
+ROLE_ADMIN = "ADMIN"
+ROLE_STAFF = "STAFF"
+ROLE_READ_ONLY = "READ_ONLY"
+
+DEFAULT_ROLE_PERMISSIONS = {
+    ROLE_SUPER_ADMIN: ["ALL"],
+    ROLE_ADMIN: ["MANAGE_USERS", "MANAGE_BILLING", "MANAGE_QBO", "EDIT_TRANSACTIONS", "VIEW_REPORTS", "MANAGE_CUSTOMERS"],
+    ROLE_STAFF: ["EDIT_TRANSACTIONS", "VIEW_REPORTS", "MANAGE_CUSTOMERS"],
+    ROLE_READ_ONLY: ["VIEW_REPORTS"]
+}
+
+# Temporary challenge store for MFA logins: challenge_token -> {username, created_at}
+mfa_challenges: dict[str, dict] = {}
+
+def init_client_user_rbac_mfa_tables():
+    """Applies schema migrations to ClientUser table in datalazo PostgreSQL database."""
+    try:
+        conn = get_db_connection("datalazo")
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'ADMIN';
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "permissions" JSONB DEFAULT '[]'::jsonb;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "totpSecret" TEXT;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "totpEnabled" BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "totpEnforced" BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "totpBackupCodes" JSONB DEFAULT '[]'::jsonb;
+                ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "totpConfiguredAt" TIMESTAMP WITH TIME ZONE;
+            """)
+            conn.commit()
+        conn.close()
+        print("[RBAC/MFA SCHEMA INIT] Successfully initialized ClientUser RBAC & MFA columns.")
+    except Exception as e:
+        print(f"[RBAC/MFA SCHEMA INIT WARNING]: {e}")
+
+def get_user_role_and_permissions(username: str) -> tuple[str, list[str]]:
+    """Returns (role, permissions_list) for a given username."""
+    if not username:
+        return ROLE_READ_ONLY, []
+    clean_u = username.strip().lower()
+    if APP_USERNAME and clean_u == APP_USERNAME.lower():
+        return ROLE_SUPER_ADMIN, ["ALL"]
+    
+    user = get_client_user(username)
+    if user:
+        role = (user.get("role") or ROLE_ADMIN).upper()
+        custom_perms = user.get("permissions") or []
+        if isinstance(custom_perms, str):
+            try:
+                custom_perms = json.loads(custom_perms)
+            except Exception:
+                custom_perms = []
+        base_perms = DEFAULT_ROLE_PERMISSIONS.get(role, [])
+        all_perms = list(set(base_perms + custom_perms))
+        return role, all_perms
+    
+    return ROLE_ADMIN, DEFAULT_ROLE_PERMISSIONS[ROLE_ADMIN]
+
+def is_admin_user(username: str) -> bool:
+    role, _ = get_user_role_and_permissions(username)
+    return role in (ROLE_SUPER_ADMIN, ROLE_ADMIN)
+
+def generate_totp_secret() -> str:
+    return pyotp.random_base32()
+
+def get_totp_provisioning_uri(username: str, secret: str) -> str:
+    totp = pyotp.TOTP(secret)
+    return totp.provisioning_uri(name=username, issuer_name="VRTServices")
+
+def generate_qr_code_data_uri(uri: str) -> str:
+    img = qrcode.make(uri)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64_str}"
+
+def verify_totp_code(secret: str, code: str) -> bool:
+    if not secret or not code:
+        return False
+    clean_code = str(code).strip().replace(" ", "").replace("-", "")
+    if len(clean_code) != 6 or not clean_code.isdigit():
+        return False
+    totp = pyotp.TOTP(secret)
+    return totp.verify(clean_code, valid_window=1)
+
+def generate_backup_codes(count: int = 8) -> list[str]:
+    codes = []
+    for _ in range(count):
+        code = secrets.token_hex(4).upper()
+        codes.append(f"{code[:4]}-{code[4:]}")
+    return codes
+
+def verify_and_consume_backup_code(username: str, code: str) -> bool:
+    if not username or not code:
+        return False
+    clean_code = str(code).strip().upper()
+    user = get_client_user(username)
+    if not user:
+        return False
+    backup_codes = user.get("totpBackupCodes") or []
+    if isinstance(backup_codes, str):
+        try:
+            backup_codes = json.loads(backup_codes)
+        except Exception:
+            backup_codes = []
+    if clean_code in backup_codes:
+        backup_codes.remove(clean_code)
+        try:
+            conn = get_db_connection("datalazo")
+            with conn.cursor() as cur:
+                cur.execute('UPDATE "ClientUser" SET "totpBackupCodes" = %s WHERE username = %s;', (json.dumps(backup_codes), username))
+                conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error consuming backup code: {e}")
+        return True
+    return False
 
 # ── Templates ──────────────────────────────────────────────────────────────────
 templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
@@ -2050,13 +2172,9 @@ def init_qbo_db():
             conn.close()
 
     try:
-        conn_dlz = get_db_connection("datalazo")
-        with conn_dlz.cursor() as cur:
-            cur.execute('ALTER TABLE "ClientUser" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT;')
-            conn_dlz.commit()
-        conn_dlz.close()
+        init_client_user_rbac_mfa_tables()
     except Exception as e_col:
-        print(f"sessionToken column check: {e_col}")
+        print(f"RBAC/MFA column init check: {e_col}")
 
 init_qbo_db()
 
@@ -2332,6 +2450,23 @@ async def login_submit(
                     user_agent = request.headers.get("user-agent", "")
                     update_terms_accepted(username_clean, client_ip, user_agent)
             
+            # Check 2FA / TOTP status
+            if user.get("totpEnabled"):
+                challenge_token = secrets.token_urlsafe(32)
+                mfa_challenges[challenge_token] = {
+                    "username": username_clean,
+                    "created_at": datetime.datetime.now()
+                }
+                return templates.TemplateResponse(
+                    request=request,
+                    name="login.html",
+                    context={
+                        "mfa_required": True,
+                        "challenge_token": challenge_token,
+                        "username": username_clean
+                    }
+                )
+
             # Create single active session and redirect
             token = create_user_session(username_clean)
             
@@ -2404,6 +2539,217 @@ async def login_submit(
         },
         status_code=401,
     )
+
+@app.post("/login/mfa-verify")
+async def login_mfa_verify(
+    request: Request,
+    challenge_token: str = Form(...),
+    mfa_code: str = Form(...),
+    username: str = Form(...)
+):
+    clean_u = username.strip()
+    c_info = mfa_challenges.get(challenge_token)
+    if not c_info or c_info.get("username").lower() != clean_u.lower():
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "2FA verification session expired. Please log in again.",
+                "username": clean_u
+            },
+            status_code=400
+        )
+
+    # Check 5 minute expiration
+    now = datetime.datetime.now()
+    if (now - c_info["created_at"]).total_seconds() > 300:
+        mfa_challenges.pop(challenge_token, None)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "2FA verification code challenge timed out. Please try logging in again.",
+                "username": clean_u
+            },
+            status_code=400
+        )
+
+    user = get_client_user(clean_u)
+    if not user:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "User account not found.", "username": clean_u},
+            status_code=400
+        )
+
+    secret = user.get("totpSecret")
+    is_valid = verify_totp_code(secret, mfa_code) or verify_and_consume_backup_code(clean_u, mfa_code)
+    
+    if not is_valid:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "mfa_required": True,
+                "challenge_token": challenge_token,
+                "username": clean_u,
+                "error": "Invalid 2FA verification code or backup code. Please try again."
+            },
+            status_code=400
+        )
+
+    # Success! Consume challenge
+    mfa_challenges.pop(challenge_token, None)
+
+    token = create_user_session(clean_u)
+    client_ip = get_real_client_ip(request)
+    user_agent = request.headers.get("user-agent", "")
+    site_host = get_request_host(request)
+    record_login(clean_u, site_host, client_ip, user_agent)
+    log_audit_event(clean_u, "USER_LOGIN_MFA", "User", clean_u, {"site": site_host, "mfa": True}, client_ip)
+
+    response = RedirectResponse("/dashboard", status_code=302)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,   # 8 hours
+    )
+    return response
+
+# ── MFA PROFILE API ENDPOINTS ────────────────────────────────────────────────
+@app.get("/api/user/mfa/setup")
+async def get_mfa_setup(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    secret = generate_totp_secret()
+    uri = get_totp_provisioning_uri(username, secret)
+    qr_data_uri = generate_qr_code_data_uri(uri)
+    
+    return {
+        "status": "success",
+        "secret": secret,
+        "provisioning_uri": uri,
+        "qr_code": qr_data_uri
+    }
+
+@app.post("/api/user/mfa/enable")
+async def enable_mfa(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    payload = await request.json()
+    secret = payload.get("secret")
+    code = payload.get("code")
+    
+    if not secret or not code:
+        raise HTTPException(status_code=400, detail="Secret and 6-digit code are required.")
+    
+    if not verify_totp_code(secret, code):
+        raise HTTPException(status_code=400, detail="Invalid 6-digit verification code. Please check your authenticator app and try again.")
+    
+    backup_codes = generate_backup_codes(8)
+    
+    conn = None
+    try:
+        conn = get_db_connection("datalazo")
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE "ClientUser"
+                SET "totpSecret" = %s,
+                    "totpEnabled" = TRUE,
+                    "totpBackupCodes" = %s,
+                    "totpConfiguredAt" = CURRENT_TIMESTAMP
+                WHERE username = %s;
+            """, (secret, json.dumps(backup_codes), username))
+            conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to enable MFA: {e}")
+    finally:
+        if conn: conn.close()
+    
+    log_audit_event(username, "MFA_ENABLED", "User", username, {"action": "enable"}, request=request)
+    return {
+        "status": "success",
+        "message": "Two-Factor Authentication enabled successfully.",
+        "backup_codes": backup_codes
+    }
+
+@app.post("/api/user/mfa/disable")
+async def disable_mfa(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    payload = await request.json()
+    password = payload.get("password")
+    code = payload.get("code")
+    
+    user = get_client_user(username)
+    if not user or not verify_password(password, user["password"]):
+        raise HTTPException(status_code=400, detail="Invalid current password.")
+    
+    secret = user.get("totpSecret")
+    if secret and not verify_totp_code(secret, code) and not verify_and_consume_backup_code(username, code):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code.")
+    
+    conn = None
+    try:
+        conn = get_db_connection("datalazo")
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE "ClientUser"
+                SET "totpEnabled" = FALSE,
+                    "totpSecret" = NULL,
+                    "totpBackupCodes" = '[]'::jsonb,
+                    "totpConfiguredAt" = NULL
+                WHERE username = %s;
+            """, (username,))
+            conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disable MFA: {e}")
+    finally:
+        if conn: conn.close()
+    
+    log_audit_event(username, "MFA_DISABLED", "User", username, {"action": "disable"}, request=request)
+    return {"status": "success", "message": "Two-Factor Authentication has been disabled."}
+
+@app.post("/api/user/mfa/regenerate-backup-codes")
+async def regenerate_backup_codes_endpoint(request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    payload = await request.json()
+    code = payload.get("code")
+    
+    user = get_client_user(username)
+    if not user or not user.get("totpEnabled"):
+        raise HTTPException(status_code=400, detail="MFA is not enabled on this account.")
+    
+    secret = user.get("totpSecret")
+    if not verify_totp_code(secret, code):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code.")
+    
+    new_codes = generate_backup_codes(8)
+    conn = None
+    try:
+        conn = get_db_connection("datalazo")
+        with conn.cursor() as cur:
+            cur.execute('UPDATE "ClientUser" SET "totpBackupCodes" = %s WHERE username = %s;', (json.dumps(new_codes), username))
+            conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate backup codes: {e}")
+    finally:
+        if conn: conn.close()
+    
+    log_audit_event(username, "MFA_BACKUP_CODES_REGENERATED", "User", username, {}, request=request)
+    return {"status": "success", "backup_codes": new_codes}
 
 @app.get("/logout")
 async def logout(request: Request, reason: str = ""):
@@ -2574,6 +2920,11 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             ca = user.get("createdAt")
             created_at_fmt = ca.strftime("%b %d, %Y") if hasattr(ca, "strftime") else str(ca)
 
+        user_role, user_perms = get_user_role_and_permissions(username)
+        is_admin = is_admin_user(username)
+        is_super_admin = user_role == ROLE_SUPER_ADMIN
+        totp_enabled = bool(user.get("totpEnabled")) if user else False
+
         client_user_data = {
             "id": (user.get("id") or "") if user else "",
             "username": username,
@@ -2587,7 +2938,12 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "monthly_usage_actual": user.get("monthlyUsageActual", 0) if user else 0,
             "monthly_usage_previous": user.get("monthlyUsagePrevious", 0) if user else 0,
             "terms_accepted": bool(user.get("termsAccepted")) if user else False,
-            "created_at": created_at_fmt
+            "created_at": created_at_fmt,
+            "role": user_role,
+            "permissions": user_perms,
+            "is_admin": is_admin,
+            "is_super_admin": is_super_admin,
+            "totp_enabled": totp_enabled
         }
 
         return {
@@ -2601,7 +2957,11 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "qbo_realm_id": qbo_realm_id or "",
             "qbo_company_name": qbo_company_name or "",
             "resend_reply_to_email": ctx_reply_to,
-            "client_user": client_user_data
+            "client_user": client_user_data,
+            "user_role": user_role,
+            "is_admin": is_admin,
+            "is_super_admin": is_super_admin,
+            "totp_enabled": totp_enabled
         }
     except Exception as e:
         import traceback
@@ -2684,6 +3044,12 @@ async def read_customers_page(request: Request, msg: str = "", error: str = ""):
 @app.get("/billing", response_class=HTMLResponse)
 @app.get("/invoices", response_class=HTMLResponse)
 async def read_billing_page(request: Request, msg: str = "", error: str = ""):
+    username = get_current_username(request)
+    if not username:
+        return RedirectResponse("/login", status_code=302)
+    if not is_admin_user(username):
+        return RedirectResponse("/dashboard?error=Access+Denied:+Billing+settings+are+restricted+to+ADMIN+users", status_code=302)
+
     ctx = prepare_dashboard_context(request)
     if isinstance(ctx, RedirectResponse):
         return ctx
@@ -8637,9 +9003,16 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
     </div>
     """
 
+def check_billing_admin_access(request: Request):
+    username = get_current_username(request)
+    if not username or not is_admin_user(username):
+        raise HTTPException(status_code=403, detail="Access Denied: Billing settings are restricted to ADMIN users.")
+    return username
+
 @app.get("/api/billing/overview")
-async def get_billing_overview():
+async def get_billing_overview(request: Request):
     """Returns overall financial summary metrics for billing tab."""
+    check_billing_admin_access(request)
     conn = None
     try:
         conn = get_db_connection()
@@ -8678,14 +9051,17 @@ async def get_billing_overview():
                 stats["active_schedules"] = 0
 
             return dict(stats)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.get("/api/billing/schedules")
-async def list_billing_schedules():
+async def list_billing_schedules(request: Request):
     """List all recurring billing schedules with customer details."""
+    check_billing_admin_access(request)
     conn = None
     try:
         conn = get_db_connection()
@@ -8702,6 +9078,8 @@ async def list_billing_schedules():
             rows = cur.fetchall()
             schedules = [dict(r) | {"created_at": str(r["created_at"]), "updated_at": str(r["updated_at"])} for r in rows]
             return {"schedules": schedules, "data": schedules}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -8710,6 +9088,7 @@ async def list_billing_schedules():
 @app.post("/api/billing/schedules")
 async def create_billing_schedule(request: Request):
     """Create a recurring monthly billing schedule for a customer."""
+    check_billing_admin_access(request)
     payload = await request.json()
     customer_id = payload.get("customer_id")
     billing_amount = float(payload.get("billing_amount") or 0.0)
@@ -8738,14 +9117,17 @@ async def create_billing_schedule(request: Request):
             row = cur.fetchone()
             conn.commit()
             return {"status": "success", "schedule_id": row["id"]}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.delete("/api/billing/schedules/{schedule_id}")
-async def delete_billing_schedule(schedule_id: str):
+async def delete_billing_schedule(schedule_id: str, request: Request):
     """Deletes or deactivates a billing schedule."""
+    check_billing_admin_access(request)
     conn = None
     try:
         sid = int(str(schedule_id).strip())
@@ -8756,6 +9138,8 @@ async def delete_billing_schedule(schedule_id: str):
             return {"status": "success", "message": f"Schedule #{sid} deleted."}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid schedule ID.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -8764,6 +9148,7 @@ async def delete_billing_schedule(schedule_id: str):
 @app.put("/api/billing/schedules/{schedule_id}")
 async def update_billing_schedule(schedule_id: str, request: Request):
     """Update an existing recurring monthly billing schedule."""
+    check_billing_admin_access(request)
     try:
         sid = int(str(schedule_id).strip())
     except ValueError:
@@ -8803,14 +9188,17 @@ async def update_billing_schedule(schedule_id: str, request: Request):
             """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status, sid))
             conn.commit()
             return {"status": "success", "message": f"Schedule #{sid} updated successfully."}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.get("/api/billing/invoices")
-async def list_invoices(status: str = "ALL", customer_id: str = None):
+async def list_invoices(request: Request, status: str = "ALL", customer_id: str = None):
     """List invoices with optional status and customer filter."""
+    check_billing_admin_access(request)
     conn = None
     try:
         cid = None
@@ -8853,6 +9241,8 @@ async def list_invoices(status: str = "ALL", customer_id: str = None):
                 row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
                 res.append(row)
             return {"invoices": res, "data": res}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -8861,6 +9251,7 @@ async def list_invoices(status: str = "ALL", customer_id: str = None):
 @app.post("/api/billing/invoices")
 async def create_manual_invoice(request: Request):
     """Create a manual one-off invoice and optionally send immediately."""
+    check_billing_admin_access(request)
     payload = await request.json()
     customer_id = payload.get("customer_id")
     amount = float(payload.get("amount") or 0.0)
@@ -8921,14 +9312,17 @@ async def create_manual_invoice(request: Request):
                         print(f"Error sending manual invoice email: {e_send}")
 
             return {"status": "success", "invoice_id": inv_id, "invoice_number": inv_number}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
 
 @app.post("/api/billing/invoices/{invoice_id}/send")
-async def send_invoice_email(invoice_id: str):
+async def send_invoice_email(invoice_id: str, request: Request):
     """Sends or resends an invoice to customer via Resend API."""
+    check_billing_admin_access(request)
     conn = None
     try:
         conn = get_db_connection()
@@ -9011,6 +9405,7 @@ def revert_schedule_last_billed_at_if_needed(cur, schedule_id: int, target_invoi
 @app.post("/api/billing/invoices/{invoice_id}/status")
 async def update_invoice_status(invoice_id: str, request: Request):
     """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes, reverting recurring schedule last_billed_at if voided."""
+    check_billing_admin_access(request)
     payload = await request.json()
     new_status = (payload.get("status") or "PAID").upper()
     payment_method = payload.get("payment_method") or "ACH / Bank Transfer"
@@ -9066,8 +9461,9 @@ async def update_invoice_status(invoice_id: str, request: Request):
         if conn: conn.close()
 
 @app.delete("/api/billing/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str):
+async def delete_invoice(invoice_id: str, request: Request):
     """Deletes an invoice record, reverting recurring schedule last_billed_at if associated."""
+    check_billing_admin_access(request)
     conn = None
     try:
         conn = get_db_connection()
@@ -9091,8 +9487,9 @@ async def delete_invoice(invoice_id: str):
         if conn: conn.close()
 
 @app.get("/api/billing/invoices/{invoice_id}/view", response_class=HTMLResponse)
-async def view_invoice_html(invoice_id: str):
+async def view_invoice_html(invoice_id: str, request: Request):
     """Renders standalone HTML printable invoice page."""
+    check_billing_admin_access(request)
     conn = None
     try:
         conn = get_db_connection()
