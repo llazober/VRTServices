@@ -974,13 +974,13 @@
                     <span>📩</span> <span id="headerUnreadCountText">0 New Replies</span>
                 </div>
 
-                <div class="user-profile">
+                <div class="user-profile" onclick="openSecurityModal()" style="cursor: pointer; user-select: none;" title="Click to manage 2FA & Security Settings">
                     <div class="user-avatar" title="{{ user_email or username }}">
                         {{ (user_email or username or 'U')[0]|upper }}
                     </div>
                     <div class="user-info">
                         <span class="user-name">{{ user_email or username }}</span>
-                        <span class="user-role">{{ parent_name }} &bull; <strong style="color: #e100ff;">{{ user_role or 'ADMIN' }}</strong></span>
+                        <span class="user-role">{{ parent_name }} &bull; <strong style="color: #e100ff; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;">{{ user_role or 'ADMIN' }}</strong></span>
                     </div>
                 </div>
 
@@ -9221,9 +9221,15 @@
 
     <script>
         function openSecurityModal() {
+            console.log("[SECURITY MODAL] Opening Account & Security Settings modal...");
             const modal = document.getElementById('securityModal');
             if (modal) {
                 modal.style.display = 'flex';
+                modal.style.opacity = '1';
+                modal.style.zIndex = '2147483647';
+            } else {
+                console.error("[SECURITY MODAL ERROR] Element #securityModal not found in DOM");
+                alert("Account & Security Settings modal could not be found.");
             }
         }
         function closeSecurityModal() {
