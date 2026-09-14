@@ -5961,43 +5961,19 @@ async def get_customer_storage_files(customer_id: str, request: Request, prefix:
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         response = client.list_objects_v2(Bucket=bucket, Prefix=current_prefix, Delimiter='/')
 
-        PROTECTED_SYSTEM_FOLDERS = {"inbox", "bank statements", "check images", "tax documents", "esignatures"}
-        is_at_root = (current_prefix == root_folder_path)
-
         subfolders = []
         for cp in response.get('CommonPrefixes', []):
             folder_key = cp['Prefix']
             folder_name = folder_key[len(current_prefix):].rstrip('/')
             if folder_name:
-                is_protected = is_at_root and (folder_name.lower() in PROTECTED_SYSTEM_FOLDERS)
                 subfolders.append({
                     "name": folder_name,
                     "prefix": folder_key,
                     "is_folder": True,
-                    "is_protected": is_protected
+                    "is_protected": False
                 })
 
-        # Guarantee core standard folders are always present and visible in customer root
-        if current_prefix == root_folder_path:
-            existing_folder_names = {sf["name"].rstrip('/') for sf in subfolders}
-            is_individual = (cust.get("customer_type") or "").strip().lower() == "individual"
-            standard_folders = ["Inbox", "Tax Documents", "ESignatures"] if is_individual else ["Inbox", "Bank Statements", "Check Images", "Tax Documents", "ESignatures"]
-            
-            for std_f in standard_folders:
-                if std_f not in existing_folder_names:
-                    std_prefix = f"{root_folder_path}{std_f}/"
-                    subfolders.append({
-                        "name": std_f,
-                        "prefix": std_prefix,
-                        "is_folder": True,
-                        "is_protected": True
-                    })
-                    try:
-                        client.put_object(Bucket=bucket, Key=std_prefix, Body=b'')
-                    except Exception:
-                        pass
-
-            subfolders = sorted(subfolders, key=lambda x: x["name"].lower())
+        subfolders = sorted(subfolders, key=lambda x: x["name"].lower())
 
         files = []
         for obj in response.get('Contents', []):
@@ -6845,14 +6821,7 @@ async def delete_customer_storage_folder(customer_id: str, prefix: str, request:
         if folder_prefix == root_folder:
             raise HTTPException(status_code=403, detail="Forbidden: Cannot delete the customer's root folder")
 
-        # Protection: Cannot delete standard system default folders
-        PROTECTED_SYSTEM_FOLDERS = {"inbox", "bank statements", "check images", "tax documents", "esignatures"}
-        relative_path = folder_prefix[len(root_folder):].rstrip("/")
-        if "/" not in relative_path and relative_path.lower() in PROTECTED_SYSTEM_FOLDERS:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Forbidden: System folder '{relative_path}' is protected and cannot be deleted."
-            )
+
 
         client, err = get_s3_client()
         if not client:
