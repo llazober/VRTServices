@@ -11256,29 +11256,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                             cust = found_email_cust
                             print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by sender email '{clean_s_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
 
-                # Tier 2.5: Safely match ClientUser email in datalazo database (if ClientUser has an assigned customerId)
-                if not cust and sender_email:
-                    try:
-                        conn_dlz = get_db_connection("datalazo")
-                        with conn_dlz.cursor(cursor_factory=RealDictCursor) as cur_dlz:
-                            cur_dlz.execute("""
-                                SELECT u."customerId"
-                                FROM "ClientUser" u
-                                WHERE LOWER(u.email) = LOWER(%s) AND u."customerId" IS NOT NULL
-                                LIMIT 1;
-                            """, (sender_email,))
-                            cu_match = cur_dlz.fetchone()
-                            if cu_match and cu_match.get("customerId"):
-                                matched_cid = cu_match["customerId"]
-                                cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE id = %s;", (matched_cid,))
-                                cust = cur.fetchone()
-                                if cust:
-                                    print(f"[RESEND INBOUND ROUTING] Tier 2.5 SUCCESS match ClientUser email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
-                        conn_dlz.close()
-                    except Exception as e_dlz:
-                        print(f"[RESEND INBOUND ROUTING] Tier 2.5 ClientUser lookup notice: {e_dlz}")
-
-                # Tier 3: Default Catch-All Customer (CUST-0000)
+                # Tier 3: Default Catch-All Customer (CUST-0000) for Unassigned Inbound Emails
                 if not cust:
                     cur.execute("""
                         SELECT id, legal_name, parent_name, customer_type FROM customer 
