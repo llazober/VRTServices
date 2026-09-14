@@ -6297,9 +6297,8 @@
             if (extBtn) extBtn.href = inlineViewUrl;
             if (dlBtn) dlBtn.href = downloadUrl;
 
-            if (modal.parentElement !== document.body) {
-                document.body.appendChild(modal);
-            }
+            // Unconditionally append to body so pdfViewerModal is moved to the end of DOM and renders on top of all open modals
+            document.body.appendChild(modal);
             modal.style.zIndex = '2147483655';
             modal.style.display = 'flex';
             modal.style.opacity = '1';
