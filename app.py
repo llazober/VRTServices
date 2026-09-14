@@ -1445,6 +1445,11 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
             if not cust_matches:
                 return "", []
 
+            now = datetime.datetime.now()
+            actual_month_str = now.strftime("%Y-%m")
+            actual_month_label = now.strftime("%B %Y")
+            current_year_str = str(now.year)
+
             for cust in cust_matches:
                 cid = cust["id"]
                 c_num = cust.get("custumer_number") or f"CUST-{cid}"
@@ -1452,60 +1457,67 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
                 c_type = (cust.get("customer_type") or "Business").strip()
                 status = cust.get("status") or "Active"
 
+                # Priority: Fetch checklist for Actual Month / Current Period
                 cur.execute("""
                     SELECT * FROM customer_task_checklist
                     WHERE customer_id = %s
-                    ORDER BY period DESC LIMIT 5;
-                """, (cid,))
-                checklists = cur.fetchall() or []
+                    ORDER BY 
+                      CASE WHEN period = %s THEN 1
+                           WHEN period = %s THEN 2
+                           ELSE 3
+                      END, period DESC
+                    LIMIT 1;
+                """, (cid, actual_month_str, current_year_str))
+                actual_chk = cur.fetchone()
 
                 cur.execute("""
                     SELECT category, title, due_date, status
                     FROM compliance_calendar_events
                     WHERE customer_id = %s
-                    ORDER BY due_date DESC LIMIT 10;
+                    ORDER BY 
+                        CASE WHEN LOWER(COALESCE(status, 'pending')) = 'pending' THEN 1 ELSE 2 END,
+                        due_date ASC
+                    LIMIT 5;
                 """, (cid,))
                 events = cur.fetchall() or []
 
                 block_lines = [
-                    f"=== LIVE DATABASE CUSTOMER STATUS: {legal} ({c_num}) ===",
+                    f"=== LIVE DATABASE CUSTOMER STATUS (ACTUAL MONTH: {actual_month_label}): {legal} ({c_num}) ===",
                     f"- Account Type: {c_type}",
                     f"- Account Status: {status}"
                 ]
 
-                if checklists:
-                    block_lines.append("\n--- Task Checklist History (Live Database) ---")
-                    for chk in checklists:
-                        period = chk.get("period", "Current")
-                        block_lines.append(f"Period [{period}]:")
-                        
-                        is_ind = c_type.lower() in ("individual", "joint account")
-                        if not is_ind:
-                            bk_stmt = "[x] Completed" if chk.get("bank_statement_received") else "[ ] Pending"
-                            chk_imgs = "[x] Completed" if chk.get("check_images_received") else "[ ] Pending"
-                            ai_ext = "[x] Completed" if chk.get("extraction_ai_categorization_done") else "[ ] Pending"
-                            acc_rev = "[x] Completed" if chk.get("accountant_reviewed") else "[ ] Pending"
-                            block_lines.append(f"  [Bookkeeping Steps] Bank Stmt: {bk_stmt} | Check Imgs: {chk_imgs} | AI Extracted: {ai_ext} | Accountant Review: {acc_rev}")
-                            if chk.get("notes"):
-                                block_lines.append(f"  [Bookkeeping Notes]: {chk.get('notes')}")
+                if actual_chk:
+                    chk_period = actual_chk.get("period", actual_month_str)
+                    block_lines.append(f"\n--- Task Checklist for Actual Period [{chk_period} ({actual_month_label})] ---")
+                    
+                    is_ind = c_type.lower() in ("individual", "joint account")
+                    if not is_ind:
+                        bk_stmt = "[x] Completed" if actual_chk.get("bank_statement_received") else "[ ] Pending"
+                        chk_imgs = "[x] Completed" if actual_chk.get("check_images_received") else "[ ] Pending"
+                        ai_ext = "[x] Completed" if actual_chk.get("extraction_ai_categorization_done") else "[ ] Pending"
+                        acc_rev = "[x] Completed" if actual_chk.get("accountant_reviewed") else "[ ] Pending"
+                        block_lines.append(f"  [Bookkeeping Steps] Bank Stmt: {bk_stmt} | Check Imgs: {chk_imgs} | AI Extracted: {ai_ext} | Accountant Review: {acc_rev}")
+                        if actual_chk.get("notes"):
+                            block_lines.append(f"  [Bookkeeping Notes]: {actual_chk.get('notes')}")
 
-                        t_req = "[x] Completed" if chk.get("tax_docs_requested") else "[ ] Pending"
-                        t_rec = "[x] Completed" if chk.get("tax_docs_received") else "[ ] Pending"
-                        t_org = "[x] Completed" if chk.get("tax_organizer") else "[ ] Pending"
-                        t_prep = "[x] Completed" if chk.get("tax_preparation") else "[ ] Pending"
-                        t_rev = "[x] Completed" if chk.get("tax_review") else "[ ] Pending"
-                        t_sig = "[x] Completed" if chk.get("tax_client_signature") else "[ ] Pending"
-                        t_efile = "[x] Completed" if chk.get("tax_efile") else "[ ] Pending"
-                        t_acc = "[x] Completed" if chk.get("tax_accepted") else "[ ] Pending"
-                        
-                        block_lines.append(f"  [Tax Workflow Steps] Docs Requested: {t_req} | Docs Received: {t_rec} | Tax Organizer: {t_org} | Tax Prep: {t_prep} | Tax Review: {t_rev} | Client Signature: {t_sig} | E-File: {t_efile} | IRS/State Accepted: {t_acc}")
-                        if chk.get("tax_notes"):
-                            block_lines.append(f"  [Tax Notes]: {chk.get('tax_notes')}")
+                    t_req = "[x] Completed" if actual_chk.get("tax_docs_requested") else "[ ] Pending"
+                    t_rec = "[x] Completed" if actual_chk.get("tax_docs_received") else "[ ] Pending"
+                    t_org = "[x] Completed" if actual_chk.get("tax_organizer") else "[ ] Pending"
+                    t_prep = "[x] Completed" if actual_chk.get("tax_preparation") else "[ ] Pending"
+                    t_rev = "[x] Completed" if actual_chk.get("tax_review") else "[ ] Pending"
+                    t_sig = "[x] Completed" if actual_chk.get("tax_client_signature") else "[ ] Pending"
+                    t_efile = "[x] Completed" if actual_chk.get("tax_efile") else "[ ] Pending"
+                    t_acc = "[x] Completed" if actual_chk.get("tax_accepted") else "[ ] Pending"
+                    
+                    block_lines.append(f"  [Tax Workflow Steps] Docs Requested: {t_req} | Docs Received: {t_rec} | Tax Organizer: {t_org} | Tax Prep: {t_prep} | Tax Review: {t_rev} | Client Signature: {t_sig} | E-File: {t_efile} | IRS/State Accepted: {t_acc}")
+                    if actual_chk.get("tax_notes"):
+                        block_lines.append(f"  [Tax Notes]: {actual_chk.get('tax_notes')}")
                 else:
-                    block_lines.append("\n- Task Checklist: No checklist records created yet.")
+                    block_lines.append(f"\n- Task Checklist [{actual_month_label}]: No checklist started for this actual month yet.")
 
                 if events:
-                    block_lines.append("\n--- Compliance & Tax Deadlines ---")
+                    block_lines.append(f"\n--- Active Deadlines ({actual_month_label}) ---")
                     for ev in events:
                         due_str = ev["due_date"].isoformat() if ev.get("due_date") else "No date"
                         ev_stat = ev.get("status") or "Pending"
@@ -1515,10 +1527,10 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
                 context_blocks.append(block_text)
                 citations.append({
                     "source_id": f"Live DB Customer {c_num}",
-                    "title": f"Live Customer Checklist & Status: {legal} ({c_num})",
-                    "category": "Live Database Customer Checklist",
+                    "title": f"Actual Month Checklist & Status ({actual_month_label}): {legal} ({c_num})",
+                    "category": "Live Customer Actual Month Checklist",
                     "chunk_index": 0,
-                    "filename": f"Customer_{c_num}_Checklist",
+                    "filename": f"Customer_{c_num}_ActualMonth",
                     "score": 1.0,
                     "snippet": block_text[:250] + "..."
                 })
@@ -1629,7 +1641,7 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
                         "Rules:\n"
                         "1. Cite sources using document sources or [Live DB Customer CUST-XXXX], matching the provided sources.\n"
                         "2. Provide clear, professional, well-structured markdown answers.\n"
-                        "3. When answering about a customer's checklist or compliance status, clearly list completed vs pending steps, and summarize overall progress.\n"
+                        "3. When answering about a customer's checklist or compliance status, focus exclusively on the Actual Month (current period) status, clearly listing completed vs pending steps for the current month/period, without listing historical past months unless specifically requested.\n"
                         "4. If the context does not contain enough information, synthesize a helpful response while clearly noting what was retrieved."
                     )
                 },
