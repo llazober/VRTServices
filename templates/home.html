@@ -977,9 +977,6 @@
     <div id="clientPortalModal" style="display: none; position: fixed; inset: 0; background: rgba(5, 7, 13, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
         <div style="background: #0e1322; border: 1px solid rgba(0, 242, 254, 0.35); border-radius: 24px; max-width: 580px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(0,242,254,0.15); color: #fff; overflow: hidden; position: relative;">
             
-            <!-- Close Button -->
-            <button onclick="closeClientPortalModal()" style="position: absolute; top: 18px; right: 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;">✕</button>
-
             <!-- STEP 1: Customer ID Authentication View -->
             <div id="portalStep1Auth" style="padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">
                 <div style="display: flex; align-items: center; gap: 14px;">
@@ -1012,8 +1009,11 @@
                     Sign In to Inbox ➔
                 </button>
 
-                <div style="font-size: 0.76rem; color: #64748b; text-align: center; line-height: 1.4;">
-                    💡 Don't know your Customer ID? Check your recent invoice or email from VRT Services.
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 10px;">
+                    <div style="font-size: 0.76rem; color: #64748b; line-height: 1.4;">
+                        💡 Don't know your Customer ID? Check your recent invoice or email from VRT Services.
+                    </div>
+                    <button onclick="closeClientPortalModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 0.78rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap;">Exit</button>
                 </div>
             </div>
 
@@ -1032,8 +1032,8 @@
                             ID: <strong id="portalCustomerRefText" style="color: #38bdf8;">CUST-1001</strong>
                         </div>
                     </div>
-                    <button onclick="resetClientPortalModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.74rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
-                        Change ID
+                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; font-size: 0.76rem; font-weight: 800; padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                        🚪 Log Out
                     </button>
                 </div>
 
@@ -1064,7 +1064,7 @@
 
                 <!-- Actions -->
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
-                    <button onclick="closeClientPortalModal()" style="background: rgba(255,255,255,0.08); border: none; color: #cbd5e1; padding: 10px 18px; border-radius: 10px; font-size: 0.84rem; font-weight: 700; cursor: pointer;">Close</button>
+                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.16); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; padding: 10px 18px; border-radius: 10px; font-size: 0.84rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">🚪 Log Out & Exit</button>
                     <button id="btnPortalSubmitUpload" onclick="uploadSelectedFilesToInbox()" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; padding: 10px 22px; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 6px;">
                         🚀 Upload to Inbox Folder
                     </button>
@@ -1144,6 +1144,11 @@
             document.getElementById('portalFilesContainer').style.display = 'none';
             document.getElementById('portalUploadStatus').style.display = 'none';
             showPortalStep1();
+        };
+
+        window.logoutAndExitClientPortal = function() {
+            resetClientPortalModal();
+            closeClientPortalModal();
         };
 
         window.handlePortalAuthKeyDown = function(e) {
