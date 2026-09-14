@@ -347,18 +347,43 @@ def create_user_session(username: str) -> str:
     }
     active_user_tokens[username_clean] = token
 
-    # Persist session token in database so server redeployments/restarts keep users logged in
+    # 1. Persist session token in primary DB active_sessions table so all accounts survive server restarts
     conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    username TEXT PRIMARY KEY,
+                    session_token TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("""
+                INSERT INTO active_sessions (username, session_token, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (username) DO UPDATE SET
+                    session_token = EXCLUDED.session_token,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (username_clean, token))
+            conn.commit()
+    except Exception as e:
+        print(f"Database error updating active_sessions: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+    # 2. Also update ClientUser in datalazo DB if present
     try:
         conn = get_db_connection("datalazo")
         with conn.cursor() as cur:
             cur.execute(
-                'UPDATE "ClientUser" SET "sessionToken" = %s WHERE username = %s;',
+                'UPDATE "ClientUser" SET "sessionToken" = %s WHERE LOWER(username) = LOWER(%s);',
                 (token, username_clean)
             )
             conn.commit()
     except Exception as e:
-        print(f"Database error updating sessionToken: {e}")
+        pass
     finally:
         if conn:
             conn.close()
@@ -384,8 +409,32 @@ def get_current_session_info(request: Request) -> tuple[str | None, str | None, 
         if active_user_tokens.get(username) == token:
             return token, username, None
 
-    # Fallback lookup in DB if server was restarted and in-memory dicts were reset
+    # Fallback 1: Lookup in active_sessions table across server restarts
     conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    username TEXT PRIMARY KEY,
+                    session_token TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("SELECT username FROM active_sessions WHERE session_token = %s;", (token,))
+            row = cur.fetchone()
+            if row and row.get("username"):
+                username_clean = row.get("username")
+                valid_sessions[token] = {"username": username_clean}
+                active_user_tokens[username_clean] = token
+                return token, username_clean, None
+    except Exception as e:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+    # Fallback 2: Lookup in ClientUser table in datalazo DB
     try:
         conn = get_db_connection("datalazo")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -2756,11 +2805,19 @@ async def logout(request: Request, reason: str = ""):
     token = request.cookies.get(COOKIE_NAME)
     if token:
         sess = valid_sessions.pop(token, None)
-        if sess and isinstance(sess, dict) and "username" in sess:
-            username = sess["username"]
+        username = sess.get("username") if isinstance(sess, dict) else None
+        if username:
             log_audit_event(username, "USER_LOGOUT", "User", username, {"reason": reason or "user_action"}, request=request)
             if active_user_tokens.get(username) == token:
                 active_user_tokens.pop(username, None)
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM active_sessions WHERE username = %s;", (username,))
+                    conn.commit()
+                conn.close()
+            except Exception:
+                pass
                 
     redirect_url = "/login"
     if reason == "concurrent":
