@@ -6300,17 +6300,7 @@
             if (modal.parentElement !== document.body) {
                 document.body.appendChild(modal);
             }
-
-            const commsModal = document.getElementById('customerCommsHistoryModal');
-            const isCommsOpen = commsModal && commsModal.style.display !== 'none' && commsModal.style.display !== '';
-
-            if (isCommsOpen) {
-                commsModal.style.zIndex = '2147483650';
-                modal.style.zIndex = '2147483645';
-            } else {
-                modal.style.zIndex = '2147483649';
-            }
-
+            modal.style.zIndex = '2147483655';
             modal.style.display = 'flex';
             modal.style.opacity = '1';
         }
