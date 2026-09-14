@@ -1410,6 +1410,127 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
         return 0.0
     return dot / (norm1 * norm2)
 
+def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
+    """
+    Extracts live customer task checklist status, customer profile info, and compliance calendar events
+    from the VRT database when a RAG query mentions a specific customer (by name or CUST-XXXX number).
+    """
+    conn = None
+    context_blocks = []
+    citations = []
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cust_matches = []
+            c_num_match = re.search(r'CUST-\d+', query, re.IGNORECASE)
+            if c_num_match:
+                c_num = c_num_match.group(0).upper()
+                cur.execute("SELECT id, custumer_number, legal_name, display_name, customer_type, status, assigned_user_id FROM customer WHERE UPPER(custumer_number) = %s;", (c_num,))
+                cust_matches = cur.fetchall() or []
+
+            if not cust_matches:
+                ignore_words = {'what', 'is', 'the', 'checklist', 'status', 'for', 'customer', 'client', 'check', 'show', 'get', 'me', 'list', 'tax', 'bookkeeping', 'events', 'deadline', 'deadlines', 'review', 'rag', 'progress', 'state'}
+                words = [w for w in re.findall(r'\b[A-Za-z0-9\'-]+\b', query) if w.lower() not in ignore_words and len(w) > 1]
+                if words:
+                    where_clauses = []
+                    params = []
+                    for w in words:
+                        where_clauses.append("(legal_name ILIKE %s OR display_name ILIKE %s OR custumer_number ILIKE %s)")
+                        term = f"%{w}%"
+                        params.extend([term, term, term])
+                    sql = f"SELECT id, custumer_number, legal_name, display_name, customer_type, status, assigned_user_id FROM customer WHERE {' OR '.join(where_clauses)} LIMIT 3;"
+                    cur.execute(sql, tuple(params))
+                    cust_matches = cur.fetchall() or []
+
+            if not cust_matches:
+                return "", []
+
+            for cust in cust_matches:
+                cid = cust["id"]
+                c_num = cust.get("custumer_number") or f"CUST-{cid}"
+                legal = cust.get("legal_name") or cust.get("display_name") or "Unknown"
+                c_type = (cust.get("customer_type") or "Business").strip()
+                status = cust.get("status") or "Active"
+
+                cur.execute("""
+                    SELECT * FROM customer_task_checklist
+                    WHERE customer_id = %s
+                    ORDER BY period DESC LIMIT 5;
+                """, (cid,))
+                checklists = cur.fetchall() or []
+
+                cur.execute("""
+                    SELECT category, title, due_date, status
+                    FROM compliance_calendar_events
+                    WHERE customer_id = %s
+                    ORDER BY due_date DESC LIMIT 10;
+                """, (cid,))
+                events = cur.fetchall() or []
+
+                block_lines = [
+                    f"=== LIVE DATABASE CUSTOMER STATUS: {legal} ({c_num}) ===",
+                    f"- Account Type: {c_type}",
+                    f"- Account Status: {status}"
+                ]
+
+                if checklists:
+                    block_lines.append("\n--- Task Checklist History (Live Database) ---")
+                    for chk in checklists:
+                        period = chk.get("period", "Current")
+                        block_lines.append(f"Period [{period}]:")
+                        
+                        is_ind = c_type.lower() in ("individual", "joint account")
+                        if not is_ind:
+                            bk_stmt = "[x] Completed" if chk.get("bank_statement_received") else "[ ] Pending"
+                            chk_imgs = "[x] Completed" if chk.get("check_images_received") else "[ ] Pending"
+                            ai_ext = "[x] Completed" if chk.get("extraction_ai_categorization_done") else "[ ] Pending"
+                            acc_rev = "[x] Completed" if chk.get("accountant_reviewed") else "[ ] Pending"
+                            block_lines.append(f"  [Bookkeeping Steps] Bank Stmt: {bk_stmt} | Check Imgs: {chk_imgs} | AI Extracted: {ai_ext} | Accountant Review: {acc_rev}")
+                            if chk.get("notes"):
+                                block_lines.append(f"  [Bookkeeping Notes]: {chk.get('notes')}")
+
+                        t_req = "[x] Completed" if chk.get("tax_docs_requested") else "[ ] Pending"
+                        t_rec = "[x] Completed" if chk.get("tax_docs_received") else "[ ] Pending"
+                        t_org = "[x] Completed" if chk.get("tax_organizer") else "[ ] Pending"
+                        t_prep = "[x] Completed" if chk.get("tax_preparation") else "[ ] Pending"
+                        t_rev = "[x] Completed" if chk.get("tax_review") else "[ ] Pending"
+                        t_sig = "[x] Completed" if chk.get("tax_client_signature") else "[ ] Pending"
+                        t_efile = "[x] Completed" if chk.get("tax_efile") else "[ ] Pending"
+                        t_acc = "[x] Completed" if chk.get("tax_accepted") else "[ ] Pending"
+                        
+                        block_lines.append(f"  [Tax Workflow Steps] Docs Requested: {t_req} | Docs Received: {t_rec} | Tax Organizer: {t_org} | Tax Prep: {t_prep} | Tax Review: {t_rev} | Client Signature: {t_sig} | E-File: {t_efile} | IRS/State Accepted: {t_acc}")
+                        if chk.get("tax_notes"):
+                            block_lines.append(f"  [Tax Notes]: {chk.get('tax_notes')}")
+                else:
+                    block_lines.append("\n- Task Checklist: No checklist records created yet.")
+
+                if events:
+                    block_lines.append("\n--- Compliance & Tax Deadlines ---")
+                    for ev in events:
+                        due_str = ev["due_date"].isoformat() if ev.get("due_date") else "No date"
+                        ev_stat = ev.get("status") or "Pending"
+                        block_lines.append(f"  - [{ev_stat.upper()}] {ev['title']} ({ev['category']}) - Due: {due_str}")
+
+                block_text = "\n".join(block_lines)
+                context_blocks.append(block_text)
+                citations.append({
+                    "source_id": f"Live DB Customer {c_num}",
+                    "title": f"Live Customer Checklist & Status: {legal} ({c_num})",
+                    "category": "Live Database Customer Checklist",
+                    "chunk_index": 0,
+                    "filename": f"Customer_{c_num}_Checklist",
+                    "score": 1.0,
+                    "snippet": block_text[:250] + "..."
+                })
+
+    except Exception as e:
+        print(f"Error fetching live customer RAG context: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+    return "\n\n".join(context_blocks), citations
+
 def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict:
     conn = None
     retrieved_chunks = []
@@ -1470,8 +1591,16 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
         if conn:
             conn.close()
 
+    # Fetch Live Customer Checklist & Status Context if query targets a customer
+    cust_context_str, cust_citations = get_live_customer_rag_context(query)
+
     context_blocks = []
     citations = []
+
+    if cust_context_str:
+        context_blocks.append(cust_context_str)
+        citations.extend(cust_citations)
+
     for idx, item in enumerate(retrieved_chunks, 1):
         context_blocks.append(f"--- Document Source [{idx}]: {item['doc_title']} ({item['doc_category']}) ---\n{item['content']}")
         citations.append({
@@ -1484,7 +1613,7 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
             "snippet": item["content"][:200] + "..."
         })
 
-    context_str = "\n\n".join(context_blocks) if context_blocks else "No relevant knowledge base documents found."
+    context_str = "\n\n".join(context_blocks) if context_blocks else "No relevant knowledge base documents or customer records found."
 
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     ai_answer = ""
@@ -1496,16 +1625,17 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
                     "role": "system",
                     "content": (
                         "You are the official VRT Services Knowledge Base & RAG Assistant.\n"
-                        "Your job is to answer user queries accurately based on the provided context retrieved from uploaded documents in the VRT Database.\n"
+                        "Your job is to answer user queries accurately based on the provided context retrieved from uploaded documents and live database records (including customer task checklists and compliance statuses).\n"
                         "Rules:\n"
-                        "1. Cite sources using [Source 1], [Source 2], etc., matching the provided document sources.\n"
+                        "1. Cite sources using document sources or [Live DB Customer CUST-XXXX], matching the provided sources.\n"
                         "2. Provide clear, professional, well-structured markdown answers.\n"
-                        "3. If the context does not contain enough information, synthesize a helpful response using general knowledge while clearly noting what was found in the uploaded documents."
+                        "3. When answering about a customer's checklist or compliance status, clearly list completed vs pending steps, and summarize overall progress.\n"
+                        "4. If the context does not contain enough information, synthesize a helpful response while clearly noting what was retrieved."
                     )
                 },
                 {
                     "role": "user",
-                    "content": f"User Query: {query}\n\nRetrieved Knowledge Base Context from VRT Database:\n{context_str}"
+                    "content": f"User Query: {query}\n\nRetrieved Context from VRT Database:\n{context_str}"
                 }
             ]
 
@@ -1531,14 +1661,20 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
             ai_answer = f"⚠️ Could not reach OpenAI API ({str(e)}). Displaying retrieved VRT Database context below."
 
     if not ai_answer:
-        if retrieved_chunks:
+        if cust_context_str:
+            ai_answer = f"### Live Database Customer Status\n{cust_context_str}\n\n"
+            if retrieved_chunks:
+                ai_answer += "### Knowledge Base Context\n"
+                for c in retrieved_chunks[:3]:
+                    ai_answer += f"**From [{c['doc_title']}]:**\n> {c['content'][:300]}...\n\n"
+        elif retrieved_chunks:
             top_sources = ", ".join(list(set(c['doc_title'] for c in retrieved_chunks)))
             ai_answer = f"### VRT Database Context Summary\nBased on your query **\"{query}\"**, the most relevant context retrieved from VRT Database documents ({top_sources}):\n\n"
             for c in retrieved_chunks[:3]:
                 ai_answer += f"**From [{c['doc_title']}]:**\n> {c['content'][:300]}...\n\n"
             ai_answer += "\n*(Note: Add your `OPENAI_API_KEY` to `.env` to enable full GPT-4o mini natural language synthesis).* "
         else:
-            ai_answer = f"No documents found in VRT Database matching **\"{query}\"**. Please upload relevant documents in the Knowledge Base tab."
+            ai_answer = f"No documents or customer records found in VRT Database matching **\"{query}\"**."
 
     return {
         "query": query,
