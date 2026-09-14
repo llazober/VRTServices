@@ -6300,7 +6300,17 @@
             if (modal.parentElement !== document.body) {
                 document.body.appendChild(modal);
             }
-            modal.style.zIndex = '2147483649';
+
+            const commsModal = document.getElementById('customerCommsHistoryModal');
+            const isCommsOpen = commsModal && commsModal.style.display !== 'none' && commsModal.style.display !== '';
+
+            if (isCommsOpen) {
+                commsModal.style.zIndex = '2147483650';
+                modal.style.zIndex = '2147483645';
+            } else {
+                modal.style.zIndex = '2147483649';
+            }
+
             modal.style.display = 'flex';
             modal.style.opacity = '1';
         }
@@ -6796,6 +6806,11 @@
             if (modal) modal.style.display = 'none';
             const debugBox = document.getElementById('webhookDebugLogBox');
             if (debugBox) debugBox.remove();
+
+            const pdfModal = document.getElementById('pdfViewerModal');
+            if (pdfModal && pdfModal.style.display !== 'none') {
+                pdfModal.style.zIndex = '2147483649';
+            }
         }
 
         async function toggleWebhookLogInspector(event) {
