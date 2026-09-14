@@ -5450,15 +5450,24 @@
             } else {
                 // Render Subfolders — use data-prefix to avoid inline escaping issues
                 subfolders.forEach(sf => {
+                    const cleanName = (sf.name || '').toLowerCase().replace('/', '').trim();
+                    const isProtected = sf.is_protected || (currentStoragePrefix === currentStorageRootFolder && ['inbox', 'bank statements', 'check images', 'tax documents', 'esignatures'].includes(cleanName));
+
+                    const deleteBtnHtml = isProtected
+                        ? `<button disabled style="padding: 4px 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); color: #64748b; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: not-allowed; opacity: 0.65;" title="System default folder is protected and cannot be deleted">🔒 System</button>`
+                        : `<button class="storage-delete-folder-btn" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-name="${sf.name.replace(/"/g, '&quot;')}" data-cid="${cid}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete folder and all its contents">🗑️</button>`;
+
+                    const systemBadge = isProtected ? `<span style="font-size:0.65rem; background:rgba(56, 189, 248, 0.12); border:1px solid rgba(56, 189, 248, 0.3); color:#38bdf8; padding:1px 6px; border-radius:4px; font-weight:600; text-transform:uppercase; margin-left:4px;">System</span>` : '';
+
                     rowsHtml += `<tr class="storage-item-row storage-nav-row" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-cid="${cid}" data-name="${sf.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; cursor: pointer;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
                         <td style="padding: 10px 12px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.1rem;">📁</span> ${sf.name}/
+                            <span style="font-size: 1.1rem;">📁</span> ${sf.name}/ ${systemBadge}
                         </td>
                         <td style="padding: 10px 12px; color: #64748b; font-family: monospace;">—</td>
                         <td style="padding: 10px 12px; color: #64748b;">Folder</td>
                         <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
                             <button class="storage-open-btn" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-cid="${cid}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;">Open ↗</button>
-                            <button class="storage-delete-folder-btn" data-prefix="${sf.prefix.replace(/"/g, '&quot;')}" data-name="${sf.name.replace(/"/g, '&quot;')}" data-cid="${cid}" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;" title="Delete folder and all its contents">🗑️</button>
+                            ${deleteBtnHtml}
                         </td>
                     </tr>`;
                 });
@@ -5841,6 +5850,13 @@
         async function deleteStorageFolder(prefix, folderName, customerId) {
             const cid = customerId || currentStorageCustomerId;
             if (!cid || !prefix) return;
+
+            const protectedFolders = ['inbox', 'bank statements', 'check images', 'tax documents', 'esignatures'];
+            const cleanName = (folderName || '').toLowerCase().replace('/', '').trim();
+            if (currentStoragePrefix === currentStorageRootFolder && protectedFolders.includes(cleanName)) {
+                alert(`🔒 System folder "${folderName}" is protected and cannot be deleted.`);
+                return;
+            }
 
             if (!await showCustomConfirm(`⚠️ Delete folder "${folderName}"?\n\nThis will permanently delete the folder and ALL files inside it. This cannot be undone.`)) return;
 
