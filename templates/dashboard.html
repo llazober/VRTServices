@@ -6321,7 +6321,7 @@
                 }
             }
 
-            const isIndividual = (customerType || '').toString().trim().toLowerCase() === 'individual';
+            const isIndividual = ['individual', 'joint account'].includes((customerType || '').toString().trim().toLowerCase());
             const bkTabBtn = document.getElementById('tabBkWorkflow');
             if (bkTabBtn) {
                 bkTabBtn.style.display = isIndividual ? 'none' : 'inline-flex';

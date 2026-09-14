@@ -1766,7 +1766,7 @@ def init_customer_do_folders(customer_id: int, legal_name: str, year: int = None
 
     bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
 
-    is_individual = customer_type and customer_type.strip().lower() == "individual"
+    is_individual = customer_type and customer_type.strip().lower() in ("individual", "joint account")
 
     if is_individual:
         folders_to_create = [
@@ -5541,7 +5541,8 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
     
     generated_events = []
     
-    if c_type == "Business":
+    is_individual = c_type.lower() in ("individual", "joint account")
+    if not is_individual:
         # 1. Monthly Sales Tax Filing (20th of each month)
         for month in range(1, 13):
             due_d = datetime.date(current_year, month, 20)
@@ -6113,7 +6114,7 @@ async def get_customer_storage_folders(customer_id: str, request: Request):
         response = client.list_objects_v2(Bucket=bucket, Prefix=root_folder)
 
         folder_set = set()
-        is_individual = (cust.get("customer_type") or "").strip().lower() == "individual"
+        is_individual = (cust.get("customer_type") or "").strip().lower() in ("individual", "joint account")
         if is_individual:
             folder_set.add("Inbox/")
             folder_set.add("Tax Documents/")
@@ -9685,7 +9686,7 @@ async def get_dashboard_pending_tasks(request: Request, parentName: str = ""):
                     continue
 
                 c_type = (cust.get("customer_type") or "Business").strip()
-                is_individual = c_type.lower() == "individual"
+                is_individual = c_type.lower() in ("individual", "joint account")
 
                 bk_slug, bk_label = get_in_process_period(cur, cust_id, "bookkeeping")
                 tax_slug, tax_label = get_in_process_period(cur, cust_id, "tax")
