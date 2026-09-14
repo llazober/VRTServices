@@ -11239,36 +11239,44 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
                             print(f"[RESEND INBOUND ROUTING] Tier 1.2 SUCCESS match by invoice number '{clean_inv}' -> Customer #{cust['id']} ({cust['legal_name']})")
                             break
 
-                # Tier 2: Match by Sender Email or Recipient Email address in customer table
-                if not cust and (sender_email or recipient_email):
-                    search_emails = [e for e in [sender_email, recipient_email] if e and "@" in e]
-                    for s_email in search_emails:
+                # Tier 2: Match by Sender Email address in customer table
+                if not cust and sender_email:
+                    clean_s_email = sender_email.strip().lower()
+                    if clean_s_email and "@" in clean_s_email:
                         cur.execute("""
                             SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
                             FROM customer c
-                            WHERE LOWER(COALESCE(c.email, '')) = LOWER(%s) 
-                               OR LOWER(COALESCE(c.billing_email, '')) = LOWER(%s)
+                            WHERE LOWER(COALESCE(c.email, '')) = %s 
+                               OR LOWER(COALESCE(c.billing_email, '')) = %s
                             ORDER BY c.id DESC
                             LIMIT 1;
-                        """, (s_email, s_email))
+                        """, (clean_s_email, clean_s_email))
                         found_email_cust = cur.fetchone()
                         if found_email_cust:
                             cust = found_email_cust
-                            print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by email '{s_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
-                            break
+                            print(f"[RESEND INBOUND ROUTING] Tier 2 SUCCESS match by sender email '{clean_s_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
 
-                # Tier 2.5: Match ClientUser email
+                # Tier 2.5: Safely match ClientUser email in datalazo database (if ClientUser has an assigned customerId)
                 if not cust and sender_email:
-                    cur.execute("""
-                        SELECT c.id, c.legal_name, c.parent_name, c.customer_type 
-                        FROM "ClientUser" u
-                        JOIN customer c ON u."customerId" = c.id
-                        WHERE LOWER(u.email) = LOWER(%s)
-                        LIMIT 1;
-                    """, (sender_email,))
-                    cust = cur.fetchone()
-                    if cust:
-                        print(f"[RESEND INBOUND ROUTING] Tier 2.5 SUCCESS match ClientUser email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                    try:
+                        conn_dlz = get_db_connection("datalazo")
+                        with conn_dlz.cursor(cursor_factory=RealDictCursor) as cur_dlz:
+                            cur_dlz.execute("""
+                                SELECT u."customerId"
+                                FROM "ClientUser" u
+                                WHERE LOWER(u.email) = LOWER(%s) AND u."customerId" IS NOT NULL
+                                LIMIT 1;
+                            """, (sender_email,))
+                            cu_match = cur_dlz.fetchone()
+                            if cu_match and cu_match.get("customerId"):
+                                matched_cid = cu_match["customerId"]
+                                cur.execute("SELECT id, legal_name, parent_name, customer_type FROM customer WHERE id = %s;", (matched_cid,))
+                                cust = cur.fetchone()
+                                if cust:
+                                    print(f"[RESEND INBOUND ROUTING] Tier 2.5 SUCCESS match ClientUser email '{sender_email}' -> Customer #{cust['id']} ({cust['legal_name']})")
+                        conn_dlz.close()
+                    except Exception as e_dlz:
+                        print(f"[RESEND INBOUND ROUTING] Tier 2.5 ClientUser lookup notice: {e_dlz}")
 
                 # Tier 3: Default Catch-All Customer (CUST-0000)
                 if not cust:
