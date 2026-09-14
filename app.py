@@ -5618,6 +5618,31 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
             'Annual', assigned_tax_prep, 30, True
         ))
 
+    if is_individual:
+        # Clean up stale auto-generated business events if client is individual/joint
+        cur.execute("""
+            DELETE FROM compliance_calendar_events
+            WHERE customer_id = %s
+              AND (auto_generated = TRUE OR auto_generated IS NULL)
+              AND (
+                  category IN ('Sales Tax', 'Bookkeeping Close', 'Payroll Tax', 'Franchise Tax', '1099/W2')
+                  OR title LIKE '%%Corporate Tax Return%%'
+                  OR title LIKE '%%1120%%'
+              );
+        """, (customer_id,))
+    else:
+        # Clean up stale auto-generated individual events if client is business
+        cur.execute("""
+            DELETE FROM compliance_calendar_events
+            WHERE customer_id = %s
+              AND (auto_generated = TRUE OR auto_generated IS NULL)
+              AND (
+                  category = 'Estimated Tax'
+                  OR title LIKE '%%Individual Income Tax Return%%'
+                  OR title LIKE '%%1040%%'
+              );
+        """, (customer_id,))
+
     check_sql = """
         SELECT 1 FROM compliance_calendar_events 
         WHERE customer_id = %s 
