@@ -3571,6 +3571,7 @@ async def get_wu_checks_files_api(request: Request):
 
 @app.post("/api/wu-checks/run")
 async def run_wu_checks_automation_api(request: Request):
+    import sys
     import subprocess
     script_path = os.path.abspath("automate_wu_checks.py")
     if not os.path.exists(script_path):

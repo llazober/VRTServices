@@ -15,6 +15,11 @@ pip install playwright
 playwright install chromium
 ```
 
+> **Windows Terminal Tip**: If `playwright` command is not in your system PATH, invoke it via Python module syntax:
+> ```bash
+> python -m playwright install chromium
+> ```
+
 ### Reference Implementation Script (`automate_wu_checks.py`)
 
 ```python
@@ -194,8 +199,20 @@ for cid in check_ids:
 
 ---
 
+## Dashboard Web Interface Integration
+
+Strategy 1 is fully integrated into the VRTServices CRM Dashboard interface:
+
+1. **Sidebar Navigation**: Click **WU Check Automation** (green badge at bottom of side menu) or navigate directly to `/western-union-checks`.
+2. **1-Click Launcher**: Click **🚀 Launch Playwright Routine** to launch Chromium automatically in the background.
+3. **Interactive Script Download**: Download `automate_wu_checks.py` directly from the dashboard for command-line execution.
+4. **Live Check Repository Explorer**: Browse, view, and monitor all downloaded check PDFs saved in `./western_union_checks/`.
+
+---
+
 ## Troubleshooting & Best Practices
 
-1. **Anti-Automation & Rate Limiting**: Include a 1-2 second delay (`time.sleep(1.5)`) between check downloads to avoid triggering Western Union session timeouts.
-2. **Duplicate Protection**: Always check `os.path.exists(target_filename)` before clicking so you can safely resume interrupted downloads.
-3. **Session Expiration**: Log in fresh before running Playwright in headful mode.
+1. **PATH Resolution (`name 'sys' is not defined` or Command Not Found)**: Always run via `python -m playwright` or launch via the CRM Dashboard UI launcher.
+2. **Anti-Automation & Rate Limiting**: Include a 1-2 second delay (`time.sleep(1.5)`) between check downloads to avoid triggering Western Union session timeouts.
+3. **Duplicate Protection**: Always check `os.path.exists(target_filename)` before clicking so you can safely resume interrupted downloads.
+4. **Session Expiration**: Log in fresh before running Playwright in headful mode.
