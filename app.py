@@ -3608,8 +3608,14 @@ async def download_wu_checks_bat(request: Request):
     bat_content = """@echo off
 title Western Union Check Automation Launcher
 color 0a
+
+:: Register custom Windows protocol so clicking "Run Local Routine" in browser launches this batch file without re-downloading
+reg add "HKCU\\Software\\Classes\\wu-checks" /ve /t REG_SZ /d "URL:WU Checks Protocol" /f >nul 2>&1
+reg add "HKCU\\Software\\Classes\\wu-checks" /v "URL Protocol" /t REG_SZ /d "" /f >nul 2>&1
+reg add "HKCU\\Software\\Classes\\wu-checks\\shell\\open\\command" /ve /t REG_SZ /d "\\"%%~f0\\"" /f >nul 2>&1
+
 echo =========================================================================
-echo  WESTERN UNION CHECK AUTOMATION - 1-CLICK WINDOWS LAUNCHER
+echo  WESTERN UNION CHECK AUTOMATION - WINDOWS LOCAL LAUNCHER
 echo =========================================================================
 echo.
 echo [1/2] Checking and installing Playwright dependencies...
