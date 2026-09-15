@@ -2163,12 +2163,9 @@
                         <button onclick="runWUCheckAutomation()" id="btn_run_wu" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 12px; padding: 14px 24px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
                             <span>🚀</span> Launch Playwright Routine
                         </button>
-                        <a href="/api/wu-checks/download-script" download="automate_wu_checks.py" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); color: #38bdf8; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.15)';" onmouseout="this.style.background='rgba(30, 41, 59, 0.8)';">
-                            <span>📥</span> Download Script (.py)
-                        </a>
-                        <a href="/api/wu-checks/download-bat" download="launch_wu_checks.bat" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; border: none; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
-                            <span>⚡</span> Download 1-Click Launcher (.bat)
-                        </a>
+                        <button onclick="launchWUBatchDirect()" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; border: none; border-radius: 12px; padding: 14px 22px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                            <span>⚡</span> 1-Click Download & Launch (.bat)
+                        </button>
                         <a href="https://www.westernunion.com/" target="_blank" rel="noopener noreferrer" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(245, 158, 11, 0.25)';" onmouseout="this.style.background='rgba(245, 158, 11, 0.15)';">
                             <span>🌐</span> Open Western Union Site
                         </a>
@@ -2310,6 +2307,24 @@
             </div>
 
             <script>
+                function launchWUBatchDirect() {
+                    const a1 = document.createElement('a');
+                    a1.href = '/api/wu-checks/download-script';
+                    a1.download = 'automate_wu_checks.py';
+                    document.body.appendChild(a1);
+                    a1.click();
+                    document.body.removeChild(a1);
+
+                    setTimeout(() => {
+                        const a2 = document.createElement('a');
+                        a2.href = '/api/wu-checks/download-bat';
+                        a2.download = 'launch_wu_checks.bat';
+                        document.body.appendChild(a2);
+                        a2.click();
+                        document.body.removeChild(a2);
+                    }, 300);
+                }
+
                 async function runWUCheckAutomation() {
                     const btn = document.getElementById('btn_run_wu');
                     const statStatus = document.getElementById('wu_stat_status');
