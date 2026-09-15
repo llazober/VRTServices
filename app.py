@@ -3578,10 +3578,18 @@ async def run_wu_checks_automation_api(request: Request):
         return JSONResponse(status_code=404, content={"success": False, "error": "automate_wu_checks.py script not found."})
 
     try:
-        proc = subprocess.Popen([sys.executable, script_path], cwd=os.path.dirname(script_path))
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = subprocess.CREATE_NEW_CONSOLE
+
+        proc = subprocess.Popen(
+            [sys.executable, script_path],
+            cwd=os.path.dirname(script_path),
+            creationflags=creationflags
+        )
         return {
             "success": True,
-            "message": f"Strategy 1 Playwright Automation launched (PID: {proc.pid}). Chromium browser will open for Western Union login.",
+            "message": f"Strategy 1 Playwright Automation launched (PID: {proc.pid}). Interactive console and Chromium browser window are opening...",
             "pid": proc.pid
         }
     except Exception as ex:

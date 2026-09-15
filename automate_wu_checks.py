@@ -55,7 +55,11 @@ def run_automation(interactive_prompt=True):
             print("=======================================================\n")
             
             if interactive_prompt:
-                input("Press Enter to start downloading checks...")
+                try:
+                    input("Press Enter to start downloading checks...")
+                except (EOFError, OSError):
+                    print("No interactive console stdin attached. Waiting 20 seconds for manual login in browser window...")
+                    time.sleep(20)
 
             update_status("running", "Locating checks table records...")
             row_selector = "table tbody tr"
