@@ -3602,6 +3602,32 @@ async def download_wu_checks_script(request: Request):
         media_type="application/x-python"
     )
 
+@app.get("/api/wu-checks/download-bat")
+async def download_wu_checks_bat(request: Request):
+    from fastapi.responses import Response
+    bat_content = """@echo off
+title Western Union Check Automation Launcher
+color 0a
+echo =========================================================================
+echo  WESTERN UNION CHECK AUTOMATION - 1-CLICK WINDOWS LAUNCHER
+echo =========================================================================
+echo.
+echo [1/2] Checking & installing Playwright dependencies...
+pip install playwright --quiet
+python -m playwright install chromium
+echo.
+echo [2/2] Launching Western Union Automation Script...
+python automate_wu_checks.py
+echo.
+echo Automation process finished.
+pause
+"""
+    return Response(
+        content=bat_content,
+        media_type="application/x-bat",
+        headers={"Content-Disposition": "attachment; filename=launch_wu_checks.bat"}
+    )
+
 
 
 # ── Public Client Portal API Routes ─────────────────────────────────────────
