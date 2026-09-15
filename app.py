@@ -3613,11 +3613,11 @@ echo  WESTERN UNION CHECK AUTOMATION - 1-CLICK WINDOWS LAUNCHER
 echo =========================================================================
 echo.
 echo [1/2] Checking & installing Playwright dependencies...
-pip install playwright --quiet
-python -m playwright install chromium
+py -3 -m pip install playwright --quiet 2>nul || python -m pip install playwright --quiet
+py -3 -m playwright install chromium 2>nul || python -m playwright install chromium
 echo.
 echo [2/2] Launching Western Union Automation Script...
-python automate_wu_checks.py
+py -3 automate_wu_checks.py 2>nul || python automate_wu_checks.py
 echo.
 echo Automation process finished.
 pause
