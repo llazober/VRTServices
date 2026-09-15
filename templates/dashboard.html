@@ -2306,18 +2306,27 @@
             <script>
                 async function runWUCheckAutomation() {
                     const btn = document.getElementById('btn_run_wu');
+                    const statStatus = document.getElementById('wu_stat_status');
+                    const statMsg = document.getElementById('wu_stat_msg');
+
                     if (btn) btn.disabled = true;
+                    if (statStatus) statStatus.innerHTML = '<span style="width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; display: inline-block;"></span> Launching Routine...';
+                    if (statMsg) statMsg.innerText = 'Initializing Playwright process...';
+
                     try {
                         const resp = await fetch('/api/wu-checks/run', { method: 'POST' });
                         const data = await resp.json();
                         if (data.success) {
-                            alert('🚀 ' + data.message);
+                            if (statStatus) statStatus.innerHTML = '<span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; display: inline-block;"></span> Routine Active';
+                            if (statMsg) statMsg.innerText = data.message || 'Automation running in background.';
                             startWUPolling();
                         } else {
-                            alert('❌ Error: ' + (data.error || 'Failed to start routine'));
+                            if (statStatus) statStatus.innerHTML = '<span style="width: 10px; height: 10px; border-radius: 50%; background: #f87171; display: inline-block;"></span> Error';
+                            if (statMsg) statMsg.innerText = data.error || 'Failed to start routine.';
                         }
                     } catch (e) {
-                        alert('❌ Network error starting routine: ' + e);
+                        if (statStatus) statStatus.innerHTML = '<span style="width: 10px; height: 10px; border-radius: 50%; background: #f87171; display: inline-block;"></span> Network Error';
+                        if (statMsg) statMsg.innerText = 'Network error starting routine: ' + e;
                     } finally {
                         if (btn) btn.disabled = false;
                     }
