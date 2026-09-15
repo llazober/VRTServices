@@ -931,6 +931,16 @@
                 <span class="nav-text" style="font-weight: 800;">Company Profile</span>
             </a>
 
+            <a href="/western-union-checks" class="nav-item {% if active_tab == 'wu_checks' %}active{% endif %}" title="Western Union Checks Automation">
+                <div class="icon-box" style="color: #10b981;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 14V6c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zm-2 0H3V6h14v8zm-7-7c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm5 14H5v-2h12v2zm4-4H7v-2h14v2z"/>
+                    </svg>
+                </div>
+                <span class="nav-text" style="font-weight: 800;">WU Check Automation</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff;">AUTO</span>
+            </a>
+
             <button class="nav-item" onclick="openSupportModal()" title="Support Request">
                 <div class="icon-box" style="color: #00f2fe;">
                     <svg viewBox="0 0 24 24">
@@ -956,7 +966,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% elif active_tab == 'wu_checks' %}Western Union Check Automation (Strategy 1){% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -2131,6 +2141,223 @@
                         input.type = 'password';
                         btn.innerText = '👁️';
                     }
+                }
+            </script>
+            {% elif active_tab == 'wu_checks' %}
+            <!-- Western Union Check Automation View (Strategy 1) -->
+            <div style="display: flex; flex-direction: column; gap: 24px; padding-bottom: 40px;">
+                <!-- Header Banner -->
+                <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 95, 70, 0.25) 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 20px; padding: 28px 32px; backdrop-filter: blur(12px); box-shadow: 0 15px 35px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <span style="background: linear-gradient(135deg, #10b981, #059669); color: #000; font-weight: 800; font-size: 0.75rem; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;">Strategy 1 Enabled</span>
+                            <span style="color: #94a3b8; font-size: 0.88rem;">Playwright Python Automation</span>
+                        </div>
+                        <h2 style="font-size: 1.8rem; font-weight: 800; color: #fff; margin: 0 0 6px;">Western Union Check Downloading Automation</h2>
+                        <p style="color: #cbd5e1; margin: 0; font-size: 0.95rem; max-width: 680px;">
+                            Automated Playwright routine to log into Western Union, extract scanned checks table records, and save each check locally as <code>Check # &lt;XXXX&gt;.pdf</code>.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <button onclick="runWUCheckAutomation()" id="btn_run_wu" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 12px; padding: 14px 24px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                            <span>🚀</span> Launch Playwright Routine
+                        </button>
+                        <a href="/api/wu-checks/download-script" download="automate_wu_checks.py" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); color: #38bdf8; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.15)';" onmouseout="this.style.background='rgba(30, 41, 59, 0.8)';">
+                            <span>📥</span> Download Script (.py)
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Stats Summary Row -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);">
+                        <div style="color: #94a3b8; font-size: 0.82rem; font-weight: 700; text-transform: uppercase;">Total Checks Downloaded</div>
+                        <div style="font-size: 2.2rem; font-weight: 800; color: #10b981; margin-top: 6px;" id="wu_stat_count">{{ wu_check_count or 0 }}</div>
+                        <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">PDF / Image files stored locally</div>
+                    </div>
+                    <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);">
+                        <div style="color: #94a3b8; font-size: 0.82rem; font-weight: 700; text-transform: uppercase;">Storage Location</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #38bdf8; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ wu_dir }}">{{ wu_dir }}</div>
+                        <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">Local root directory</div>
+                    </div>
+                    <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);">
+                        <div style="color: #94a3b8; font-size: 0.82rem; font-weight: 700; text-transform: uppercase;">Engine Status</div>
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #f59e0b; margin-top: 8px; display: flex; align-items: center; gap: 8px;" id="wu_stat_status">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #4ade80; display: inline-block;"></span> Playwright Ready
+                        </div>
+                        <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;" id="wu_stat_msg">Click Launch to begin process</div>
+                    </div>
+                </div>
+
+                <!-- Strategy 1 Explanation & Execution Guide Card -->
+                <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 32px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+                        <h3 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <span>📖</span> How to Run Strategy 1 (Playwright Automation Routine)
+                        </h3>
+                        <span style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 0.8rem; font-weight: 700; padding: 6px 14px; border-radius: 20px;">
+                            Fully Automated PDF Extraction
+                        </span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                        <!-- Step 1 Card -->
+                        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #38bdf8, #0284c7); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">1</div>
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin: 0;">Prerequisites Setup</h4>
+                            </div>
+                            <p style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
+                                Ensure Python and Playwright browser binaries are installed on your workstation terminal:
+                            </p>
+                            <div style="background: #090d16; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.82rem; color: #4ade80;">
+                                pip install playwright<br>
+                                playwright install chromium
+                            </div>
+                        </div>
+
+                        <!-- Step 2 Card -->
+                        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">2</div>
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin: 0;">Launch Automation</h4>
+                            </div>
+                            <p style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
+                                Click <strong>Launch Playwright Routine</strong> above or run the Python script directly from your project directory:
+                            </p>
+                            <div style="background: #090d16; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.82rem; color: #38bdf8;">
+                                python automate_wu_checks.py
+                            </div>
+                        </div>
+
+                        <!-- Step 3 Card -->
+                        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">3</div>
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin: 0;">Manual Login & 2FA</h4>
+                            </div>
+                            <p style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin: 0;">
+                                A visible Chromium browser window will open automatically. Log into Western Union with your credentials and complete 2FA. Navigate to the <strong>Checks / Scanned Checks Table</strong> page.
+                            </p>
+                        </div>
+
+                        <!-- Step 4 Card -->
+                        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">4</div>
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin: 0;">Automatic Download</h4>
+                            </div>
+                            <p style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin: 0;">
+                                Press <code>ENTER</code> in terminal. Playwright will iterate through every check row, open popups, intercept PDF downloads, and auto-save as <code>Check # &lt;XXXX&gt;.pdf</code> into <code>./western_union_checks/</code>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Downloaded Files Table Card -->
+                <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                        <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <span>📁</span> Downloaded Checks Repository
+                        </h3>
+                        <button onclick="refreshWUCheckFiles()" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); color: #f8fafc; border-radius: 10px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
+                            🔄 Refresh List
+                        </button>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                            <thead>
+                                <tr style="background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <th style="padding: 14px 16px; color: #94a3b8; font-weight: 700;">File Name</th>
+                                    <th style="padding: 14px 16px; color: #94a3b8; font-weight: 700;">Size</th>
+                                    <th style="padding: 14px 16px; color: #94a3b8; font-weight: 700;">Date Downloaded</th>
+                                    <th style="padding: 14px 16px; color: #94a3b8; font-weight: 700; text-align: right;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wu_files_tbody">
+                                {% if wu_check_files and wu_check_files|length > 0 %}
+                                    {% for f in wu_check_files %}
+                                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                                        <td style="padding: 14px 16px; color: #f8fafc; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                                            <span style="font-size: 1.2rem;">📄</span> {{ f.name }}
+                                        </td>
+                                        <td style="padding: 14px 16px; color: #cbd5e1;">{{ f.size_kb }} KB</td>
+                                        <td style="padding: 14px 16px; color: #94a3b8;">{{ f.modified }}</td>
+                                        <td style="padding: 14px 16px; text-align: right;">
+                                            <span style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Saved Local</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" style="padding: 32px; text-align: center; color: #64748b;">
+                                            No checks downloaded yet. Click <strong>Launch Playwright Routine</strong> to begin downloading check PDFs.
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                async function runWUCheckAutomation() {
+                    const btn = document.getElementById('btn_run_wu');
+                    if (btn) btn.disabled = true;
+                    try {
+                        const resp = await fetch('/api/wu-checks/run', { method: 'POST' });
+                        const data = await resp.json();
+                        if (data.success) {
+                            alert('🚀 ' + data.message);
+                            startWUPolling();
+                        } else {
+                            alert('❌ Error: ' + (data.error || 'Failed to start routine'));
+                        }
+                    } catch (e) {
+                        alert('❌ Network error starting routine: ' + e);
+                    } finally {
+                        if (btn) btn.disabled = false;
+                    }
+                }
+
+                async function refreshWUCheckFiles() {
+                    try {
+                        const resp = await fetch('/api/wu-checks/files');
+                        const data = await resp.json();
+                        if (data.success) {
+                            const countEl = document.getElementById('wu_stat_count');
+                            if (countEl) countEl.innerText = data.count;
+                            
+                            const tbody = document.getElementById('wu_files_tbody');
+                            if (tbody && data.files) {
+                                if (data.files.length === 0) {
+                                    tbody.innerHTML = '<tr><td colspan="4" style="padding: 32px; text-align: center; color: #64748b;">No checks downloaded yet.</td></tr>';
+                                } else {
+                                    tbody.innerHTML = data.files.map(f => `
+                                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                                            <td style="padding: 14px 16px; color: #f8fafc; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                                                <span style="font-size: 1.2rem;">📄</span> ${f.name}
+                                            </td>
+                                            <td style="padding: 14px 16px; color: #cbd5e1;">${f.size_kb} KB</td>
+                                            <td style="padding: 14px 16px; color: #94a3b8;">${f.modified}</td>
+                                            <td style="padding: 14px 16px; text-align: right;">
+                                                <span style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Saved Local</span>
+                                            </td>
+                                        </tr>
+                                    `).join('');
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error refreshing files:', e);
+                    }
+                }
+
+                function startWUPolling() {
+                    setInterval(refreshWUCheckFiles, 5000);
                 }
             </script>
             {% else %}

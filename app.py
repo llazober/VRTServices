@@ -80,7 +80,7 @@ async def add_security_and_cache_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https:;"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     
-    if request.url.path in ["/", "/index", "/dashboard", "/customers", "/company-profile"]:
+    if request.url.path in ["/", "/index", "/dashboard", "/customers", "/company-profile", "/western-union-checks", "/wu-checks"]:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -3492,6 +3492,113 @@ async def save_company_profile_api(request: Request):
         )
         return {"success": True, "message": "Company Profile updated successfully", "profile": get_company_profile()}
     return JSONResponse(status_code=400, content={"success": False, "error": res.get("error")})
+
+# ── WESTERN UNION CHECK AUTOMATION ROUTES ───────────────────────────────────
+
+@app.get("/western-union-checks", response_class=HTMLResponse)
+@app.get("/wu-checks", response_class=HTMLResponse)
+async def read_western_union_checks_page(request: Request):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+
+    ctx["active_tab"] = "wu_checks"
+    
+    wu_dir = os.path.abspath("./western_union_checks")
+    os.makedirs(wu_dir, exist_ok=True)
+    
+    check_files = []
+    try:
+        for fname in os.listdir(wu_dir):
+            if fname.endswith((".pdf", ".png", ".jpg", ".jpeg")):
+                fpath = os.path.join(wu_dir, fname)
+                stat = os.stat(fpath)
+                check_files.append({
+                    "name": fname,
+                    "size_bytes": stat.st_size,
+                    "size_kb": round(stat.st_size / 1024, 1),
+                    "modified": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                })
+        check_files.sort(key=lambda x: x["modified"], reverse=True)
+    except Exception as ex:
+        print(f"[WU CHECKS DIR ERROR]: {ex}")
+
+    ctx["wu_check_files"] = check_files
+    ctx["wu_check_count"] = len(check_files)
+    ctx["wu_dir"] = wu_dir
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
+@app.get("/api/wu-checks/files")
+async def get_wu_checks_files_api(request: Request):
+    wu_dir = os.path.abspath("./western_union_checks")
+    os.makedirs(wu_dir, exist_ok=True)
+    check_files = []
+    try:
+        for fname in os.listdir(wu_dir):
+            if fname.endswith((".pdf", ".png", ".jpg", ".jpeg")):
+                fpath = os.path.join(wu_dir, fname)
+                stat = os.stat(fpath)
+                check_files.append({
+                    "name": fname,
+                    "size_bytes": stat.st_size,
+                    "size_kb": round(stat.st_size / 1024, 1),
+                    "modified": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                })
+        check_files.sort(key=lambda x: x["modified"], reverse=True)
+    except Exception as ex:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(ex)})
+
+    status_info = {"status": "idle", "message": "No automation task currently running."}
+    status_file = os.path.join(wu_dir, "automation_status.json")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r", encoding="utf-8") as sf:
+                status_info = json.load(sf)
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "count": len(check_files),
+        "files": check_files,
+        "status": status_info
+    }
+
+@app.post("/api/wu-checks/run")
+async def run_wu_checks_automation_api(request: Request):
+    import subprocess
+    script_path = os.path.abspath("automate_wu_checks.py")
+    if not os.path.exists(script_path):
+        return JSONResponse(status_code=404, content={"success": False, "error": "automate_wu_checks.py script not found."})
+
+    try:
+        proc = subprocess.Popen([sys.executable, script_path], cwd=os.path.dirname(script_path))
+        return {
+            "success": True,
+            "message": f"Strategy 1 Playwright Automation launched (PID: {proc.pid}). Chromium browser will open for Western Union login.",
+            "pid": proc.pid
+        }
+    except Exception as ex:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(ex)})
+
+@app.get("/api/wu-checks/download-script")
+async def download_wu_checks_script(request: Request):
+    from fastapi.responses import FileResponse
+    script_path = os.path.abspath("automate_wu_checks.py")
+    if not os.path.exists(script_path):
+        return JSONResponse(status_code=404, content={"detail": "Script file not found"})
+    return FileResponse(
+        path=script_path,
+        filename="automate_wu_checks.py",
+        media_type="application/x-python"
+    )
+
+
 
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
