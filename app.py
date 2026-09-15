@@ -80,7 +80,7 @@ async def add_security_and_cache_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https:;"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     
-    if request.url.path in ["/", "/index", "/dashboard", "/customers"]:
+    if request.url.path in ["/", "/index", "/dashboard", "/customers", "/company-profile"]:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -1318,6 +1318,124 @@ def init_esignature_tables():
         if conn:
             conn.close()
 
+def init_company_profile_table():
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS company_profile (
+                    id              INT PRIMARY KEY DEFAULT 1,
+                    company_name    VARCHAR(255) DEFAULT '',
+                    address         TEXT DEFAULT '',
+                    city            VARCHAR(100) DEFAULT '',
+                    state           VARCHAR(50) DEFAULT '',
+                    zip_code        VARCHAR(20) DEFAULT '',
+                    website         VARCHAR(255) DEFAULT '',
+                    phone           VARCHAR(50) DEFAULT '',
+                    rep_name        VARCHAR(255) DEFAULT '',
+                    rep_email       VARCHAR(255) DEFAULT '',
+                    efin_pin        VARCHAR(50) DEFAULT '',
+                    sid_pin         VARCHAR(50) DEFAULT '',
+                    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT company_profile_single_row CHECK (id = 1)
+                );
+                ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT '';
+                ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS state VARCHAR(50) DEFAULT '';
+                ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20) DEFAULT '';
+
+                INSERT INTO company_profile (id, company_name, address, city, state, zip_code, website, phone, rep_name, rep_email, efin_pin, sid_pin)
+                VALUES (1, '', '', '', '', '', '', '', '', '', '', '')
+                ON CONFLICT (id) DO NOTHING;
+            """)
+            conn.commit()
+            print("Company Profile table initialized successfully in VRT database.")
+    except Exception as e:
+        print(f"Error initializing Company Profile table: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+def get_company_profile() -> dict:
+    conn = None
+    profile = {
+        "company_name": "",
+        "address": "",
+        "city": "",
+        "state": "",
+        "zip_code": "",
+        "website": "",
+        "phone": "",
+        "rep_name": "",
+        "rep_email": "",
+        "efin_pin": "",
+        "sid_pin": ""
+    }
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT company_name, address, city, state, zip_code, website, phone, rep_name, rep_email, efin_pin, sid_pin
+                FROM company_profile WHERE id = 1;
+            """)
+            row = cur.fetchone()
+            if row:
+                for k in profile.keys():
+                    profile[k] = row.get(k) or ""
+    except Exception as e:
+        print(f"Error reading company profile: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return profile
+
+def save_company_profile(data: dict) -> dict:
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO company_profile (id, company_name, address, city, state, zip_code, website, phone, rep_name, rep_email, efin_pin, sid_pin, updated_at)
+                VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (id) DO UPDATE SET
+                    company_name = EXCLUDED.company_name,
+                    address = EXCLUDED.address,
+                    city = EXCLUDED.city,
+                    state = EXCLUDED.state,
+                    zip_code = EXCLUDED.zip_code,
+                    website = EXCLUDED.website,
+                    phone = EXCLUDED.phone,
+                    rep_name = EXCLUDED.rep_name,
+                    rep_email = EXCLUDED.rep_email,
+                    efin_pin = EXCLUDED.efin_pin,
+                    sid_pin = EXCLUDED.sid_pin,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (
+                str(data.get("company_name", "") or "").strip(),
+                str(data.get("address", "") or "").strip(),
+                str(data.get("city", "") or "").strip(),
+                str(data.get("state", "") or "").strip(),
+                str(data.get("zip_code", "") or "").strip(),
+                str(data.get("website", "") or "").strip(),
+                str(data.get("phone", "") or "").strip(),
+                str(data.get("rep_name", "") or "").strip(),
+                str(data.get("rep_email", "") or "").strip(),
+                str(data.get("efin_pin", "") or "").strip(),
+                str(data.get("sid_pin", "") or "").strip()
+            ))
+            conn.commit()
+            return {"success": True, "message": "Company profile updated successfully."}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error updating company profile: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        if conn:
+            conn.close()
+
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
     if not text:
         return []
@@ -1709,6 +1827,7 @@ try:
     init_compliance_tables()
     init_kb_tables()
     init_esignature_tables()
+    init_company_profile_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -3148,7 +3267,8 @@ def prepare_dashboard_context(request: Request) -> dict | RedirectResponse:
             "user_role": user_role,
             "is_admin": is_admin,
             "is_super_admin": is_super_admin,
-            "totp_enabled": totp_enabled
+            "totp_enabled": totp_enabled,
+            "company_profile": get_company_profile()
         }
     except Exception as e:
         import traceback
@@ -3280,6 +3400,98 @@ async def read_management_tools_page(request: Request, msg: str = "", error: str
         name="dashboard.html",
         context=ctx
     )
+
+@app.get("/company-profile", response_class=HTMLResponse)
+@app.get("/firm-profile", response_class=HTMLResponse)
+async def read_company_profile_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "company_profile"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
+@app.post("/company-profile", response_class=HTMLResponse)
+async def save_company_profile_form(
+    request: Request,
+    company_name: str = Form(""),
+    address: str = Form(""),
+    city: str = Form(""),
+    state: str = Form(""),
+    zip_code: str = Form(""),
+    website: str = Form(""),
+    phone: str = Form(""),
+    rep_name: str = Form(""),
+    rep_email: str = Form(""),
+    efin_pin: str = Form(""),
+    sid_pin: str = Form("")
+):
+    username = get_current_username(request)
+    if not username:
+        return RedirectResponse("/login", status_code=302)
+    
+    data = {
+        "company_name": company_name,
+        "address": address,
+        "city": city,
+        "state": state,
+        "zip_code": zip_code,
+        "website": website,
+        "phone": phone,
+        "rep_name": rep_name,
+        "rep_email": rep_email,
+        "efin_pin": efin_pin,
+        "sid_pin": sid_pin
+    }
+    res = save_company_profile(data)
+    log_audit_event(
+        username=username,
+        action="UPDATE_COMPANY_PROFILE",
+        entity_type="COMPANY_PROFILE",
+        entity_id="1",
+        details=data,
+        request=request
+    )
+    if res.get("success"):
+        return RedirectResponse("/company-profile?msg=Company+Profile+updated+successfully", status_code=302)
+    else:
+        err_msg = res.get("error", "Failed to update profile")
+        return RedirectResponse(f"/company-profile?error={urllib.parse.quote(err_msg)}", status_code=302)
+
+@app.get("/api/company-profile")
+async def get_company_profile_api(request: Request):
+    username = get_current_username(request)
+    if not username:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    prof = get_company_profile()
+    return {"success": True, "profile": prof}
+
+@app.post("/api/company-profile")
+async def save_company_profile_api(request: Request):
+    username = get_current_username(request)
+    if not username:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    res = save_company_profile(data)
+    if res.get("success"):
+        log_audit_event(
+            username=username,
+            action="UPDATE_COMPANY_PROFILE_API",
+            entity_type="COMPANY_PROFILE",
+            entity_id="1",
+            details=data,
+            request=request
+        )
+        return {"success": True, "message": "Company Profile updated successfully", "profile": get_company_profile()}
+    return JSONResponse(status_code=400, content={"success": False, "error": res.get("error")})
 
 # ── Public Client Portal API Routes ─────────────────────────────────────────
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])

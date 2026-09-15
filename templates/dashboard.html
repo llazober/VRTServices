@@ -922,6 +922,15 @@
                 <span class="nav-text" style="font-weight: 800;">Management & Tools</span>
             </a>
 
+            <a href="/company-profile" class="nav-item {% if active_tab == 'company_profile' %}active{% endif %}" title="Company Profile">
+                <div class="icon-box" style="color: #a855f7;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h8v6zm0-8h-8V9h8v2z"/>
+                    </svg>
+                </div>
+                <span class="nav-text" style="font-weight: 800;">Company Profile</span>
+            </a>
+
             <button class="nav-item" onclick="openSupportModal()" title="Support Request">
                 <div class="icon-box" style="color: #00f2fe;">
                     <svg viewBox="0 0 24 24">
@@ -947,7 +956,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -1990,6 +1999,140 @@
                     </div>
                 </div>
             </div>
+            {% elif active_tab == 'company_profile' %}
+            <!-- ── DEDICATED COMPANY PROFILE MODULE VIEW ─────────────────────── -->
+            <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                    <div>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 6px; display: flex; align-items: center; gap: 12px;">
+                            🏢 Company <span style="color: #a855f7;">Profile & Credentials</span>
+                        </h2>
+                        <p style="color: var(--text-muted); font-size: 0.95rem;">
+                            Manage your tax firm details, contact information, authorized representative, and EFIN / SID security PINs.
+                        </p>
+                    </div>
+                </div>
+
+                {% if msg %}
+                <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #4ade80; padding: 14px 18px; border-radius: 14px; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                    <span>✅</span> {{ msg }}
+                </div>
+                {% endif %}
+
+                {% if error %}
+                <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; padding: 14px 18px; border-radius: 14px; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                    <span>⚠️</span> {{ error }}
+                </div>
+                {% endif %}
+
+                <form method="POST" action="/company-profile" style="display: flex; flex-direction: column; gap: 28px;">
+                    <!-- Section 1: Firm Details -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+                        <h3 style="color: #38bdf8; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            📍 Firm Identity & Location
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+                            <div style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Company Name</label>
+                                <input type="text" name="company_name" value="{{ (company_profile.company_name if company_profile else '') }}" placeholder="e.g. VRT Financial Services LLC" required style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Street Address</label>
+                                <input type="text" name="address" value="{{ (company_profile.address if company_profile else '') }}" placeholder="e.g. 123 Financial Way, Suite 400" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">City</label>
+                                <input type="text" name="city" value="{{ (company_profile.city if company_profile else '') }}" placeholder="e.g. Miami" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">State</label>
+                                <input type="text" name="state" value="{{ (company_profile.state if company_profile else '') }}" placeholder="e.g. FL" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Zip Code</label>
+                                <input type="text" name="zip_code" value="{{ (company_profile.zip_code if company_profile else '') }}" placeholder="e.g. 33131" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Website</label>
+                                <input type="text" name="website" value="{{ (company_profile.website if company_profile else '') }}" placeholder="e.g. https://www.vrtservices.com" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Phone</label>
+                                <input type="text" name="phone" value="{{ (company_profile.phone if company_profile else '') }}" placeholder="e.g. (305) 555-0199" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Authorized Representative -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+                        <h3 style="color: #4ade80; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            👤 Authorized Representative
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Rep Name</label>
+                                <input type="text" name="rep_name" value="{{ (company_profile.rep_name if company_profile else '') }}" placeholder="e.g. Jane Doe, CPA" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Rep Email</label>
+                                <input type="email" name="rep_email" value="{{ (company_profile.rep_email if company_profile else '') }}" placeholder="e.g. rep@vrtservices.com" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Tax Credentials & Security PINs -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+                        <h3 style="color: #f59e0b; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            🔐 EFIN & SID Security Credentials
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">EFin Pin</label>
+                                <div style="position: relative;">
+                                    <input type="password" id="efin_pin_input" name="efin_pin" value="{{ (company_profile.efin_pin if company_profile else '') }}" placeholder="Enter EFIN PIN" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 42px 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                                    <button type="button" onclick="togglePinVisibility('efin_pin_input', this)" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px; font-size: 1rem;" title="Toggle PIN Visibility">👁️</button>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">SID Pin</label>
+                                <div style="position: relative;">
+                                    <input type="password" id="sid_pin_input" name="sid_pin" value="{{ (company_profile.sid_pin if company_profile else '') }}" placeholder="Enter SID PIN" style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 42px 12px 14px; color: #fff; font-size: 0.95rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#a855f7';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)';">
+                                    <button type="button" onclick="togglePinVisibility('sid_pin_input', this)" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px; font-size: 1rem;" title="Toggle PIN Visibility">👁️</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 14px; padding-top: 10px;">
+                        <button type="submit" style="background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; border: none; border-radius: 12px; padding: 14px 32px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 800; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                            💾 Save Company Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <script>
+                function togglePinVisibility(inputId, btn) {
+                    const input = document.getElementById(inputId);
+                    if (!input) return;
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        btn.innerText = '🙈';
+                    } else {
+                        input.type = 'password';
+                        btn.innerText = '👁️';
+                    }
+                }
+            </script>
             {% else %}
             <!-- Hero Banner -->
             <div class="welcome-banner">
