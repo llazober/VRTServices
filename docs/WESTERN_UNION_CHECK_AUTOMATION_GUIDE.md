@@ -203,7 +203,7 @@ for cid in check_ids:
 
 Strategy 1 is fully integrated into the VRTServices CRM Dashboard interface:
 
-1. **Sidebar Navigation**: Click **WU Check Automation** (green badge at bottom of side menu) or navigate directly to `/western-union-checks`.
+1. **Direct Navigation**: Navigate directly to `/western-union-checks` if needed.
 2. **1-Click Launcher**: Click **🚀 Launch Playwright Routine** to launch Chromium automatically in the background.
 3. **Interactive Script Download**: Download `automate_wu_checks.py` directly from the dashboard for command-line execution.
 4. **Live Check Repository Explorer**: Browse, view, and monitor all downloaded check PDFs saved in `./western_union_checks/`.
