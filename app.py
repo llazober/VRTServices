@@ -12478,7 +12478,7 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "W2",        "keywords": ["w-2", "wage and tax statement", "wages, tips", "employer's ein", "allocated tips"], "min_matches": 1},
     {"doc_type": "1099-NEC",  "keywords": ["1099-nec", "nonemployee compensation", "nonemployee comp"], "min_matches": 1},
     {"doc_type": "1099-MISC", "keywords": ["1099-misc", "miscellaneous income", "rents", "royalties", "prizes", "fishing boat"], "min_matches": 2},
-    {"doc_type": "1099-INT",  "keywords": ["1099-int", "interest income", "interest earned", "early withdrawal penalty"], "min_matches": 1},
+    {"doc_type": "1099-INT",  "keywords": ["1099-int", "1099int", "1099 int", "form 1099-int", "form 1099int", "interest income", "interest earned", "early withdrawal penalty", "tax-exempt interest"], "min_matches": 1},
     {"doc_type": "1099-DIV",  "keywords": ["1099-div", "dividends and distributions", "total ordinary dividends"], "min_matches": 1},
     {"doc_type": "1099-R",    "keywords": ["1099-r", "distributions from pensions", "annuities", "gross distribution", "ira/sep/simple"], "min_matches": 1},
     {"doc_type": "1099-G",    "keywords": ["1099-g", "certain government payments", "unemployment compensation", "state income tax refunds"], "min_matches": 1},
@@ -12613,17 +12613,39 @@ def _detect_tax_doc_type(ocr_text: str) -> tuple[str | None, float]:
     """
     Runs keyword patterns against OCR text.
     Returns (doc_type, confidence) or (None, 0.0).
-    confidence = fraction of keywords matched / min_matches (capped at 1.0).
     """
     if not ocr_text or len(ocr_text.strip()) < 50:
         return None, 0.0
 
+    clean_ocr = ocr_text.lower()
+
+    # 1. Direct Form Code Priority Detection
+    for pattern in TAX_DOC_PATTERNS:
+        doc_type = pattern["doc_type"]
+        dt_clean = doc_type.lower()
+        form_variants = [
+            f"form {dt_clean}",
+            dt_clean,
+            f"form{dt_clean}",
+            dt_clean.replace("-", ""),
+            dt_clean.replace("-", " "),
+            f"form {dt_clean.replace('-', '')}",
+            f"form {dt_clean.replace('-', ' ')}",
+            f"form_{dt_clean.replace('-', '_')}"
+        ]
+        if any(fv in clean_ocr for fv in form_variants):
+            matched = sum(1 for kw in pattern["keywords"] if kw in clean_ocr)
+            if matched >= pattern["min_matches"]:
+                conf = max(0.90, min(1.0, (matched + 1) / len(pattern["keywords"])))
+                return doc_type, conf
+
+    # 2. General Keyword Ratio Scoring
     best_type = None
     best_conf = 0.0
     for pattern in TAX_DOC_PATTERNS:
-        matched = sum(1 for kw in pattern["keywords"] if kw in ocr_text)
+        matched = sum(1 for kw in pattern["keywords"] if kw in clean_ocr)
         if matched >= pattern["min_matches"]:
-            conf = min(1.0, matched / len(pattern["keywords"]))
+            conf = min(1.0, matched / max(1, pattern["min_matches"]))
             if conf > best_conf:
                 best_conf = conf
                 best_type = pattern["doc_type"]
