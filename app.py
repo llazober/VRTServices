@@ -12654,11 +12654,11 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
         if doc_type:
             renamed_filename = f"{doc_type}_{tax_year}.pdf"
             status = "Matched"
-            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) → renaming to '{renamed_filename}'")
+            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) -> renaming to '{renamed_filename}'")
         else:
             renamed_filename = f"{base_name}_review.pdf"
             status = "Needs Review"
-            print(f"[TAX CLASSIFY] Could not detect type → flagging as '{renamed_filename}'")
+            print(f"[TAX CLASSIFY] Could not detect type -> flagging as '{renamed_filename}'")
 
         new_file_key = None
         if client_s3:
@@ -12699,7 +12699,7 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                 )
                 if new_file_key != clean_key:
                     client_s3.delete_object(Bucket=bucket, Key=clean_key)
-                print(f"[TAX CLASSIFY] Moved '{clean_key}' → '{new_file_key}'")
+                print(f"[TAX CLASSIFY] Moved '{clean_key}' -> '{new_file_key}'")
             except Exception as mv_err:
                 print(f"[TAX CLASSIFY S3 MOVE ERROR] {mv_err}")
                 new_file_key = clean_key  # fallback: keep original key
@@ -13209,7 +13209,7 @@ async def send_tax_requirements_email(request: Request):
                     with urllib.request.urlopen(req_http) as resp:
                         resp.read()
                     sent_count += 1
-                    print(f"[TAX EMAIL SENT] → {cust_email} ({cust.get('legal_name')})")
+                    print(f"[TAX EMAIL SENT] -> {cust_email} ({cust.get('legal_name')})")
                 except Exception as me:
                     errors.append(f"Email send failed for {cust.get('legal_name')}: {me}")
                     print(f"[TAX EMAIL ERROR] {me}")
