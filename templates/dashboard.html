@@ -8064,12 +8064,19 @@
                 const res = await fetch('/api/tax-docs/classify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customer_id: currentChecklistCustomerId, file_key: fileKey, original_filename: originalFilename })
+                    body: JSON.stringify({
+                        customer_id: currentChecklistCustomerId,
+                        file_key: fileKey,
+                        original_filename: originalFilename,
+                        tax_year: _taxDocCurrentYear
+                    })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Classify failed');
-                alert(`✅ ${data.message} — results will appear in a few seconds.`);
-                setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), 4000);
+                alert(`✅ ${data.message} — OCR processing started.`);
+                [1000, 3500, 7000].forEach(delay => {
+                    setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), delay);
+                });
             } catch (err) {
                 alert(`❌ Error: ${err.message}`);
             }

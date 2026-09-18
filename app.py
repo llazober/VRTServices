@@ -12506,9 +12506,33 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
             return ""
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         clean_key = clean_s3_key(file_key)
-        s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
-        file_bytes = s3_obj["Body"].read()
+        file_bytes = None
+        try:
+            s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
+            file_bytes = s3_obj["Body"].read()
+        except Exception as s3_err:
+            dir_name = os.path.dirname(clean_key)
+            base_name = os.path.splitext(os.path.basename(clean_key))[0]
+            if base_name.endswith("_review"):
+                base_name = base_name[:-7]
+            fallback_keys = [
+                f"{dir_name}/{base_name}_review.pdf" if dir_name else f"{base_name}_review.pdf",
+                f"{dir_name}/{base_name}.pdf" if dir_name else f"{base_name}.pdf",
+                f"{dir_name}/{base_name}" if dir_name else base_name
+            ]
+            for fb in fallback_keys:
+                try:
+                    s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_s3_key(fb))
+                    file_bytes = s3_obj["Body"].read()
+                    if file_bytes:
+                        clean_key = clean_s3_key(fb)
+                        print(f"[TAX OCR S3 FALLBACK SUCCESS] '{file_key}' -> found at '{clean_key}'")
+                        break
+                except Exception:
+                    pass
+
         if not file_bytes:
+            print(f"[TAX OCR S3 READ ERROR] Could not fetch S3 object for '{file_key}'")
             return ""
 
         vision_client = get_vision_client()
@@ -12671,7 +12695,7 @@ def recalculate_tax_docs_status(customer_id: int, tax_year: int):
             conn.close()
 
 
-def classify_and_rename_tax_document(customer_id: int, file_key: str, original_filename: str = ""):
+def classify_and_rename_tax_document(customer_id: int, file_key: str, original_filename: str = "", tax_year: int = None):
     """
     Core tax document classification pipeline:
     1. OCR the file via Google Vision.
@@ -12681,7 +12705,8 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
     5. Recalculate completion status.
     """
     try:
-        tax_year = datetime.datetime.now().year - 1  # Always previous year
+        if not tax_year:
+            tax_year = datetime.datetime.now().year - 1  # Default to previous year
         original_filename = original_filename or os.path.basename(file_key)
         base_name = os.path.splitext(original_filename)[0]
         client_s3, err = get_s3_client()
@@ -12780,13 +12805,14 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                     UPDATE tax_return_received_docs SET
                         requirement_id = %s,
                         renamed_filename = %s,
+                        file_key = %s,
                         doc_type_detected = %s,
                         ocr_confidence = %s,
                         status = %s,
                         matched_at = %s
                     WHERE id = %s;
                 """, (
-                    req_id, renamed_filename, doc_type or "UNKNOWN",
+                    req_id, renamed_filename, fk_check, doc_type or "UNKNOWN",
                     round(confidence, 3), status, matched_at, existing[0]
                 ))
             else:
@@ -13103,13 +13129,15 @@ async def manual_classify_tax_doc(request: Request, background_tasks: Background
     customer_id = data.get("customer_id")
     file_key = (data.get("file_key") or "").strip()
     original_filename = (data.get("original_filename") or os.path.basename(file_key)).strip()
+    tax_year = data.get("tax_year")
     if not customer_id or not file_key:
         raise HTTPException(status_code=400, detail="customer_id and file_key are required")
     background_tasks.add_task(
         classify_and_rename_tax_document,
         customer_id=int(customer_id),
         file_key=file_key,
-        original_filename=original_filename
+        original_filename=original_filename,
+        tax_year=int(tax_year) if tax_year else None
     )
     return {"success": True, "message": f"Classification queued for '{original_filename}'"}
 
@@ -13122,6 +13150,7 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
     customer_id = data.get("customer_id")
+    tax_year = data.get("tax_year")
     if not customer_id:
         raise HTTPException(status_code=400, detail="customer_id is required")
 
@@ -13134,10 +13163,10 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
             cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
             cust = cur.fetchone()
 
-            # Prevent re-importing already classified or previously processed files
+            # Exclude only files that are already successfully matched
             cur.execute("""
                 SELECT file_key, original_filename FROM tax_return_received_docs
-                WHERE customer_id = %s;
+                WHERE customer_id = %s AND status = 'Matched';
             """, (customer_id,))
             for r in cur.fetchall():
                 if r.get("file_key"): existing_keys.add(r["file_key"])
@@ -13170,7 +13199,8 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
             classify_and_rename_tax_document,
             customer_id=int(customer_id),
             file_key=fk,
-            original_filename=orig
+            original_filename=orig,
+            tax_year=int(tax_year) if tax_year else None
         )
         queued_count += 1
 
