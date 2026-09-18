@@ -12482,7 +12482,7 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "1099-DIV",  "keywords": ["1099-div", "dividends and distributions", "total ordinary dividends"], "min_matches": 1},
     {"doc_type": "1099-R",    "keywords": ["1099-r", "distributions from pensions", "annuities", "gross distribution", "ira/sep/simple"], "min_matches": 1},
     {"doc_type": "1099-G",    "keywords": ["1099-g", "certain government payments", "unemployment compensation", "state income tax refunds"], "min_matches": 1},
-    {"doc_type": "SSA-1099",  "keywords": ["ssa-1099", "social security benefit statement", "net benefits", "social security administration"], "min_matches": 1},
+    {"doc_type": "SSA-1099",  "keywords": ["ssa-1099", "ssa 1099", "form ssa-1099", "social security benefit", "benefit statement", "net benefits", "social security administration"], "min_matches": 1},
     {"doc_type": "1098",      "keywords": ["1098", "mortgage interest statement", "mortgage interest received", "outstanding mortgage principal"], "min_matches": 1},
     {"doc_type": "1098-T",    "keywords": ["1098-t", "tuition statement", "student", "qualified tuition", "scholarships"], "min_matches": 2},
     {"doc_type": "1098-E",    "keywords": ["1098-e", "student loan interest statement", "student loan interest"], "min_matches": 1},
@@ -12493,52 +12493,92 @@ TAX_DOC_PATTERNS: list[dict] = [
 
 def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
     """
-    Downloads a PDF from S3, renders first 3 pages with pdf2image,
-    and runs Google Vision OCR on them. Returns combined lowercased text.
+    Downloads a PDF or Image from S3 and runs Google Vision OCR on it.
+    Returns combined lowercased text.
     """
     try:
         from extractor import get_vision_client, ocr_page_to_words, group_words_into_lines
-        import tempfile, subprocess
+        import tempfile
+        from PIL import Image
+
         client_s3, err = get_s3_client()
         if not client_s3:
             return ""
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         clean_key = clean_s3_key(file_key)
         s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
-        pdf_bytes = s3_obj["Body"].read()
+        file_bytes = s3_obj["Body"].read()
+        if not file_bytes:
+            return ""
+
+        vision_client = get_vision_client()
+        if not vision_client:
+            return ""
+
+        ext = os.path.splitext(clean_key)[1].lower()
+        all_text_parts = []
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            # 1. Image handling (.jpg, .jpeg, .png, .webp, .bmp, .tiff)
+            if ext in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"):
+                img_path = os.path.join(tmpdir, "doc_img.png")
+                try:
+                    import io
+                    im = Image.open(io.BytesIO(file_bytes))
+                    im.convert("RGB").save(img_path, "PNG")
+                except Exception:
+                    with open(img_path, "wb") as f:
+                        f.write(file_bytes)
+
+                try:
+                    words = ocr_page_to_words(vision_client, img_path)
+                    lines = group_words_into_lines(words)
+                    page_text = " ".join(line.get("text", "") for line in lines)
+                    all_text_parts.append(page_text)
+                except Exception as oe:
+                    print(f"[TAX OCR IMAGE ERROR] '{clean_key}': {oe}")
+
+                return " ".join(all_text_parts).lower()
+
+            # 2. PDF handling (.pdf)
             pdf_path = os.path.join(tmpdir, "doc.pdf")
             with open(pdf_path, "wb") as f:
-                f.write(pdf_bytes)
+                f.write(file_bytes)
 
-            # Convert first 3 pages to PNG
+            pages = []
             try:
-                from pdf2image import convert_from_path
-                pages = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=3)
-            except Exception as pe:
-                print(f"[TAX OCR] pdf2image error for '{clean_key}': {pe}")
-                return ""
+                import fitz
+                doc = fitz.open(pdf_path)
+                for page_idx in range(min(3, len(doc))):
+                    page = doc.load_page(page_idx)
+                    pix = page.get_pixmap(dpi=200)
+                    png_path = os.path.join(tmpdir, f"page_{page_idx}.png")
+                    pix.save(png_path)
+                    pages.append(png_path)
+                doc.close()
+            except Exception:
+                try:
+                    from pdf2image import convert_from_path
+                    converted_imgs = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=3)
+                    for i, page_img in enumerate(converted_imgs):
+                        png_path = os.path.join(tmpdir, f"page_{i}.png")
+                        page_img.save(png_path, "PNG")
+                        pages.append(png_path)
+                except Exception as pe:
+                    print(f"[TAX OCR PDF ERROR] '{clean_key}': {pe}")
 
-            vision_client = get_vision_client()
-            if not vision_client:
-                return ""
-
-            all_text_parts = []
-            for i, page_img in enumerate(pages):
-                png_path = os.path.join(tmpdir, f"page_{i}.png")
-                page_img.save(png_path, "PNG")
+            for png_path in pages:
                 try:
                     words = ocr_page_to_words(vision_client, png_path)
                     lines = group_words_into_lines(words)
                     page_text = " ".join(line.get("text", "") for line in lines)
                     all_text_parts.append(page_text)
                 except Exception as oe:
-                    print(f"[TAX OCR] Page {i} OCR error: {oe}")
+                    print(f"[TAX OCR PAGE ERROR] {png_path}: {oe}")
 
             return " ".join(all_text_parts).lower()
     except Exception as e:
-        print(f"[TAX OCR ERROR] Could not OCR '{file_key}': {e}")
+        print(f"[TAX OCR FATAL ERROR] Could not OCR '{file_key}': {e}")
         return ""
 
 
@@ -13087,26 +13127,21 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
 
     found_files = []
     cust = None
+    existing_keys = set()
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
             cust = cur.fetchone()
+
+            # Prevent re-importing already classified or previously processed files
             cur.execute("""
-                SELECT attachments_json FROM customer_communications
-                WHERE customer_id = %s AND attachments_json IS NOT NULL;
+                SELECT file_key, original_filename FROM tax_return_received_docs
+                WHERE customer_id = %s;
             """, (customer_id,))
-            for row in cur.fetchall():
-                att_json = row.get("attachments_json")
-                if att_json:
-                    try:
-                        items = json.loads(att_json) if isinstance(att_json, str) else att_json
-                        if isinstance(items, list):
-                            for item in items:
-                                fk = item if isinstance(item, str) else (item.get("file_key") or item.get("path") if isinstance(item, dict) else None)
-                                if fk and fk not in found_files:
-                                    found_files.append(fk)
-                    except Exception: pass
+            for r in cur.fetchall():
+                if r.get("file_key"): existing_keys.add(r["file_key"])
+                if r.get("original_filename"): existing_keys.add(r["original_filename"])
         conn.close()
     except Exception as e:
         print(f"[TAX SCAN DB ERR] {e}")
@@ -13122,7 +13157,8 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
                 res = client_s3.list_objects_v2(Bucket=bucket, Prefix=clean_s3_key(inbox_prefix))
                 for obj in res.get("Contents", []):
                     k = obj.get("Key")
-                    if k and not k.endswith("/") and k not in found_files:
+                    orig = os.path.basename(k)
+                    if k and not k.endswith("/") and k not in existing_keys and orig not in existing_keys:
                         found_files.append(k)
     except Exception as e:
         print(f"[TAX SCAN S3 ERR] {e}")
