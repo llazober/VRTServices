@@ -12923,6 +12923,28 @@ async def delete_received_tax_doc(doc_id: int, request: Request):
         if conn: conn.close()
 
 
+@app.delete("/api/tax-docs/received-all/{customer_id}")
+async def clear_all_received_tax_docs(customer_id: int, request: Request, tax_year: int = 2025):
+    """Delete all received document records for a customer for a given tax year."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tax_return_received_docs WHERE customer_id = %s AND tax_year = %s;", (customer_id, tax_year))
+            conn.commit()
+            recalculate_tax_docs_status(customer_id, tax_year)
+        return {"success": True, "customer_id": customer_id, "tax_year": tax_year}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
 @app.post("/api/tax-requirements/copy-from-year")
 async def copy_tax_requirements_from_year(request: Request):
     """Copy all requirements from a source tax year to a target tax year for a customer."""

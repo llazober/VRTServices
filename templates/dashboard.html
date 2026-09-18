@@ -8138,6 +8138,31 @@
             }
         }
 
+        async function clearAllReceivedTaxDocs() {
+            if (!currentChecklistCustomerId) return;
+            if (!confirm(`Are you sure you want to remove ALL received document records for tax year ${_taxDocCurrentYear}?`)) return;
+            const btn = document.getElementById('btnClearAllRecDocs');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Clearing…'; }
+            try {
+                _taxDocReceived = [];
+                renderTaxRecTable();
+
+                const res = await fetch(`/api/tax-docs/received-all/${currentChecklistCustomerId}?tax_year=${_taxDocCurrentYear}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Clear failed');
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                alert(`❌ Error: ${err.message}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '🗑 Clear All Received'; }
+            }
+        }
+
         async function sendTaxBulkEmail() {
             const taxYear = new Date().getFullYear() - 1;
             if (!confirm(`Send tax document requirements email to ALL Individual & Joint Account customers for tax year ${taxYear}?\n\nThis will send one email per customer and log the sent timestamp.`)) return;
@@ -8528,19 +8553,20 @@
 
                     <!-- Received Docs Tab -->
                     <div id="taxDocPanel-received" style="padding: 14px 18px; display: none;">
-                        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px;">
                             <button onclick="scanExistingTaxDocs()" id="btnScanInboxDocs" style="padding: 6px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Scan customer Inbox folder & emails for unclassified documents">🔍 Scan & Classify Inbox Docs</button>
+                            <button onclick="clearAllReceivedTaxDocs()" id="btnClearAllRecDocs" style="padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.35); color: #f87171; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Remove all received document records for this customer and tax year">🗑 Clear All Received</button>
                         </div>
                         <div id="taxRecTableWrap" style="width: 100%; overflow: hidden;">
                             <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.82rem;">
                                 <thead>
                                     <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                                        <th style="padding: 6px 8px; width: 22%;">Original File</th>
-                                        <th style="padding: 6px 8px; width: 22%;">→ Renamed As</th>
-                                        <th style="padding: 6px 8px; width: 18%;">Detected Type</th>
-                                        <th style="padding: 6px 8px; width: 12%;">Confidence</th>
+                                        <th style="padding: 6px 8px; width: 18%;">Original File</th>
+                                        <th style="padding: 6px 8px; width: 18%;">→ Renamed As</th>
+                                        <th style="padding: 6px 8px; width: 15%;">Detected Type</th>
+                                        <th style="padding: 6px 8px; width: 10%;">Confidence</th>
                                         <th style="padding: 6px 8px; width: 14%;">Status</th>
-                                        <th style="padding: 6px 8px; text-align: right; width: 12%;">Action</th>
+                                        <th style="padding: 6px 8px; text-align: right; width: 25%;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="taxRecTableBody">
