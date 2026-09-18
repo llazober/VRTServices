@@ -11941,12 +11941,14 @@ def process_inbound_post_processing(
                     if _ctype in ("individual", "joint account"):
                         for _sa_key in saved_attachments:
                             _sa_orig = os.path.basename(_sa_key)
-                            background_tasks.add_task(
-                                classify_and_rename_tax_document,
-                                customer_id=customer_id,
-                                file_key=_sa_key,
-                                original_filename=_sa_orig
-                            )
+                            try:
+                                classify_and_rename_tax_document(
+                                    customer_id=customer_id,
+                                    file_key=_sa_key,
+                                    original_filename=_sa_orig
+                                )
+                            except Exception as _cd_err:
+                                print(f"[TAX AUTO-CLASSIFY INBOUND ERROR] {_sa_key}: {_cd_err}")
                 except Exception as _cls_err:
                     print(f"[TAX CLASSIFY HOOK ERROR] {_cls_err}")
     except Exception as e_s3:
