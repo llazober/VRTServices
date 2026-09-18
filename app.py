@@ -12742,18 +12742,53 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
         ocr_text = _ocr_pdf_to_text_for_classification(file_key)
         doc_type, confidence = _detect_tax_doc_type(ocr_text)
 
-        # Determine status and display filename without performing any S3 file movement/renaming
-        renamed_filename = original_filename
+        # Determine status and rename file in-place inside Inbox/ if detected; leave original name if unclassified
         clean_key = clean_s3_key(file_key)
+        folder_dir = os.path.dirname(clean_key)
+        ext = os.path.splitext(original_filename)[1] or ".pdf"
 
         if doc_type:
             status = "Matched"
-            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) for file '{original_filename}'")
+            target_renamed = f"{doc_type}_{tax_year}{ext}"
+            new_file_key = clean_s3_key(f"{folder_dir}/{target_renamed}" if folder_dir else target_renamed)
+
+            if client_s3 and new_file_key != clean_key:
+                try:
+                    # Check for collision in Inbox/
+                    exists_already = False
+                    try:
+                        client_s3.head_object(Bucket=bucket, Key=new_file_key)
+                        exists_already = True
+                    except Exception:
+                        exists_already = False
+
+                    if exists_already:
+                        target_renamed = f"{doc_type}_{tax_year}_{base_name}{ext}"
+                        new_file_key = clean_s3_key(f"{folder_dir}/{target_renamed}" if folder_dir else target_renamed)
+
+                    client_s3.copy_object(
+                        Bucket=bucket,
+                        CopySource={"Bucket": bucket, "Key": clean_key},
+                        Key=new_file_key,
+                        ACL="private"
+                    )
+                    client_s3.delete_object(Bucket=bucket, Key=clean_key)
+                    renamed_filename = target_renamed
+                    print(f"[TAX CLASSIFY] Renamed in-place in Inbox: '{clean_key}' -> '{new_file_key}'")
+                except Exception as r_err:
+                    print(f"[TAX CLASSIFY S3 RENAME ERROR] {r_err}")
+                    renamed_filename = original_filename
+                    new_file_key = clean_key
+            else:
+                renamed_filename = target_renamed
+                new_file_key = clean_key
         else:
             status = "Needs Review"
-            print(f"[TAX CLASSIFY] Could not detect type for file '{original_filename}'")
+            renamed_filename = original_filename
+            new_file_key = clean_key
+            print(f"[TAX CLASSIFY] Could not detect type for file '{original_filename}' - keeping original name in Inbox")
 
-        fk_check = clean_key
+        fk_check = new_file_key
 
         # Match to a requirement
         req_id = None
