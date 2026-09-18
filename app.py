@@ -3917,15 +3917,21 @@ async def portal_upload_file(
             }
 
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-        client.upload_fileobj(file.file, bucket, file_key)
+        file.file.seek(0)
+        file_bytes = await file.read()
+        client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+
+        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
+        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
+        final_key = pdf_fk or file_key
 
         # Send email & log to customer history email log
-        send_portal_file_upload_notification(cust, filename, folder_name, file_key=file_key)
+        send_portal_file_upload_notification(cust, filename, folder_name, file_key=final_key)
 
         return {
             "status": "ok",
             "message": f"File '{filename}' uploaded successfully to {folder_name} folder. Email history logged.",
-            "file_key": file_key,
+            "file_key": final_key,
             "customer_name": cust.get("legal_name")
         }
     except HTTPException:
@@ -7032,19 +7038,25 @@ async def upload_customer_storage_file(
             raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
 
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-        client.upload_fileobj(file.file, bucket, file_key)
+        file.file.seek(0)
+        file_bytes = await file.read()
+        client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+
+        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
+        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
+        final_key = pdf_fk or file_key
 
         # Auto-update checklist milestones based on folder/file path & detected period
-        detected_period = extract_period_from_key(file_key)
-        lower_key = file_key.lower()
-        print(f"[CHECKLIST AUTO-UPDATE] Customer: {real_cust_id}, FileKey: '{file_key}', Period: '{detected_period}'")
+        detected_period = extract_period_from_key(final_key)
+        lower_key = final_key.lower()
+        print(f"[CHECKLIST AUTO-UPDATE] Customer: {real_cust_id}, FileKey: '{final_key}', Period: '{detected_period}'")
 
         if "check" in lower_key:
             update_customer_checklist_milestone(real_cust_id, detected_period, "checks_received")
         if "bank statement" in lower_key or "statement" in lower_key or (lower_key.endswith(".pdf") and "check" not in lower_key and "tax" not in lower_key):
             update_customer_checklist_milestone(real_cust_id, detected_period, "statement_received")
 
-        return {"message": "File uploaded successfully", "key": file_key}
+        return {"message": "File uploaded successfully", "key": final_key, "pdf_converted": bool(pdf_fk)}
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -7445,6 +7457,292 @@ async def delete_customer_storage_folder(customer_id: str, prefix: str, request:
     finally:
         if conn:
             conn.close()
+
+
+# ── PDF Conversion & Inbox Auto-Processing Utilities ──────────────────────
+def convert_image_or_text_bytes_to_pdf(filename: str, file_bytes: bytes) -> tuple[str, bytes]:
+    """
+    Converts image (JPG, PNG, WEBP, BMP, TIFF, HEIC) or text file bytes into a clean PDF byte stream.
+    Returns (pdf_filename, pdf_bytes).
+    """
+    import io, os
+    from PIL import Image, ImageOps
+    import fitz
+
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+    pdf_filename = f"{base_name}.pdf"
+    ext = os.path.splitext(filename)[1].lower()
+
+    if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.heic']:
+        try:
+            img = Image.open(io.BytesIO(file_bytes))
+            try:
+                img = ImageOps.exif_transpose(img)
+            except Exception:
+                pass
+
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode != "RGBA":
+                    img = img.convert("RGBA")
+                background.paste(img, mask=img.split()[3])
+                img = background
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
+            pdf_buf = io.BytesIO()
+            img.save(pdf_buf, format="PDF", resolution=100.0)
+            return pdf_filename, pdf_buf.getvalue()
+        except Exception as e_pil:
+            try:
+                img_doc = fitz.open(stream=file_bytes, filetype=ext.lstrip('.'))
+                pdf_bytes = img_doc.convert_to_pdf()
+                img_doc.close()
+                return pdf_filename, pdf_bytes
+            except Exception as e_fitz:
+                raise ValueError(f"Failed to convert image '{filename}' to PDF: {e_pil} / {e_fitz}")
+
+    elif ext in ['.txt', '.csv', '.log', '.json']:
+        try:
+            text_str = file_bytes.decode('utf-8', errors='replace')
+        except Exception:
+            text_str = str(file_bytes)
+        doc = fitz.open()
+        page = doc.new_page(width=612, height=792)
+        rect = fitz.Rect(36, 36, 576, 756)
+        page.insert_textbox(rect, text_str[:10000], fontsize=9, fontname="courier")
+        pdf_bytes = doc.tobytes()
+        doc.close()
+        return pdf_filename, pdf_bytes
+    else:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype=ext.lstrip('.'))
+            pdf_bytes = doc.convert_to_pdf()
+            doc.close()
+            return pdf_filename, pdf_bytes
+        except Exception as e:
+            raise ValueError(f"Unsupported file format '{ext}' for PDF conversion: {e}")
+
+
+def merge_images_to_pdf(image_tuples: list[tuple[str, bytes]]) -> bytes:
+    """
+    Merges multiple images into a single multi-page PDF document.
+    image_tuples: list of (filename, file_bytes).
+    Images are sorted alphabetically by filename as requested by user.
+    """
+    import fitz
+    sorted_tuples = sorted(image_tuples, key=lambda x: x[0].lower())
+    doc = fitz.open()
+
+    for fname, fbytes in sorted_tuples:
+        try:
+            _pdf_name, pdf_bytes = convert_image_or_text_bytes_to_pdf(fname, fbytes)
+            img_pdf = fitz.open("pdf", pdf_bytes)
+            doc.insert_pdf(img_pdf)
+            img_pdf.close()
+        except Exception as e:
+            print(f"[MERGE PDF WARNING] Failed to convert/insert '{fname}': {e}")
+
+    final_bytes = doc.tobytes()
+    doc.close()
+    return final_bytes
+
+
+def process_inbox_file_pdf_conversion(s3client, bucket: str, file_key: str, file_bytes: bytes = None) -> tuple[str | None, str | None]:
+    """
+    Option C: Converts a non-PDF file landing in storage to PDF.
+    - Saves the generated PDF at the current folder (e.g., .../Inbox/file.pdf).
+    - Moves the original raw file into .../Inbox/Raw_Originals/file.jpg.
+    Returns (pdf_key, raw_originals_key).
+    """
+    import os
+    ext = os.path.splitext(file_key)[1].lower()
+    if not ext or ext == '.pdf' or '/raw_originals/' in file_key.lower():
+        return None, None
+
+    clean_key = clean_s3_key(file_key)
+    folder_dir = os.path.dirname(clean_key)
+    filename = os.path.basename(clean_key)
+    base_name = os.path.splitext(filename)[0]
+
+    pdf_key = f"{folder_dir}/{base_name}.pdf" if folder_dir else f"{base_name}.pdf"
+    raw_originals_dir = f"{folder_dir}/Raw_Originals" if folder_dir else "Raw_Originals"
+    raw_originals_key = f"{raw_originals_dir}/{filename}"
+
+    if not file_bytes:
+        try:
+            s3_obj = s3client.get_object(Bucket=bucket, Key=clean_key)
+            file_bytes = s3_obj["Body"].read()
+        except Exception as e:
+            print(f"[PDF AUTO-CONVERT S3 READ ERROR] '{clean_key}': {e}")
+            return None, None
+
+    try:
+        _pdf_name, pdf_bytes = convert_image_or_text_bytes_to_pdf(filename, file_bytes)
+        
+        # 1. Save PDF at current folder level
+        s3client.put_object(Bucket=bucket, Key=pdf_key, Body=pdf_bytes, ACL='private')
+        print(f"[PDF AUTO-CONVERT SUCCESS] Created PDF '{pdf_key}' ({len(pdf_bytes)} bytes)")
+
+        # 2. Move raw original file to Raw_Originals subfolder (Option C)
+        s3client.copy_object(
+            Bucket=bucket,
+            CopySource={'Bucket': bucket, 'Key': clean_key},
+            Key=raw_originals_key,
+            ACL='private'
+        )
+        s3client.delete_object(Bucket=bucket, Key=clean_key)
+        print(f"[OPTION C RAW MOVED] '{clean_key}' -> '{raw_originals_key}'")
+
+        return pdf_key, raw_originals_key
+    except Exception as e:
+        print(f"[PDF CONVERSION ERROR] Failed to process '{clean_key}': {e}")
+        return None, None
+
+
+@app.post("/api/storage/convert-to-pdf")
+async def api_convert_file_to_pdf(request: Request):
+    """API endpoint to convert a specific non-PDF file in storage to PDF (Option C: moves original to Raw_Originals/)."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    key = (data.get("key") or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="Key parameter is required")
+
+    client, err = get_s3_client()
+    if not client:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    pdf_key, raw_key = process_inbox_file_pdf_conversion(client, bucket, key)
+    if not pdf_key:
+        raise HTTPException(status_code=400, detail="Failed to convert file to PDF or file is already a PDF")
+
+    return {
+        "success": True,
+        "pdf_key": pdf_key,
+        "raw_key": raw_key,
+        "message": f"Successfully converted file to PDF: '{os.path.basename(pdf_key)}'"
+    }
+
+
+@app.post("/api/storage/batch-convert-inbox")
+async def api_batch_convert_inbox(request: Request):
+    """Batch converts all non-PDF files in a folder prefix (e.g. Inbox/) to PDF."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    prefix = (data.get("prefix") or "").strip()
+    if not prefix:
+        raise HTTPException(status_code=400, detail="Prefix parameter is required")
+
+    if not prefix.endswith("/"):
+        prefix += "/"
+
+    client, err = get_s3_client()
+    if not client:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    res = client.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
+    contents = res.get("Contents", [])
+
+    converted_count = 0
+    converted_keys = []
+    for item in contents:
+        k = item["Key"]
+        filename = os.path.basename(k)
+        ext = os.path.splitext(filename)[1].lower()
+        if ext and ext != ".pdf" and not k.lower().endswith("/"):
+            pdf_k, raw_k = process_inbox_file_pdf_conversion(client, bucket, k)
+            if pdf_k:
+                converted_count += 1
+                converted_keys.append(pdf_k)
+
+    return {
+        "success": True,
+        "converted_count": converted_count,
+        "converted_keys": converted_keys,
+        "message": f"Converted {converted_count} file(s) to PDF in folder '{prefix}'"
+    }
+
+
+@app.post("/api/storage/merge-to-pdf")
+async def api_merge_images_to_pdf(request: Request):
+    """Merges multiple selected image files into a single multi-page PDF document."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    keys = data.get("keys") or []
+    output_filename = (data.get("output_filename") or "Merged_Document.pdf").strip()
+    if not output_filename.lower().endswith(".pdf"):
+        output_filename += ".pdf"
+
+    if not keys or len(keys) < 1:
+        raise HTTPException(status_code=400, detail="At least 1 file key is required for merging")
+
+    client, err = get_s3_client()
+    if not client:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    image_tuples = []
+
+    for k in keys:
+        clean_k = clean_s3_key(k)
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=clean_k)
+            b = s3_obj["Body"].read()
+            fname = os.path.basename(clean_k)
+            image_tuples.append((fname, b))
+        except Exception as e:
+            print(f"[MERGE READ ERROR] '{clean_k}': {e}")
+
+    if not image_tuples:
+        raise HTTPException(status_code=400, detail="Could not read any of the specified image files")
+
+    # Merge images into PDF (sorted alphabetically by filename)
+    merged_pdf_bytes = merge_images_to_pdf(image_tuples)
+
+    # Determine target S3 folder from first key
+    first_key = clean_s3_key(keys[0])
+    parent_folder = os.path.dirname(first_key)
+    merged_pdf_key = f"{parent_folder}/{output_filename}" if parent_folder else output_filename
+
+    client.put_object(Bucket=bucket, Key=merged_pdf_key, Body=merged_pdf_bytes, ACL='private')
+    print(f"[MERGE PDF SUCCESS] Uploaded '{merged_pdf_key}' ({len(merged_pdf_bytes)} bytes)")
+
+    # Option C: Move original merged images to Raw_Originals subfolder
+    raw_dir = f"{parent_folder}/Raw_Originals" if parent_folder else "Raw_Originals"
+    for k in keys:
+        clean_k = clean_s3_key(k)
+        fname = os.path.basename(clean_k)
+        if not fname.lower().endswith(".pdf"):
+            dest_raw_key = f"{raw_dir}/{fname}"
+            try:
+                client.copy_object(
+                    Bucket=bucket,
+                    CopySource={'Bucket': bucket, 'Key': clean_k},
+                    Key=dest_raw_key,
+                    ACL='private'
+                )
+                client.delete_object(Bucket=bucket, Key=clean_k)
+            except Exception as e_mov:
+                print(f"[MERGE MOVE RAW WARNING] '{clean_k}': {e_mov}")
+
+    return {
+        "success": True,
+        "merged_key": merged_pdf_key,
+        "message": f"Successfully merged {len(image_tuples)} file(s) into '{output_filename}'"
+    }
+
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
 def format_period_label(period_str, workflow_mode="bookkeeping"):
@@ -11500,7 +11798,12 @@ def process_inbound_post_processing(
                     if m_bytes:
                         fk = f"{target_folder}{m_name}"
                         s3client.put_object(Bucket=bucket, Key=fk, Body=m_bytes, ACL='private')
-                        saved_attachments.append(fk)
+                        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
+                        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(s3client, bucket, fk, file_bytes=m_bytes)
+                        if pdf_fk:
+                            saved_attachments.append(pdf_fk)
+                        else:
+                            saved_attachments.append(fk)
 
                 for att in _att_list:
                     file_bytes, att_name, att_id = None, "attached_file.pdf", None
@@ -11524,7 +11827,12 @@ def process_inbound_post_processing(
                     if file_bytes:
                         fk = f"{target_folder}{att_name}"
                         s3client.put_object(Bucket=bucket, Key=fk, Body=file_bytes, ACL='private')
-                        saved_attachments.append(fk)
+                        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
+                        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(s3client, bucket, fk, file_bytes=file_bytes)
+                        if pdf_fk:
+                            saved_attachments.append(pdf_fk)
+                        else:
+                            saved_attachments.append(fk)
 
                 if saved_attachments and comm_id:
                     try:

@@ -5870,12 +5870,13 @@
                     rowsHtml += `
                         <tr class="storage-item-row ${isPdf ? 'storage-pdf-row' : ''}" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" data-name-search="${f.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 10px 12px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px; word-break: break-all; ${isPdf ? 'cursor: pointer;' : ''}">
+                                <input type="checkbox" class="storage-item-select-chk" data-key="${attrKey}" data-name="${attrName}" onchange="updateStorageBatchSelectionState()" onclick="event.stopPropagation()" style="cursor: pointer; accent-color: #38bdf8; width: 15px; height: 15px; margin-right: 4px;">
                                 <span style="font-size: 1.1rem;">${icon}</span> ${f.name}
                             </td>
                             <td style="padding: 10px 12px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${formatBytes(f.size)}</td>
                             <td style="padding: 10px 12px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;">${dateStr}</td>
                             <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
-                                ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : ''}
+                                ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : `<button class="storage-convert-file-pdf-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Convert file to PDF (Moves original to Raw_Originals/)">📄 -> PDF</button>`}
                                 <button class="storage-rename-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Rename file">✏️ Rename</button>
                                 <button class="storage-move-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Move file to another folder">🚚 Move</button>
                                 <a href="/api/storage/download?key=${encodeURIComponent(attrKey)}" target="_blank" download style="padding: 4px 10px; background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.35); color: #00e676; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-decoration: none; margin-right: 6px; display: inline-block;">📥 Download</a>
@@ -5916,6 +5917,7 @@
             });
             tbody.querySelectorAll('.storage-pdf-row').forEach(row => {
                 row.querySelector('td')?.addEventListener('click', (e) => {
+                    if (e.target.closest('.storage-item-select-chk')) return;
                     const key = row.getAttribute('data-key');
                     const name = row.getAttribute('data-name');
                     const url = row.getAttribute('data-url');
@@ -5929,6 +5931,13 @@
                     const name = btn.getAttribute('data-name');
                     const url = btn.getAttribute('data-url');
                     openPdfViewerModal(e, key, name, url);
+                });
+            });
+            tbody.querySelectorAll('.storage-convert-file-pdf-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    convertSingleStorageFileToPdf(key);
                 });
             });
             tbody.querySelectorAll('.storage-rename-file-btn').forEach(btn => {
@@ -5957,6 +5966,103 @@
             });
 
             if (stats) stats.textContent = `${subfolders.length} folder(s), ${files.length} file(s)`;
+            updateStorageBatchSelectionState();
+        }
+
+        function updateStorageBatchSelectionState() {
+            const chks = document.querySelectorAll('.storage-item-select-chk:checked');
+            const mergeBtn = document.getElementById('storageMergePdfBtn');
+            const selectAllChk = document.getElementById('storageSelectAllChk');
+            const allChks = document.querySelectorAll('.storage-item-select-chk');
+
+            if (mergeBtn) {
+                if (chks.length > 0) {
+                    mergeBtn.style.display = 'inline-block';
+                    mergeBtn.innerHTML = `📑 Merge Selected (${chks.length}) -> PDF`;
+                } else {
+                    mergeBtn.style.display = 'none';
+                }
+            }
+            if (selectAllChk && allChks.length > 0) {
+                selectAllChk.checked = (chks.length === allChks.length);
+            }
+        }
+
+        function toggleStorageSelectAll(masterChk) {
+            const chks = document.querySelectorAll('.storage-item-select-chk');
+            chks.forEach(c => { c.checked = masterChk.checked; });
+            updateStorageBatchSelectionState();
+        }
+
+        async function convertSingleStorageFileToPdf(key) {
+            if (!key) return;
+            const filename = key.split('/').pop();
+            try {
+                if (typeof showToast === 'function') showToast(`Converting '${filename}' to PDF...`, 'info');
+                const res = await fetch('/api/storage/convert-to-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: key })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Conversion failed');
+                if (typeof showToast === 'function') showToast(data.message || 'File converted to PDF successfully!', 'success');
+                if (currentStorageCustomerId && currentStoragePrefix) {
+                    refreshCurrentStorageFolder();
+                }
+            } catch (err) {
+                alert('PDF Conversion Error: ' + err.message);
+            }
+        }
+
+        async function batchConvertInboxToPdf() {
+            if (!currentStoragePrefix) return;
+            const folderName = currentStoragePrefix.split('/').filter(Boolean).pop() || 'folder';
+            if (!confirm(`Convert all non-PDF files in '${folderName}' to PDF?\n\nRaw original files will be moved into a 'Raw_Originals' subfolder.`)) return;
+
+            try {
+                if (typeof showToast === 'function') showToast(`Converting files in '${folderName}' to PDF...`, 'info');
+                const res = await fetch('/api/storage/batch-convert-inbox', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prefix: currentStoragePrefix })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Batch conversion failed');
+                if (typeof showToast === 'function') showToast(data.message || 'Batch PDF conversion complete!', 'success');
+                refreshCurrentStorageFolder();
+            } catch (err) {
+                alert('Batch PDF Conversion Error: ' + err.message);
+            }
+        }
+
+        async function mergeSelectedStorageImagesToPdf() {
+            const checkedBoxes = Array.from(document.querySelectorAll('.storage-item-select-chk:checked'));
+            if (checkedBoxes.length < 1) {
+                alert('Please select at least 1 image file to merge into PDF.');
+                return;
+            }
+
+            const keys = checkedBoxes.map(cb => cb.getAttribute('data-key'));
+            const defaultName = `Merged_Document_${new Date().toISOString().slice(0,10)}.pdf`;
+            const outName = prompt(`Enter a name for the merged PDF document:`, defaultName);
+            if (!outName) return;
+
+            try {
+                if (typeof showToast === 'function') showToast(`Merging ${keys.length} file(s) into '${outName}'...`, 'info');
+                const res = await fetch('/api/storage/merge-to-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: keys, output_filename: outName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Merge failed');
+                if (typeof showToast === 'function') showToast(data.message || 'Merged PDF created successfully!', 'success');
+                refreshCurrentStorageFolder();
+            } catch (err) {
+                alert('PDF Merge Error: ' + err.message);
+            }
+        }
         }
 
         function filterStorageItems() {
@@ -7769,6 +7875,8 @@
                 <input type="file" id="storageFileInput" multiple style="display: none;" onchange="handleStorageFileUpload(event)">
                 <button onclick="document.getElementById('storageFileInput').click()" style="padding: 7px 16px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">📤 Upload Files</button>
                 <button onclick="createStorageFolder()" style="padding: 7px 14px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Create a new subfolder in the current directory">📁 New Folder</button>
+                <button id="storageMergePdfBtn" onclick="mergeSelectedStorageImagesToPdf()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Merge checked image files into 1 PDF document">📑 Merge Selected (0) -> PDF</button>
+                <button id="storageBatchConvertBtn" onclick="batchConvertInboxToPdf()" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Convert all non-PDF files in this directory to PDF">📄 Convert Inbox to PDF</button>
                 <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
             </div>
@@ -7781,10 +7889,10 @@
             <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
                 <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #94a3b8; font-size: 0.72rem; text-transform: uppercase;">
-                        <th style="padding: 10px 12px;">Name</th>
+                        <th style="padding: 10px 12px; display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="storageSelectAllChk" onchange="toggleStorageSelectAll(this)" style="cursor: pointer; accent-color: #38bdf8; width: 15px; height: 15px;" title="Select all items"> Name</th>
                         <th style="padding: 10px 12px; width: 120px;">Size</th>
                         <th style="padding: 10px 12px; width: 180px;">Last Modified</th>
-                        <th style="padding: 10px 12px; width: 170px; text-align: right;">Actions</th>
+                        <th style="padding: 10px 12px; width: 220px; text-align: right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="storageFilesTbody"></tbody>
