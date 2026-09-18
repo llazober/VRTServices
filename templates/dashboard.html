@@ -7544,6 +7544,10 @@
                 }
                 if (bkSection) bkSection.style.display = 'none';
                 if (taxSection) taxSection.style.display = 'flex';
+                // Auto-load Tax Document Tracker when switching to tax tab
+                if (currentChecklistCustomerId) {
+                    loadTaxDocTracking(currentChecklistCustomerId);
+                }
             } else {
                 if (bkTabBtn) {
                     bkTabBtn.style.background = 'rgba(56, 189, 248, 0.25)';
@@ -7811,6 +7815,240 @@
                 alert(`❌ Save Notes Error: ${err.message}`);
             }
         }
+
+        // ── TAX DOCUMENT TRACKING JS ────────────────────────────────────────────
+
+        let _taxDocCurrentYear = new Date().getFullYear() - 1;
+        let _taxDocReqs = [];
+        let _taxDocReceived = [];
+
+        function switchTaxDocTab(tabName) {
+            ['reqs', 'received'].forEach(t => {
+                const btn = document.getElementById(`taxDocTabBtn-${t}`);
+                const panel = document.getElementById(`taxDocPanel-${t}`);
+                if (t === tabName) {
+                    btn.style.background = 'rgba(248,113,113,0.15)';
+                    btn.style.color = '#f87171';
+                    btn.style.borderColor = 'rgba(248,113,113,0.4)';
+                    if (panel) panel.style.display = 'block';
+                } else {
+                    btn.style.background = 'rgba(255,255,255,0.03)';
+                    btn.style.color = '#64748b';
+                    btn.style.borderColor = 'rgba(255,255,255,0.08)';
+                    if (panel) panel.style.display = 'none';
+                }
+            });
+        }
+
+        function _taxDocStatusBadgeHtml(status) {
+            if (status === 'Completed') return `<span id="taxDocStatusBadge" style="font-size:0.7rem;padding:3px 12px;border-radius:20px;font-weight:800;background:rgba(0,230,118,0.15);color:#00e676;border:1px solid rgba(0,230,118,0.3);">✅ COMPLETED</span>`;
+            if (status === 'Needs Review') return `<span id="taxDocStatusBadge" style="font-size:0.7rem;padding:3px 12px;border-radius:20px;font-weight:800;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.3);">🔍 NEEDS REVIEW</span>`;
+            return `<span id="taxDocStatusBadge" style="font-size:0.7rem;padding:3px 12px;border-radius:20px;font-weight:800;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);">⚠️ INCOMPLETE</span>`;
+        }
+
+        async function loadTaxDocTracking(customerId) {
+            if (!customerId) return;
+            _taxDocCurrentYear = new Date().getFullYear() - 1;
+            try {
+                // Load requirements + received status in parallel
+                const [reqRes, statusRes] = await Promise.all([
+                    fetch(`/api/tax-requirements/${customerId}?tax_year=${_taxDocCurrentYear}`),
+                    fetch(`/api/tax-docs-status/${customerId}?tax_year=${_taxDocCurrentYear}`)
+                ]);
+                const reqData = await reqRes.json();
+                const statusData = await statusRes.json();
+                _taxDocReqs = reqData.requirements || [];
+                _taxDocReceived = statusData.received_docs || [];
+
+                // Update status badge
+                const badgeEl = document.getElementById('taxDocStatusBadge');
+                if (badgeEl) {
+                    const st = statusData.status || 'Incomplete';
+                    const rcv = statusData.total_received || 0;
+                    const tot = statusData.total_required || 0;
+                    const nr = statusData.needs_review || 0;
+                    let badgeText = st === 'Completed' ? '✅ COMPLETED' : (st === 'Needs Review' ? `🔍 NEEDS REVIEW (${nr})` : `⚠️ INCOMPLETE (${rcv}/${tot})`);
+                    let badgeColor = st === 'Completed' ? '#00e676' : (st === 'Needs Review' ? '#facc15' : '#f87171');
+                    let badgeBg = st === 'Completed' ? 'rgba(0,230,118,0.15)' : (st === 'Needs Review' ? 'rgba(250,204,21,0.15)' : 'rgba(248,113,113,0.15)');
+                    let badgeBorder = st === 'Completed' ? 'rgba(0,230,118,0.3)' : (st === 'Needs Review' ? 'rgba(250,204,21,0.3)' : 'rgba(248,113,113,0.3)');
+                    badgeEl.textContent = badgeText;
+                    badgeEl.style.color = badgeColor;
+                    badgeEl.style.background = badgeBg;
+                    badgeEl.style.border = `1px solid ${badgeBorder}`;
+                }
+
+                // Update email sent label
+                const emailLabel = document.getElementById('taxDocEmailSentLabel');
+                if (emailLabel) {
+                    const sentAt = statusData.req_email_sent_at;
+                    emailLabel.textContent = sentAt ? `📧 Email sent: ${new Date(sentAt).toLocaleString()}` : '📧 Email not sent yet';
+                }
+
+                renderTaxReqTable();
+                renderTaxRecTable();
+            } catch (err) {
+                console.error('[TAX DOC TRACKING] Load error:', err);
+            }
+        }
+
+        function renderTaxReqTable() {
+            const tbody = document.getElementById('taxReqTableBody');
+            if (!tbody) return;
+            if (!_taxDocReqs.length) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding:16px;text-align:center;color:#475569;font-size:0.82rem;">No requirements defined yet. Click "+ Add Document" to start.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = _taxDocReqs.map(r => {
+                const received = r.received_status === 'Matched';
+                const needsReview = r.received_status === 'Needs Review';
+                let statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(148,163,184,0.12);color:#94a3b8;border:1px solid rgba(148,163,184,0.25);">Pending</span>`;
+                if (received) statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(0,230,118,0.12);color:#00e676;border:1px solid rgba(0,230,118,0.25);">✅ Received</span>`;
+                if (needsReview) statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(250,204,21,0.12);color:#facc15;border:1px solid rgba(250,204,21,0.25);">🔍 Review</span>`;
+                return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <td style="padding:8px;color:#f8fafc;font-weight:700;">${r.doc_type}</td>
+                    <td style="padding:8px;color:#94a3b8;font-size:0.8rem;">${r.doc_label || ''}${r.source_description ? ` <em style="color:#64748b;">(${r.source_description})</em>` : ''}</td>
+                    <td style="padding:8px;">${statusBadge}</td>
+                    <td style="padding:8px;text-align:right;">
+                        <button onclick="deleteTaxRequirement(${r.id})" title="Delete" style="padding:3px 8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;border-radius:6px;font-size:0.72rem;cursor:pointer;">🗑</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderTaxRecTable() {
+            const tbody = document.getElementById('taxRecTableBody');
+            if (!tbody) return;
+            if (!_taxDocReceived.length) {
+                tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;text-align:center;color:#475569;font-size:0.82rem;">No documents received or classified yet.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = _taxDocReceived.map(d => {
+                let stBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(148,163,184,0.12);color:#94a3b8;">Received</span>`;
+                if (d.status === 'Matched') stBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(0,230,118,0.12);color:#00e676;border:1px solid rgba(0,230,118,0.25);">✅ Matched</span>`;
+                if (d.status === 'Needs Review') stBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(250,204,21,0.12);color:#facc15;border:1px solid rgba(250,204,21,0.25);">🔍 Review</span>`;
+                const conf = d.ocr_confidence ? `${Math.round(d.ocr_confidence * 100)}%` : '—';
+                const fileKey = d.file_key || '';
+                return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <td style="padding:8px;color:#94a3b8;font-size:0.78rem;">${d.original_filename || '—'}</td>
+                    <td style="padding:8px;color:#f8fafc;font-weight:700;font-size:0.78rem;">${d.renamed_filename || '—'}</td>
+                    <td style="padding:8px;color:#38bdf8;font-weight:700;font-size:0.78rem;">${d.doc_type_detected || '—'}</td>
+                    <td style="padding:8px;color:#94a3b8;font-size:0.78rem;">${conf}</td>
+                    <td style="padding:8px;">${stBadge}</td>
+                    <td style="padding:8px;text-align:right;">
+                        <button onclick="reClassifyTaxDoc('${fileKey}', '${d.original_filename || ''}')" title="Re-classify" style="padding:3px 8px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);color:#38bdf8;border-radius:6px;font-size:0.72rem;cursor:pointer;">🔄</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function sendTaxRequirementsEmail() {
+            if (!currentChecklistCustomerId) return;
+            if (!confirm(`Send tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`)) return;
+            const btn = document.getElementById('btnSendTaxEmail');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+            try {
+                const res = await fetch('/api/tax-requirements/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Send failed');
+                alert(`✅ ${data.message}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                alert(`❌ Error: ${err.message}`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '📧 Send Requirements Email'; }
+            }
+        }
+
+        async function copyTaxRequirementsFromYear() {
+            if (!currentChecklistCustomerId) return;
+            const fromYear = _taxDocCurrentYear - 1;
+            if (!confirm(`Copy all requirements from tax year ${fromYear} to ${_taxDocCurrentYear}?`)) return;
+            try {
+                const res = await fetch('/api/tax-requirements/copy-from-year', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: currentChecklistCustomerId, from_year: fromYear, to_year: _taxDocCurrentYear })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Copy failed');
+                alert(`✅ Copied ${data.copied_count} requirement(s) from ${fromYear} → ${_taxDocCurrentYear}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                alert(`❌ Error: ${err.message}`);
+            }
+        }
+
+        async function deleteTaxRequirement(reqId) {
+            if (!confirm('Delete this requirement?')) return;
+            try {
+                const res = await fetch(`/api/tax-requirements/${reqId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Delete failed');
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                alert(`❌ Error: ${err.message}`);
+            }
+        }
+
+        async function reClassifyTaxDoc(fileKey, originalFilename) {
+            if (!fileKey || !currentChecklistCustomerId) return;
+            if (!confirm(`Re-classify document "${originalFilename || fileKey}"?`)) return;
+            try {
+                const res = await fetch('/api/tax-docs/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: currentChecklistCustomerId, file_key: fileKey, original_filename: originalFilename })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Classify failed');
+                alert(`✅ ${data.message} — results will appear in a few seconds.`);
+                setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), 4000);
+            } catch (err) {
+                alert(`❌ Error: ${err.message}`);
+            }
+        }
+
+        const TAX_DOC_TYPES = ['W2','1099-NEC','1099-MISC','1099-INT','1099-DIV','1099-R','1099-G','SSA-1099','1098','1098-T','1098-E','1099-B','K-1','PRIOR-RETURN','OTHER'];
+
+        function openAddTaxRequirementModal() {
+            const docType = prompt(
+                `Enter document type for tax year ${_taxDocCurrentYear}:\n\nOptions: ${TAX_DOC_TYPES.join(', ')}\n\nType a value (or any custom type):`,
+                'W2'
+            );
+            if (!docType) return;
+            const label = prompt('Optional: Enter a label/description (e.g. "Employer W2 from Amazon")', '');
+            const source = prompt('Optional: Source description (e.g. "Amazon", "Chase Bank")', '');
+            addTaxRequirement(docType.toUpperCase(), label || '', source || '');
+        }
+
+        async function addTaxRequirement(docType, docLabel, sourceDescription) {
+            if (!currentChecklistCustomerId || !docType) return;
+            try {
+                const res = await fetch('/api/tax-requirements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_id: currentChecklistCustomerId,
+                        tax_year: _taxDocCurrentYear,
+                        doc_type: docType,
+                        doc_label: docLabel,
+                        source_description: sourceDescription,
+                        is_required: true
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Add failed');
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                alert(`❌ Error adding requirement: ${err.message}`);
+            }
+        }
+
+
 
         // --- Global Keyboard & Backdrop Event Delegation for All Modals ---
         document.addEventListener('keydown', function(e) {
@@ -8125,6 +8363,73 @@
                     <textarea id="checklistTaxNotesInput" rows="3" placeholder="Add optional preparer/reviewer notes or tax return comments..." style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; font-size: 0.8rem; outline: none; resize: vertical;"></textarea>
                     <button onclick="saveChecklistNotes(true)" style="margin-top: 8px; padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.35); color: #f87171; font-weight: 700; border-radius: 8px; font-size: 0.76rem; cursor: pointer;">💾 Save Tax Notes</button>
                 </div>
+
+                <!-- ══ TAX DOCUMENT TRACKING PANEL ══ -->
+                <div id="taxDocTrackingPanel" style="margin-top: 18px; border: 1px solid rgba(248,113,113,0.25); border-radius: 14px; background: rgba(248,113,113,0.04); overflow: hidden;">
+                    <!-- Header bar -->
+                    <div style="padding: 12px 18px; background: rgba(248,113,113,0.10); border-bottom: 1px solid rgba(248,113,113,0.2); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1rem;">📂</span>
+                            <span style="font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; color: #f8fafc;">Tax Document Tracker</span>
+                            <span id="taxDocStatusBadge" style="font-size: 0.7rem; padding: 3px 12px; border-radius: 20px; font-weight: 800; background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3);">Loading…</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <span id="taxDocEmailSentLabel" style="font-size: 0.7rem; color: #64748b; font-style: italic;"></span>
+                            <button onclick="sendTaxRequirementsEmail()" id="btnSendTaxEmail" style="padding: 6px 14px; background: linear-gradient(135deg,#2563eb,#38bdf8); color: #fff; border: none; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;">📧 Send Requirements Email</button>
+                            <button onclick="copyTaxRequirementsFromYear()" style="padding: 6px 14px; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.3); color: #facc15; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer;">📋 Copy Last Year</button>
+                        </div>
+                    </div>
+
+                    <!-- Sub-tabs -->
+                    <div style="display: flex; gap: 2px; padding: 10px 18px 0; border-bottom: 1px solid rgba(255,255,255,0.07);">
+                        <button id="taxDocTabBtn-reqs" onclick="switchTaxDocTab('reqs')" style="padding: 7px 16px; border-radius: 8px 8px 0 0; font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(248,113,113,0.4); border-bottom: none; background: rgba(248,113,113,0.15); color: #f87171;">📋 Requirements</button>
+                        <button id="taxDocTabBtn-received" onclick="switchTaxDocTab('received')" style="padding: 7px 16px; border-radius: 8px 8px 0 0; font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.08); border-bottom: none; background: rgba(255,255,255,0.03); color: #64748b;">📥 Received Docs</button>
+                    </div>
+
+                    <!-- Requirements Tab -->
+                    <div id="taxDocPanel-reqs" style="padding: 14px 18px;">
+                        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                            <button onclick="openAddTaxRequirementModal()" style="padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: #f87171; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer;">+ Add Document</button>
+                        </div>
+                        <div id="taxReqTableWrap" style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                                <thead>
+                                    <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
+                                        <th style="padding: 6px 8px;">Type</th>
+                                        <th style="padding: 6px 8px;">Label / Source</th>
+                                        <th style="padding: 6px 8px;">Status</th>
+                                        <th style="padding: 6px 8px; text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="taxReqTableBody">
+                                    <tr><td colspan="4" style="padding: 16px; text-align: center; color: #475569;">Loading requirements…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Received Docs Tab -->
+                    <div id="taxDocPanel-received" style="padding: 14px 18px; display: none;">
+                        <div id="taxRecTableWrap" style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                                <thead>
+                                    <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
+                                        <th style="padding: 6px 8px;">Original File</th>
+                                        <th style="padding: 6px 8px;">→ Renamed As</th>
+                                        <th style="padding: 6px 8px;">Detected Type</th>
+                                        <th style="padding: 6px 8px;">Confidence</th>
+                                        <th style="padding: 6px 8px;">Status</th>
+                                        <th style="padding: 6px 8px; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="taxRecTableBody">
+                                    <tr><td colspan="6" style="padding: 16px; text-align: center; color: #475569;">No received documents yet.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ══ END TAX DOCUMENT TRACKING PANEL ══ -->
             </div>
         </div>
 

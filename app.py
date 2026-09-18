@@ -1358,6 +1358,59 @@ def init_company_profile_table():
         if conn:
             conn.close()
 
+def init_tax_document_tracking_tables():
+    """Creates tax_return_requirements and tax_return_received_docs tables and extends customer_task_checklist."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tax_return_requirements (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    tax_year            INT NOT NULL,
+                    doc_type            VARCHAR(100) NOT NULL,
+                    doc_label           VARCHAR(200),
+                    source_description  VARCHAR(300),
+                    is_required         BOOLEAN NOT NULL DEFAULT TRUE,
+                    notes               TEXT,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(customer_id, tax_year, doc_type, source_description)
+                );
+                CREATE INDEX IF NOT EXISTS idx_taxreq_cust_year ON tax_return_requirements(customer_id, tax_year);
+
+                CREATE TABLE IF NOT EXISTS tax_return_received_docs (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    requirement_id      BIGINT REFERENCES tax_return_requirements(id) ON DELETE SET NULL,
+                    tax_year            INT NOT NULL,
+                    original_filename   VARCHAR(500),
+                    renamed_filename    VARCHAR(500),
+                    file_key            TEXT,
+                    doc_type_detected   VARCHAR(100),
+                    ocr_confidence      FLOAT DEFAULT 0,
+                    status              VARCHAR(30) DEFAULT 'Received',
+                    matched_at          TIMESTAMP,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_taxrec_cust_year ON tax_return_received_docs(customer_id, tax_year);
+
+                ALTER TABLE customer_task_checklist ADD COLUMN IF NOT EXISTS tax_docs_all_complete BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE customer_task_checklist ADD COLUMN IF NOT EXISTS tax_docs_status VARCHAR(30) DEFAULT 'Incomplete';
+                ALTER TABLE customer_task_checklist ADD COLUMN IF NOT EXISTS tax_req_email_sent_at TIMESTAMP;
+            """)
+            conn.commit()
+            print("Tax Document Tracking tables initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing Tax Document Tracking tables: {e}")
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+    finally:
+        if conn:
+            conn.close()
+
 def get_company_profile() -> dict:
     conn = None
     profile = {
@@ -1828,6 +1881,7 @@ try:
     init_kb_tables()
     init_esignature_tables()
     init_company_profile_table()
+    init_tax_document_tracking_tables()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -3927,6 +3981,17 @@ async def portal_upload_file(
 
         # Send email & log to customer history email log
         send_portal_file_upload_notification(cust, filename, folder_name, file_key=final_key)
+
+        # Auto-classify tax document in background
+        cust_type = (cust.get("customer_type") or "").strip().lower()
+        if cust_type in ("individual", "joint account"):
+            background_tasks = BackgroundTasks()
+            background_tasks.add_task(
+                classify_and_rename_tax_document,
+                customer_id=cust["id"],
+                file_key=final_key,
+                original_filename=filename
+            )
 
         return {
             "status": "ok",
@@ -11863,6 +11928,27 @@ def process_inbound_post_processing(
                         upd_conn.close()
                     except Exception as e_upd:
                         print(f"[ATTACHMENT UPDATE ERROR] {e_upd}")
+
+            # Auto-classify tax documents for Individual / Joint Account customers
+            if customer_id and saved_attachments:
+                try:
+                    _cust_type_conn = get_db_connection()
+                    with _cust_type_conn.cursor() as _ct_cur:
+                        _ct_cur.execute("SELECT customer_type FROM customer WHERE id = %s;", (customer_id,))
+                        _ct_row = _ct_cur.fetchone()
+                    _cust_type_conn.close()
+                    _ctype = (_ct_row[0] if _ct_row else "").strip().lower()
+                    if _ctype in ("individual", "joint account"):
+                        for _sa_key in saved_attachments:
+                            _sa_orig = os.path.basename(_sa_key)
+                            background_tasks.add_task(
+                                classify_and_rename_tax_document,
+                                customer_id=customer_id,
+                                file_key=_sa_key,
+                                original_filename=_sa_orig
+                            )
+                except Exception as _cls_err:
+                    print(f"[TAX CLASSIFY HOOK ERROR] {_cls_err}")
     except Exception as e_s3:
         print(f"[S3 PROCESSING ERROR - non-fatal] {e_s3}")
 
@@ -12380,6 +12466,736 @@ async def health_check():
             "raw_reply_to_env": os.environ.get("RESEND_REPLY_TO_EMAIL") or os.environ.get("RESEND_REPLY_TO") or "NOT_SET"
         }
     }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INCOME TAX RETURN DOCUMENT TRACKING
+# ─────────────────────────────────────────────────────────────────────────────
+
+TAX_DOC_PATTERNS: list[dict] = [
+    # Each entry: {"doc_type": str, "keywords": [str, ...], "min_matches": int}
+    {"doc_type": "W2",        "keywords": ["w-2", "wage and tax statement", "wages, tips", "employer's ein", "allocated tips"], "min_matches": 1},
+    {"doc_type": "1099-NEC",  "keywords": ["1099-nec", "nonemployee compensation", "nonemployee comp"], "min_matches": 1},
+    {"doc_type": "1099-MISC", "keywords": ["1099-misc", "miscellaneous income", "rents", "royalties", "prizes", "fishing boat"], "min_matches": 2},
+    {"doc_type": "1099-INT",  "keywords": ["1099-int", "interest income", "interest earned", "early withdrawal penalty"], "min_matches": 1},
+    {"doc_type": "1099-DIV",  "keywords": ["1099-div", "dividends and distributions", "total ordinary dividends"], "min_matches": 1},
+    {"doc_type": "1099-R",    "keywords": ["1099-r", "distributions from pensions", "annuities", "gross distribution", "ira/sep/simple"], "min_matches": 1},
+    {"doc_type": "1099-G",    "keywords": ["1099-g", "certain government payments", "unemployment compensation", "state income tax refunds"], "min_matches": 1},
+    {"doc_type": "SSA-1099",  "keywords": ["ssa-1099", "social security benefit statement", "net benefits", "social security administration"], "min_matches": 1},
+    {"doc_type": "1098",      "keywords": ["1098", "mortgage interest statement", "mortgage interest received", "outstanding mortgage principal"], "min_matches": 1},
+    {"doc_type": "1098-T",    "keywords": ["1098-t", "tuition statement", "student", "qualified tuition", "scholarships"], "min_matches": 2},
+    {"doc_type": "1098-E",    "keywords": ["1098-e", "student loan interest statement", "student loan interest"], "min_matches": 1},
+    {"doc_type": "1099-B",    "keywords": ["1099-b", "proceeds from broker", "brokerage", "proceeds from sales", "cost basis"], "min_matches": 1},
+    {"doc_type": "K-1",       "keywords": ["schedule k-1", "partner's share", "shareholder's share", "form 1065", "form 1120-s", "form 1041"], "min_matches": 1},
+    {"doc_type": "PRIOR-RETURN", "keywords": ["u.s. individual income tax return", "form 1040", "adjusted gross income", "taxable income", "filing status"], "min_matches": 2},
+]
+
+def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
+    """
+    Downloads a PDF from S3, renders first 3 pages with pdf2image,
+    and runs Google Vision OCR on them. Returns combined lowercased text.
+    """
+    try:
+        from extractor import get_vision_client, ocr_page_to_words, group_words_into_lines
+        import tempfile, subprocess
+        client_s3, err = get_s3_client()
+        if not client_s3:
+            return ""
+        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+        clean_key = clean_s3_key(file_key)
+        s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
+        pdf_bytes = s3_obj["Body"].read()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "doc.pdf")
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_bytes)
+
+            # Convert first 3 pages to PNG
+            try:
+                from pdf2image import convert_from_path
+                pages = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=3)
+            except Exception as pe:
+                print(f"[TAX OCR] pdf2image error for '{clean_key}': {pe}")
+                return ""
+
+            vision_client = get_vision_client()
+            if not vision_client:
+                return ""
+
+            all_text_parts = []
+            for i, page_img in enumerate(pages):
+                png_path = os.path.join(tmpdir, f"page_{i}.png")
+                page_img.save(png_path, "PNG")
+                try:
+                    words = ocr_page_to_words(vision_client, png_path)
+                    lines = group_words_into_lines(words)
+                    page_text = " ".join(line.get("text", "") for line in lines)
+                    all_text_parts.append(page_text)
+                except Exception as oe:
+                    print(f"[TAX OCR] Page {i} OCR error: {oe}")
+
+            return " ".join(all_text_parts).lower()
+    except Exception as e:
+        print(f"[TAX OCR ERROR] Could not OCR '{file_key}': {e}")
+        return ""
+
+
+def _detect_tax_doc_type(ocr_text: str) -> tuple[str | None, float]:
+    """
+    Runs keyword patterns against OCR text.
+    Returns (doc_type, confidence) or (None, 0.0).
+    confidence = fraction of keywords matched / min_matches (capped at 1.0).
+    """
+    if not ocr_text or len(ocr_text.strip()) < 50:
+        return None, 0.0
+
+    best_type = None
+    best_conf = 0.0
+    for pattern in TAX_DOC_PATTERNS:
+        matched = sum(1 for kw in pattern["keywords"] if kw in ocr_text)
+        if matched >= pattern["min_matches"]:
+            conf = min(1.0, matched / len(pattern["keywords"]))
+            if conf > best_conf:
+                best_conf = conf
+                best_type = pattern["doc_type"]
+
+    return best_type, best_conf
+
+
+def recalculate_tax_docs_status(customer_id: int, tax_year: int):
+    """Recalculates completion status of tax doc requirements and updates customer_task_checklist."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Count requirements
+            cur.execute("""
+                SELECT COUNT(*) as total FROM tax_return_requirements
+                WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE;
+            """, (customer_id, tax_year))
+            req_row = cur.fetchone()
+            total_required = req_row["total"] if req_row else 0
+
+            if total_required == 0:
+                return  # No requirements defined yet — skip
+
+            # Count distinct matched doc types
+            cur.execute("""
+                SELECT COUNT(DISTINCT requirement_id) as received
+                FROM tax_return_received_docs
+                WHERE customer_id = %s AND tax_year = %s AND status = 'Matched';
+            """, (customer_id, tax_year))
+            rec_row = cur.fetchone()
+            total_received = rec_row["received"] if rec_row else 0
+
+            # Count needs review
+            cur.execute("""
+                SELECT COUNT(*) as nr FROM tax_return_received_docs
+                WHERE customer_id = %s AND tax_year = %s AND status = 'Needs Review';
+            """, (customer_id, tax_year))
+            nr_row = cur.fetchone()
+            needs_review_count = nr_row["nr"] if nr_row else 0
+
+            if total_received >= total_required:
+                new_status = "Completed"
+                all_complete = True
+                notes_text = f"All {total_required} required documents received for tax year {tax_year}."
+            elif needs_review_count > 0:
+                new_status = "Needs Review"
+                all_complete = False
+                notes_text = f"{total_received}/{total_required} documents received; {needs_review_count} document(s) need review. Tax year {tax_year}."
+            else:
+                new_status = "Incomplete"
+                all_complete = False
+                missing = total_required - total_received
+                notes_text = f"{total_received}/{total_required} documents received; {missing} still missing. Tax year {tax_year}."
+
+            period = f"{tax_year}-01"  # Use January of the tax_year as the period key
+            cur.execute("""
+                INSERT INTO customer_task_checklist (customer_id, period, tax_docs_status, tax_docs_all_complete, tax_notes, updated_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (customer_id, period) DO UPDATE SET
+                    tax_docs_status = EXCLUDED.tax_docs_status,
+                    tax_docs_all_complete = EXCLUDED.tax_docs_all_complete,
+                    tax_notes = EXCLUDED.tax_notes,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (customer_id, period, new_status, all_complete, notes_text))
+            conn.commit()
+            print(f"[TAX STATUS] Customer {customer_id} / {tax_year}: {new_status} ({total_received}/{total_required} docs).")
+    except Exception as e:
+        print(f"[TAX STATUS ERROR] Customer {customer_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def classify_and_rename_tax_document(customer_id: int, file_key: str, original_filename: str = ""):
+    """
+    Core tax document classification pipeline:
+    1. OCR the file via Google Vision.
+    2. Detect doc type from patterns.
+    3. Rename & move the file on S3 accordingly.
+    4. Record in tax_return_received_docs.
+    5. Recalculate completion status.
+    """
+    try:
+        tax_year = datetime.datetime.now().year - 1  # Always previous year
+        original_filename = original_filename or os.path.basename(file_key)
+        base_name = os.path.splitext(original_filename)[0]
+        client_s3, err = get_s3_client()
+        bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+
+        print(f"[TAX CLASSIFY] Starting classification for customer {customer_id}: '{original_filename}'")
+
+        ocr_text = _ocr_pdf_to_text_for_classification(file_key)
+        doc_type, confidence = _detect_tax_doc_type(ocr_text)
+
+        # Determine new filename
+        if doc_type:
+            renamed_filename = f"{doc_type}_{tax_year}.pdf"
+            status = "Matched"
+            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) → renaming to '{renamed_filename}'")
+        else:
+            renamed_filename = f"{base_name}_review.pdf"
+            status = "Needs Review"
+            print(f"[TAX CLASSIFY] Could not detect type → flagging as '{renamed_filename}'")
+
+        new_file_key = None
+        if client_s3:
+            clean_key = clean_s3_key(file_key)
+            folder_dir = os.path.dirname(clean_key)
+
+            if doc_type:
+                # Look up customer's root folder to build Tax Documents path
+                try:
+                    _conn2 = get_db_connection()
+                    with _conn2.cursor(cursor_factory=RealDictCursor) as _c2:
+                        _c2.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+                        cust_row = _c2.fetchone()
+                    _conn2.close()
+                    root_folder = get_customer_root_folder_path(cust_row) if cust_row else None
+                    if root_folder:
+                        if not root_folder.endswith("/"):
+                            root_folder += "/"
+                        tax_docs_folder = f"{root_folder}Tax Documents/Tax Year {tax_year}/"
+                    else:
+                        tax_docs_folder = folder_dir + "/"
+                except Exception:
+                    tax_docs_folder = folder_dir + "/"
+
+                new_file_key = f"{tax_docs_folder}{renamed_filename}"
+            else:
+                # Stay in Inbox/, just rename with _review suffix
+                new_file_key = f"{folder_dir}/{renamed_filename}"
+
+            # Copy to new location, delete old
+            try:
+                new_file_key = clean_s3_key(new_file_key)
+                client_s3.copy_object(
+                    Bucket=bucket,
+                    CopySource={"Bucket": bucket, "Key": clean_key},
+                    Key=new_file_key,
+                    ACL="private"
+                )
+                if new_file_key != clean_key:
+                    client_s3.delete_object(Bucket=bucket, Key=clean_key)
+                print(f"[TAX CLASSIFY] Moved '{clean_key}' → '{new_file_key}'")
+            except Exception as mv_err:
+                print(f"[TAX CLASSIFY S3 MOVE ERROR] {mv_err}")
+                new_file_key = clean_key  # fallback: keep original key
+
+        # Match to a requirement
+        req_id = None
+        matched_at = None
+        if doc_type:
+            try:
+                _conn3 = get_db_connection()
+                with _conn3.cursor() as _c3:
+                    _c3.execute("""
+                        SELECT id FROM tax_return_requirements
+                        WHERE customer_id = %s AND tax_year = %s AND doc_type = %s AND is_required = TRUE
+                        ORDER BY id LIMIT 1;
+                    """, (customer_id, tax_year, doc_type))
+                    rr = _c3.fetchone()
+                    if rr:
+                        req_id = rr[0]
+                        matched_at = datetime.datetime.now()
+                _conn3.close()
+            except Exception:
+                pass
+
+        # Record in tax_return_received_docs
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tax_return_received_docs
+                    (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
+                     file_key, doc_type_detected, ocr_confidence, status, matched_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING;
+            """, (
+                customer_id, req_id, tax_year, original_filename, renamed_filename,
+                new_file_key or file_key, doc_type or "UNKNOWN", round(confidence, 3), status,
+                matched_at
+            ))
+            conn.commit()
+        conn.close()
+
+        # Recalculate completion
+        recalculate_tax_docs_status(customer_id, tax_year)
+
+    except Exception as e:
+        import traceback
+        print(f"[TAX CLASSIFY FATAL ERROR] Customer {customer_id} / '{file_key}': {e}")
+        traceback.print_exc()
+
+
+# ── TAX REQUIREMENTS REST API ─────────────────────────────────────────────────
+
+@app.get("/api/tax-requirements/{customer_id}")
+async def get_tax_requirements(customer_id: int, request: Request, tax_year: int = None):
+    """List all tax return document requirements for a customer."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not tax_year:
+        tax_year = datetime.datetime.now().year - 1
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT r.*, rd.renamed_filename, rd.status AS received_status, rd.matched_at,
+                       rd.doc_type_detected, rd.ocr_confidence
+                FROM tax_return_requirements r
+                LEFT JOIN LATERAL (
+                    SELECT renamed_filename, status, matched_at, doc_type_detected, ocr_confidence
+                    FROM tax_return_received_docs
+                    WHERE requirement_id = r.id
+                    ORDER BY created_at DESC LIMIT 1
+                ) rd ON TRUE
+                WHERE r.customer_id = %s AND r.tax_year = %s
+                ORDER BY r.doc_type;
+            """, (customer_id, tax_year))
+            rows = [dict(r) for r in cur.fetchall()]
+        return {"requirements": rows, "tax_year": tax_year, "customer_id": customer_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.post("/api/tax-requirements")
+async def create_tax_requirement(request: Request):
+    """Add a tax return document requirement for a customer."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    customer_id = data.get("customer_id")
+    tax_year = data.get("tax_year") or (datetime.datetime.now().year - 1)
+    doc_type = (data.get("doc_type") or "").strip().upper()
+    doc_label = (data.get("doc_label") or "").strip()
+    source_description = (data.get("source_description") or "").strip() or None
+    notes = (data.get("notes") or "").strip() or None
+    is_required = bool(data.get("is_required", True))
+    if not customer_id or not doc_type:
+        raise HTTPException(status_code=400, detail="customer_id and doc_type are required")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO tax_return_requirements
+                    (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (customer_id, tax_year, doc_type, source_description) DO UPDATE SET
+                    doc_label = EXCLUDED.doc_label, notes = EXCLUDED.notes,
+                    is_required = EXCLUDED.is_required, updated_at = CURRENT_TIMESTAMP
+                RETURNING *;
+            """, (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required))
+            row = dict(cur.fetchone())
+            conn.commit()
+        return {"success": True, "requirement": row}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.put("/api/tax-requirements/{req_id}")
+async def update_tax_requirement(req_id: int, request: Request):
+    """Edit a tax return document requirement."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    doc_type = (data.get("doc_type") or "").strip().upper() or None
+    doc_label = (data.get("doc_label") or "").strip() or None
+    source_description = (data.get("source_description") or "").strip() or None
+    notes = (data.get("notes") or "").strip() or None
+    is_required = data.get("is_required")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE tax_return_requirements SET
+                    doc_type = COALESCE(%s, doc_type),
+                    doc_label = COALESCE(%s, doc_label),
+                    source_description = COALESCE(%s, source_description),
+                    notes = COALESCE(%s, notes),
+                    is_required = COALESCE(%s, is_required),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s RETURNING *;
+            """, (doc_type, doc_label, source_description, notes, is_required, req_id))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Requirement not found")
+            conn.commit()
+        return {"success": True, "requirement": dict(row)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.delete("/api/tax-requirements/{req_id}")
+async def delete_tax_requirement(req_id: int, request: Request):
+    """Delete a tax return document requirement."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tax_return_requirements WHERE id = %s RETURNING id;", (req_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Requirement not found")
+            conn.commit()
+        return {"success": True, "deleted_id": req_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.post("/api/tax-requirements/copy-from-year")
+async def copy_tax_requirements_from_year(request: Request):
+    """Copy all requirements from a source tax year to a target tax year for a customer."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    customer_id = data.get("customer_id")
+    from_year = data.get("from_year")
+    to_year = data.get("to_year") or datetime.datetime.now().year - 1
+    if not customer_id or not from_year:
+        raise HTTPException(status_code=400, detail="customer_id and from_year are required")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tax_return_requirements
+                    (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
+                SELECT customer_id, %s, doc_type, doc_label, source_description, notes, is_required
+                FROM tax_return_requirements
+                WHERE customer_id = %s AND tax_year = %s
+                ON CONFLICT (customer_id, tax_year, doc_type, source_description) DO NOTHING;
+            """, (to_year, customer_id, from_year))
+            copied = cur.rowcount
+            conn.commit()
+        return {"success": True, "copied_count": copied, "from_year": from_year, "to_year": to_year}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.get("/api/tax-docs-status/{customer_id}")
+async def get_tax_docs_status(customer_id: int, request: Request, tax_year: int = None):
+    """Get received documents, requirements summary, and completion status for a customer."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not tax_year:
+        tax_year = datetime.datetime.now().year - 1
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM tax_return_received_docs
+                WHERE customer_id = %s AND tax_year = %s
+                ORDER BY created_at DESC;
+            """, (customer_id, tax_year))
+            received = [dict(r) for r in cur.fetchall()]
+
+            cur.execute("""
+                SELECT COUNT(*) as total FROM tax_return_requirements
+                WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE;
+            """, (customer_id, tax_year))
+            total_required = (cur.fetchone() or {}).get("total", 0)
+
+            cur.execute("""
+                SELECT tax_docs_status, tax_docs_all_complete, tax_notes, tax_req_email_sent_at
+                FROM customer_task_checklist
+                WHERE customer_id = %s AND period = %s;
+            """, (customer_id, f"{tax_year}-01"))
+            chk = dict(cur.fetchone() or {})
+
+        total_received_matched = sum(1 for r in received if r.get("status") == "Matched")
+        needs_review = sum(1 for r in received if r.get("status") == "Needs Review")
+
+        return {
+            "customer_id": customer_id,
+            "tax_year": tax_year,
+            "total_required": total_required,
+            "total_received": total_received_matched,
+            "needs_review": needs_review,
+            "status": chk.get("tax_docs_status", "Incomplete"),
+            "all_complete": bool(chk.get("tax_docs_all_complete", False)),
+            "notes": chk.get("tax_notes", ""),
+            "req_email_sent_at": str(chk.get("tax_req_email_sent_at", "") or ""),
+            "received_docs": received
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.post("/api/tax-docs/classify")
+async def manual_classify_tax_doc(request: Request, background_tasks: BackgroundTasks):
+    """Manually trigger tax document classification for a specific file key."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    customer_id = data.get("customer_id")
+    file_key = (data.get("file_key") or "").strip()
+    original_filename = (data.get("original_filename") or os.path.basename(file_key)).strip()
+    if not customer_id or not file_key:
+        raise HTTPException(status_code=400, detail="customer_id and file_key are required")
+    background_tasks.add_task(
+        classify_and_rename_tax_document,
+        customer_id=int(customer_id),
+        file_key=file_key,
+        original_filename=original_filename
+    )
+    return {"success": True, "message": f"Classification queued for '{original_filename}'"}
+
+
+@app.post("/api/tax-requirements/send-email")
+async def send_tax_requirements_email(request: Request):
+    """
+    Send the January tax requirements email to one customer or all Individual/Joint Account customers.
+    Updates tax_docs_requested = TRUE and logs tax_req_email_sent_at timestamp.
+    """
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    customer_id_filter = data.get("customer_id")  # None = send to all eligible
+    tax_year = data.get("tax_year") or (datetime.datetime.now().year - 1)
+    user_parent = get_user_parent_name(username) or "VRT Services"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if customer_id_filter:
+                cur.execute("""
+                    SELECT * FROM customer WHERE id = %s
+                    AND LOWER(customer_type) IN ('individual', 'joint account');
+                """, (customer_id_filter,))
+            else:
+                cur.execute("""
+                    SELECT * FROM customer
+                    WHERE LOWER(customer_type) IN ('individual', 'joint account')
+                    AND status = 'Active'
+                    AND (parent_name = %s OR parent_name IS NULL OR parent_name = '')
+                    ORDER BY legal_name;
+                """, (user_parent,))
+            customers = [dict(r) for r in cur.fetchall()]
+
+        if not customers:
+            return {"success": False, "message": "No eligible Individual/Joint Account customers found.", "sent_count": 0}
+
+        resend_key = (
+            os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY") or ""
+        ).strip().strip('\'"`')
+
+        sent_count = 0
+        errors = []
+        for cust in customers:
+            cid = cust["id"]
+            cust_email = parse_clean_email(cust.get("email") or "")
+            if not cust_email:
+                errors.append(f"Customer {cid} ({cust.get('legal_name')}) has no email — skipped.")
+                continue
+
+            # Fetch their requirements for this year
+            try:
+                _rc = get_db_connection()
+                with _rc.cursor(cursor_factory=RealDictCursor) as _rcur:
+                    _rcur.execute("""
+                        SELECT doc_type, doc_label, source_description, notes
+                        FROM tax_return_requirements
+                        WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE
+                        ORDER BY doc_type;
+                    """, (cid, tax_year))
+                    reqs = [dict(r) for r in _rcur.fetchall()]
+                _rc.close()
+            except Exception:
+                reqs = []
+
+            raw_ref = str(cust.get('custumer_number') or cust.get('id')).strip()
+            cust_ref = raw_ref if raw_ref.upper().startswith("CUST-") else f"CUST-{raw_ref}"
+            parent_name = (cust.get("parent_name") or "VRT Services").strip()
+
+            # Build requirements HTML list
+            if reqs:
+                req_html_items = "".join(
+                    f"""<li style="padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem;">
+                        <strong>{r['doc_type']}</strong>
+                        {'— ' + r['doc_label'] if r.get('doc_label') else ''}
+                        {' <span style="color:#64748b;">(' + r['source_description'] + ')</span>' if r.get('source_description') else ''}
+                        {' <em style="color:#94a3b8;">— ' + r['notes'] + '</em>' if r.get('notes') else ''}
+                    </li>"""
+                    for r in reqs
+                )
+            else:
+                req_html_items = "<li style='padding:6px 0;color:#64748b;'>Please contact our office for your personalized document list.</li>"
+
+            html_body = f"""
+            <div style="font-family:'Plus Jakarta Sans',Arial,sans-serif;line-height:1.6;color:#1e293b;max-width:620px;margin:0 auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+              <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:28px 32px;">
+                <h1 style="color:#fff;margin:0;font-size:1.3rem;font-weight:700;">{parent_name}</h1>
+                <p style="color:#bfdbfe;margin:6px 0 0;font-size:0.9rem;">Tax Year {tax_year} — Document Collection Notice</p>
+              </div>
+              <div style="padding:28px 32px;">
+                <p style="font-size:0.95rem;margin-bottom:8px;">Hello <strong>{cust.get('legal_name') or 'Valued Client'}</strong>,</p>
+                <p style="font-size:0.9rem;color:#475569;margin-bottom:20px;">
+                  It's time to gather your tax documents for the <strong>{tax_year} Income Tax Return</strong>.
+                  Please submit the following documents at your earliest convenience so we can prepare your return accurately and on time.
+                </p>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+                  <h3 style="margin:0 0 12px;font-size:1rem;color:#0f172a;">📋 Required Documents — Tax Year {tax_year}</h3>
+                  <ul style="list-style:none;margin:0;padding:0;">{req_html_items}</ul>
+                </div>
+                <p style="font-size:0.9rem;color:#475569;margin-bottom:16px;">You can submit your documents in two ways:</p>
+                <div style="display:flex;gap:12px;margin-bottom:24px;">
+                  <a href="https://portal.datalazo.net/portal?cust={cust_ref}" style="background:#2563eb;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;">📁 Upload via Client Portal</a>
+                  <a href="mailto:{get_resend_reply_to_email()}?subject=Tax Documents {tax_year} [{cust_ref}]" style="background:#f1f5f9;color:#1e293b;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;border:1px solid #cbd5e1;">📧 Reply by Email</a>
+                </div>
+                <p style="font-size:0.8rem;color:#94a3b8;">Account Reference: {cust_ref} &nbsp;|&nbsp; Please include this reference when replying by email.</p>
+              </div>
+              <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;font-size:0.78rem;color:#94a3b8;">
+                <p style="margin:0;">This is an automated notice from <strong>{parent_name}</strong>. Please do not reply to this email — use the portal link or the reply-by-email link above.</p>
+              </div>
+            </div>
+            """
+
+            text_body = (
+                f"Hello {cust.get('legal_name') or 'Valued Client'},\n\n"
+                f"It's time to gather your tax documents for the {tax_year} Income Tax Return.\n"
+                f"Required documents: {', '.join(r['doc_type'] for r in reqs) if reqs else 'Please contact our office.'}\n\n"
+                f"Submit via portal: https://portal.datalazo.net/portal?cust={cust_ref}\n"
+                f"Or reply to this email with your documents attached.\n\n"
+                f"Account Ref: {cust_ref}\n{parent_name}"
+            )
+
+            subject = f"Tax Year {tax_year} — Documents Required [{cust_ref}]"
+
+            if resend_key:
+                try:
+                    payload = {
+                        "from": format_resend_from_header(f"{parent_name} Tax Team"),
+                        "to": [cust_email],
+                        "reply_to": get_resend_reply_to_email(),
+                        "subject": subject,
+                        "html": html_body,
+                        "text": text_body
+                    }
+                    req_http = urllib.request.Request(
+                        "https://api.resend.com/emails",
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req_http) as resp:
+                        resp.read()
+                    sent_count += 1
+                    print(f"[TAX EMAIL SENT] → {cust_email} ({cust.get('legal_name')})")
+                except Exception as me:
+                    errors.append(f"Email send failed for {cust.get('legal_name')}: {me}")
+                    print(f"[TAX EMAIL ERROR] {me}")
+            else:
+                errors.append(f"No Resend API key configured — skipped {cust.get('legal_name')}.")
+
+            # Update checklist: mark tax_docs_requested + log sent timestamp
+            try:
+                _uc = get_db_connection()
+                with _uc.cursor() as _ucur:
+                    period = f"{tax_year}-01"
+                    _ucur.execute("""
+                        INSERT INTO customer_task_checklist
+                            (customer_id, period, tax_docs_requested, tax_req_email_sent_at, updated_at)
+                        VALUES (%s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT (customer_id, period) DO UPDATE SET
+                            tax_docs_requested = TRUE,
+                            tax_req_email_sent_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP;
+                    """, (cid, period))
+                    _uc.commit()
+                _uc.close()
+            except Exception as ue:
+                print(f"[TAX EMAIL CHECKLIST UPDATE ERROR] {ue}")
+
+            # Log to customer_communications as OUTBOUND
+            try:
+                _cc = get_db_connection()
+                with _cc.cursor() as _ccur:
+                    _ccur.execute("""
+                        INSERT INTO customer_communications
+                            (customer_id, direction, sender_email, recipient_email, reply_to_email,
+                             subject, body_text, status, is_read, created_at)
+                        VALUES (%s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', TRUE, CURRENT_TIMESTAMP);
+                    """, (
+                        cid,
+                        get_resend_from_email(),
+                        cust_email,
+                        get_resend_reply_to_email(),
+                        subject,
+                        text_body
+                    ))
+                    _cc.commit()
+                _cc.close()
+            except Exception as ce:
+                print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
+
+        return {
+            "success": True,
+            "sent_count": sent_count,
+            "total_customers": len(customers),
+            "errors": errors,
+            "message": f"Tax requirements email sent to {sent_count}/{len(customers)} customer(s) for tax year {tax_year}."
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
 
 if __name__ == "__main__":
     import uvicorn
