@@ -1030,7 +1030,10 @@
 
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
+                            <button onclick="sendTaxBulkEmail()" id="btnBulkTaxEmailPage" title="Send tax document requirements email to all Individual & Joint Account customers" style="padding: 12px 20px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 16px rgba(56,189,248,0.35); transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;">
+                                📧 Bulk Tax Email
+                            </button>
                             <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
                                 ➕ Add New Customer
                             </button>
@@ -8079,11 +8082,33 @@
             }
         }
 
+        async function scanExistingTaxDocs() {
+            if (!currentChecklistCustomerId) return;
+            const btn = document.getElementById('btnScanInboxDocs');
+            if (btn) { btn.disabled = true; btn.textContent = '🔍 Scanning Inbox…'; }
+            try {
+                const res = await fetch('/api/tax-docs/scan-existing', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: currentChecklistCustomerId })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Scan failed');
+                alert(`✅ ${data.message} — OCR classification results will appear shortly.`);
+                setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), 4000);
+            } catch (err) {
+                alert(`❌ Error scanning docs: ${err.message}`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '🔍 Scan & Classify Inbox Docs'; }
+            }
+        }
+
         async function sendTaxBulkEmail() {
             const taxYear = new Date().getFullYear() - 1;
             if (!confirm(`Send tax document requirements email to ALL Individual & Joint Account customers for tax year ${taxYear}?\n\nThis will send one email per customer and log the sent timestamp.`)) return;
-            const btn = document.getElementById('btnBulkTaxEmail');
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+            const btn1 = document.getElementById('btnBulkTaxEmail');
+            const btn2 = document.getElementById('btnBulkTaxEmailPage');
+            [btn1, btn2].forEach(b => { if (b) { b.disabled = true; b.textContent = '⏳ Sending…'; } });
             try {
                 const res = await fetch('/api/tax-requirements/send-email', {
                     method: 'POST',
@@ -8101,7 +8126,7 @@
                 console.error('[TAX BULK EMAIL]', err);
                 alert(`❌ Bulk Email Error: ${err.message}`);
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '📧 Bulk Tax Email'; }
+                [btn1, btn2].forEach(b => { if (b) { b.disabled = false; b.innerHTML = '📧 Bulk Tax Email'; } });
             }
         }
 
@@ -8450,13 +8475,13 @@
                             <button onclick="openAddTaxRequirementModal()" style="padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: #f87171; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer;">+ Add Document</button>
                         </div>
                         <div id="taxReqTableWrap" style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                            <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.82rem;">
                                 <thead>
                                     <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                                        <th style="padding: 6px 8px;">Type</th>
-                                        <th style="padding: 6px 8px;">Label / Source</th>
-                                        <th style="padding: 6px 8px;">Status</th>
-                                        <th style="padding: 6px 8px; text-align: right;">Actions</th>
+                                        <th style="padding: 6px 8px; width: 25%;">Type</th>
+                                        <th style="padding: 6px 8px; width: 35%;">Label / Source</th>
+                                        <th style="padding: 6px 8px; width: 22%;">Status</th>
+                                        <th style="padding: 6px 8px; text-align: right; width: 18%;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="taxReqTableBody">
@@ -8468,16 +8493,19 @@
 
                     <!-- Received Docs Tab -->
                     <div id="taxDocPanel-received" style="padding: 14px 18px; display: none;">
+                        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                            <button onclick="scanExistingTaxDocs()" id="btnScanInboxDocs" style="padding: 6px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Scan customer Inbox folder & emails for unclassified documents">🔍 Scan & Classify Inbox Docs</button>
+                        </div>
                         <div id="taxRecTableWrap" style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                            <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.82rem;">
                                 <thead>
                                     <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                                        <th style="padding: 6px 8px;">Original File</th>
-                                        <th style="padding: 6px 8px;">→ Renamed As</th>
-                                        <th style="padding: 6px 8px;">Detected Type</th>
-                                        <th style="padding: 6px 8px;">Confidence</th>
-                                        <th style="padding: 6px 8px;">Status</th>
-                                        <th style="padding: 6px 8px; text-align: right;">Action</th>
+                                        <th style="padding: 6px 8px; width: 22%;">Original File</th>
+                                        <th style="padding: 6px 8px; width: 22%;">→ Renamed As</th>
+                                        <th style="padding: 6px 8px; width: 18%;">Detected Type</th>
+                                        <th style="padding: 6px 8px; width: 12%;">Confidence</th>
+                                        <th style="padding: 6px 8px; width: 14%;">Status</th>
+                                        <th style="padding: 6px 8px; text-align: right; width: 12%;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="taxRecTableBody">

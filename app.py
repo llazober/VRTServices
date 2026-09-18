@@ -13001,6 +13001,73 @@ async def manual_classify_tax_doc(request: Request, background_tasks: Background
     return {"success": True, "message": f"Classification queued for '{original_filename}'"}
 
 
+@app.post("/api/tax-docs/scan-existing")
+async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundTasks):
+    """Scan customer S3 Inbox/ folder and communications for unclassified documents and queue classification."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    data = await request.json()
+    customer_id = data.get("customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id is required")
+
+    found_files = []
+    cust = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            cust = cur.fetchone()
+            cur.execute("""
+                SELECT attachments_json FROM customer_communications
+                WHERE customer_id = %s AND attachments_json IS NOT NULL;
+            """, (customer_id,))
+            for row in cur.fetchall():
+                att_json = row.get("attachments_json")
+                if att_json:
+                    try:
+                        items = json.loads(att_json) if isinstance(att_json, str) else att_json
+                        if isinstance(items, list):
+                            for item in items:
+                                fk = item if isinstance(item, str) else (item.get("file_key") or item.get("path") if isinstance(item, dict) else None)
+                                if fk and fk not in found_files:
+                                    found_files.append(fk)
+                    except Exception: pass
+        conn.close()
+    except Exception as e:
+        print(f"[TAX SCAN DB ERR] {e}")
+
+    try:
+        if cust:
+            client_s3, err = get_s3_client()
+            bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+            root_folder = get_customer_root_folder_path(cust)
+            if not root_folder.endswith("/"): root_folder += "/"
+            inbox_prefix = f"{root_folder}Inbox/"
+            if client_s3:
+                res = client_s3.list_objects_v2(Bucket=bucket, Prefix=clean_s3_key(inbox_prefix))
+                for obj in res.get("Contents", []):
+                    k = obj.get("Key")
+                    if k and not k.endswith("/") and k not in found_files:
+                        found_files.append(k)
+    except Exception as e:
+        print(f"[TAX SCAN S3 ERR] {e}")
+
+    queued_count = 0
+    for fk in found_files:
+        orig = os.path.basename(fk)
+        background_tasks.add_task(
+            classify_and_rename_tax_document,
+            customer_id=int(customer_id),
+            file_key=fk,
+            original_filename=orig
+        )
+        queued_count += 1
+
+    return {"success": True, "message": f"Queued {queued_count} document(s) for classification", "queued_count": queued_count}
+
+
 @app.post("/api/tax-requirements/send-email")
 async def send_tax_requirements_email(request: Request):
     """
