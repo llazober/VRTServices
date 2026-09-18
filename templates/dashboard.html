@@ -5547,8 +5547,9 @@
             const currentVal = select.value || 'all';
             const usersSet = new Set();
             (currentCustomerRecords || []).forEach(c => {
-                if (c.assigned_user_id && c.assigned_user_id.trim()) {
-                    usersSet.add(c.assigned_user_id.trim());
+                const uStr = c.assigned_user_id ? String(c.assigned_user_id).trim() : '';
+                if (uStr) {
+                    usersSet.add(uStr);
                 }
             });
             const sortedUsers = Array.from(usersSet).sort((a, b) => a.localeCompare(b));
@@ -5577,9 +5578,9 @@
             const selectedUserFilter = userFilterSelect ? userFilterSelect.value : 'all';
 
             if (selectedUserFilter === 'unassigned') {
-                recordsToDisplay = recordsToDisplay.filter(c => !c.assigned_user_id || !c.assigned_user_id.trim());
+                recordsToDisplay = recordsToDisplay.filter(c => !c.assigned_user_id || !String(c.assigned_user_id).trim());
             } else if (selectedUserFilter && selectedUserFilter !== 'all') {
-                recordsToDisplay = recordsToDisplay.filter(c => (c.assigned_user_id || '').trim().toLowerCase() === selectedUserFilter.trim().toLowerCase());
+                recordsToDisplay = recordsToDisplay.filter(c => String(c.assigned_user_id || '').trim().toLowerCase() === selectedUserFilter.trim().toLowerCase());
             }
 
             if (modalCount) modalCount.textContent = recordsToDisplay.length;
@@ -7364,8 +7365,9 @@
 
             const usersSet = new Set();
             (rawWorkloadData || []).forEach(i => {
-                if (i.assigned_user_id && i.assigned_user_id.trim()) {
-                    usersSet.add(i.assigned_user_id.trim());
+                const uStr = i.assigned_user_id ? String(i.assigned_user_id).trim() : '';
+                if (uStr) {
+                    usersSet.add(uStr);
                 }
             });
 
@@ -7431,9 +7433,9 @@
             }
 
             if (currentWorkloadUserFilter === 'unassigned') {
-                items = items.filter(i => !i.assigned_user_id || !i.assigned_user_id.trim());
+                items = items.filter(i => !i.assigned_user_id || !String(i.assigned_user_id).trim());
             } else if (currentWorkloadUserFilter && currentWorkloadUserFilter !== 'all') {
-                items = items.filter(i => (i.assigned_user_id || '').trim().toLowerCase() === currentWorkloadUserFilter.trim().toLowerCase());
+                items = items.filter(i => String(i.assigned_user_id || '').trim().toLowerCase() === currentWorkloadUserFilter.trim().toLowerCase());
             }
 
             if (items.length === 0) {
