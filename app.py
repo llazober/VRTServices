@@ -12487,6 +12487,9 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "1098-T",    "keywords": ["1098-t", "tuition statement", "student", "qualified tuition", "scholarships"], "min_matches": 2},
     {"doc_type": "1098-E",    "keywords": ["1098-e", "student loan interest statement", "student loan interest"], "min_matches": 1},
     {"doc_type": "1099-B",    "keywords": ["1099-b", "proceeds from broker", "brokerage", "proceeds from sales", "cost basis"], "min_matches": 1},
+    {"doc_type": "1095-A",    "keywords": ["1095-a", "1095a", "form 1095-a", "health insurance marketplace statement", "marketplace identifier", "slcsp", "advance payment of premium tax credit"], "min_matches": 1},
+    {"doc_type": "1095-B",    "keywords": ["1095-b", "1095b", "form 1095-b", "health coverage"], "min_matches": 1},
+    {"doc_type": "1095-C",    "keywords": ["1095-c", "1095c", "form 1095-c", "employer-provided health insurance offer and coverage"], "min_matches": 1},
     {"doc_type": "K-1",       "keywords": ["schedule k-1", "partner's share", "shareholder's share", "form 1065", "form 1120-s", "form 1041"], "min_matches": 1},
     {"doc_type": "PRIOR-RETURN", "keywords": ["u.s. individual income tax return", "form 1040", "adjusted gross income", "taxable income", "filing status"], "min_matches": 2},
 ]
@@ -12764,9 +12767,10 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                     Key=new_file_key,
                     ACL="private"
                 )
-                if new_file_key != clean_key:
+                # Delete source file if it was a temporary _review file, but preserve original Inbox files
+                if new_file_key != clean_key and (clean_key.lower().endswith("_review.pdf") or "/inbox/" not in clean_key.lower()):
                     client_s3.delete_object(Bucket=bucket, Key=clean_key)
-                print(f"[TAX CLASSIFY] Moved '{clean_key}' -> '{new_file_key}'")
+                print(f"[TAX CLASSIFY] Copied '{clean_key}' -> '{new_file_key}'")
             except Exception as mv_err:
                 print(f"[TAX CLASSIFY S3 MOVE ERROR] {mv_err}")
                 new_file_key = clean_key  # fallback: keep original key
