@@ -12724,20 +12724,40 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
             except Exception:
                 pass
 
-        # Record in tax_return_received_docs
+        # Record in tax_return_received_docs (Upsert pattern)
         conn = get_db_connection()
         with conn.cursor() as cur:
+            fk_check = new_file_key or file_key
             cur.execute("""
-                INSERT INTO tax_return_received_docs
-                    (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
-                     file_key, doc_type_detected, ocr_confidence, status, matched_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING;
-            """, (
-                customer_id, req_id, tax_year, original_filename, renamed_filename,
-                new_file_key or file_key, doc_type or "UNKNOWN", round(confidence, 3), status,
-                matched_at
-            ))
+                SELECT id FROM tax_return_received_docs
+                WHERE customer_id = %s AND tax_year = %s AND (file_key = %s OR original_filename = %s);
+            """, (customer_id, tax_year, fk_check, original_filename))
+            existing = cur.fetchone()
+            if existing:
+                cur.execute("""
+                    UPDATE tax_return_received_docs SET
+                        requirement_id = %s,
+                        renamed_filename = %s,
+                        doc_type_detected = %s,
+                        ocr_confidence = %s,
+                        status = %s,
+                        matched_at = %s
+                    WHERE id = %s;
+                """, (
+                    req_id, renamed_filename, doc_type or "UNKNOWN",
+                    round(confidence, 3), status, matched_at, existing[0]
+                ))
+            else:
+                cur.execute("""
+                    INSERT INTO tax_return_received_docs
+                        (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
+                         file_key, doc_type_detected, ocr_confidence, status, matched_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                """, (
+                    customer_id, req_id, tax_year, original_filename, renamed_filename,
+                    fk_check, doc_type or "UNKNOWN", round(confidence, 3), status,
+                    matched_at
+                ))
             conn.commit()
         conn.close()
 
