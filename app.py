@@ -12872,11 +12872,19 @@ async def delete_tax_requirement(req_id: int, request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM tax_return_requirements WHERE id = %s RETURNING id;", (req_id,))
+            cur.execute("SELECT customer_id, tax_year FROM tax_return_requirements WHERE id = %s;", (req_id,))
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Requirement not found")
+            cust_id, t_year = row[0], row[1]
+
+            # Safely un-link any received docs pointing to this requirement first
+            cur.execute("UPDATE tax_return_received_docs SET requirement_id = NULL WHERE requirement_id = %s;", (req_id,))
+            cur.execute("DELETE FROM tax_return_requirements WHERE id = %s;", (req_id,))
             conn.commit()
+
+            # Recalculate completion status for this customer & year
+            recalculate_tax_docs_status(cust_id, t_year)
         return {"success": True, "deleted_id": req_id}
     except HTTPException:
         raise
@@ -13014,8 +13022,7 @@ async def send_tax_requirements_email(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if customer_id_filter:
                 cur.execute("""
-                    SELECT * FROM customer WHERE id = %s
-                    AND LOWER(customer_type) IN ('individual', 'joint account');
+                    SELECT * FROM customer WHERE id = %s;
                 """, (customer_id_filter,))
             else:
                 cur.execute("""

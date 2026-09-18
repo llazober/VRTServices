@@ -2743,10 +2743,14 @@
                 <div style="display: flex; gap: 10px; align-items: center; flex: 1;">
                     <input type="text" id="customerSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 14px; font-size: 0.88rem; color: #fff; width: 100%; max-width: 380px; outline: none;" oninput="fetchCustomerRecords()">
                 </div>
-                <button id="toggleCustomerFormBtn" onclick="toggleCustomerForm()" style="padding: 8px 18px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225, 0, 255, 0.3);">
-                    ➕ Add New Customer
-                </button>
-            </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button id="toggleCustomerFormBtn" onclick="toggleCustomerForm()" style="padding: 8px 18px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225, 0, 255, 0.3);">
+                        ➕ Add New Customer
+                    </button>
+                    <button onclick="sendTaxBulkEmail()" id="btnBulkTaxEmail" title="Send tax document requirements email to all Individual & Joint Account customers" style="padding: 8px 18px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-size: 0.8rem; font-weight: 800; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 12px rgba(56,189,248,0.3); display: flex; align-items: center; gap: 7px;">
+                        📧 Bulk Tax Email
+                    </button>
+                </div>
 
             <!-- Add/Edit Form -->
             <form id="customerForm" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(225, 0, 255, 0.25); border-radius: 14px; padding: 18px; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));" onsubmit="saveCustomerRecord(event)">
@@ -7846,9 +7850,28 @@
             return `<span id="taxDocStatusBadge" style="font-size:0.7rem;padding:3px 12px;border-radius:20px;font-weight:800;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);">⚠️ INCOMPLETE</span>`;
         }
 
+        function populateTaxDocYearSelect() {
+            const yearSel = document.getElementById('taxDocYearSelect');
+            if (!yearSel) return;
+            const currentYear = new Date().getFullYear();
+            const years = [];
+            for (let y = currentYear; y >= currentYear - 5; y--) {
+                years.push(y - 1);
+            }
+            if (!years.includes(_taxDocCurrentYear)) _taxDocCurrentYear = currentYear - 1;
+            yearSel.innerHTML = years.map(y => `<option value="${y}" ${y === _taxDocCurrentYear ? 'selected' : ''}>Tax Year ${y}</option>`).join('');
+        }
+
+        function onTaxDocYearChange(newYear) {
+            _taxDocCurrentYear = parseInt(newYear);
+            if (currentChecklistCustomerId) {
+                loadTaxDocTracking(currentChecklistCustomerId);
+            }
+        }
+
         async function loadTaxDocTracking(customerId) {
             if (!customerId) return;
-            _taxDocCurrentYear = new Date().getFullYear() - 1;
+            populateTaxDocYearSelect();
             try {
                 // Load requirements + received status in parallel
                 const [reqRes, statusRes] = await Promise.all([
@@ -7985,12 +8008,18 @@
         async function deleteTaxRequirement(reqId) {
             if (!confirm('Delete this requirement?')) return;
             try {
-                const res = await fetch(`/api/tax-requirements/${reqId}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Delete failed');
+                const res = await fetch(`/api/tax-requirements/${reqId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                let data = {};
+                try { data = await res.json(); } catch(_) {}
+                if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
                 await loadTaxDocTracking(currentChecklistCustomerId);
             } catch (err) {
-                alert(`❌ Error: ${err.message}`);
+                console.error('[TAX DELETE]', err);
+                alert(`❌ Delete failed: ${err.message}`);
             }
         }
 
@@ -8035,16 +8064,44 @@
                         customer_id: currentChecklistCustomerId,
                         tax_year: _taxDocCurrentYear,
                         doc_type: docType,
-                        doc_label: docLabel,
-                        source_description: sourceDescription,
+                        doc_label: docLabel || null,
+                        source_description: sourceDescription || null,
                         is_required: true
                     })
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Add failed');
+                let data = {};
+                try { data = await res.json(); } catch(_) {}
+                if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
                 await loadTaxDocTracking(currentChecklistCustomerId);
             } catch (err) {
+                console.error('[TAX ADD REQ]', err);
                 alert(`❌ Error adding requirement: ${err.message}`);
+            }
+        }
+
+        async function sendTaxBulkEmail() {
+            const taxYear = new Date().getFullYear() - 1;
+            if (!confirm(`Send tax document requirements email to ALL Individual & Joint Account customers for tax year ${taxYear}?\n\nThis will send one email per customer and log the sent timestamp.`)) return;
+            const btn = document.getElementById('btnBulkTaxEmail');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+            try {
+                const res = await fetch('/api/tax-requirements/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tax_year: taxYear })   // no customer_id = send to all
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Bulk send failed');
+                let msg = `✅ ${data.message}`;
+                if (data.errors && data.errors.length) {
+                    msg += `\n\nWarnings:\n${data.errors.join('\n')}`;
+                }
+                alert(msg);
+            } catch (err) {
+                console.error('[TAX BULK EMAIL]', err);
+                alert(`❌ Bulk Email Error: ${err.message}`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '📧 Bulk Tax Email'; }
             }
         }
 
@@ -8371,6 +8428,7 @@
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1rem;">📂</span>
                             <span style="font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; color: #f8fafc;">Tax Document Tracker</span>
+                            <select id="taxDocYearSelect" onchange="onTaxDocYearChange(this.value)" style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(248,113,113,0.4); color: #f87171; border-radius: 8px; padding: 3px 10px; font-size: 0.78rem; font-weight: 800; cursor: pointer; outline: none; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></select>
                             <span id="taxDocStatusBadge" style="font-size: 0.7rem; padding: 3px 12px; border-radius: 20px; font-weight: 800; background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3);">Loading…</span>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
