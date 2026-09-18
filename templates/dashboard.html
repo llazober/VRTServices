@@ -7965,7 +7965,8 @@
                     <td style="padding:8px;color:#94a3b8;font-size:0.78rem;">${conf}</td>
                     <td style="padding:8px;">${stBadge}</td>
                     <td style="padding:8px;text-align:right;white-space:nowrap;">
-                        <button onclick="reClassifyTaxDoc('${fileKey.replace(/'/g, "\\'")}', '${origName.replace(/'/g, "\\'")}')" title="Re-classify document" style="padding:4px 10px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">🔄 Retry</button>
+                        <button onclick="reClassifyTaxDoc('${fileKey.replace(/'/g, "\\'")}', '${origName.replace(/'/g, "\\'")}')" title="Re-classify document" style="padding:4px 7px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:4px;">🔄 Retry</button>
+                        <button onclick="deleteReceivedTaxDoc(${d.id})" title="Delete received document record" style="padding:4px 7px;background:rgba(248,113,113,0.2);border:1px solid rgba(248,113,113,0.4);color:#f87171;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">🗑 Delete</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -8013,8 +8014,13 @@
         }
 
         async function deleteTaxRequirement(reqId) {
+            if (!reqId) return;
             if (!confirm('Delete this requirement?')) return;
             try {
+                // Optimistic UI update
+                _taxDocReqs = _taxDocReqs.filter(r => r.id !== reqId);
+                renderTaxReqTable();
+
                 const res = await fetch(`/api/tax-requirements/${reqId}`, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
@@ -8023,11 +8029,35 @@
                 let data = {};
                 try { data = await res.json(); } catch(_) {}
                 if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
-                alert('✅ Requirement deleted successfully');
                 await loadTaxDocTracking(currentChecklistCustomerId);
             } catch (err) {
                 console.error('[TAX DELETE]', err);
                 alert(`❌ Delete failed: ${err.message}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            }
+        }
+
+        async function deleteReceivedTaxDoc(docId) {
+            if (!docId) return;
+            if (!confirm('Remove this received document record from this customer?')) return;
+            try {
+                // Optimistic UI update
+                _taxDocReceived = _taxDocReceived.filter(d => d.id !== docId);
+                renderTaxRecTable();
+
+                const res = await fetch(`/api/tax-docs/received/${docId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                let data = {};
+                try { data = await res.json(); } catch(_) {}
+                if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                console.error('[TAX REC DELETE]', err);
+                alert(`❌ Delete failed: ${err.message}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
             }
         }
 

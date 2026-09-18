@@ -12894,6 +12894,35 @@ async def delete_tax_requirement(req_id: int, request: Request):
         if conn: conn.close()
 
 
+@app.delete("/api/tax-docs/received/{doc_id}")
+async def delete_received_tax_doc(doc_id: int, request: Request):
+    """Delete a received tax document record and recalculate completion status."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT customer_id, tax_year FROM tax_return_received_docs WHERE id = %s;", (doc_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Received document record not found")
+            cust_id, t_year = row[0], row[1]
+
+            cur.execute("DELETE FROM tax_return_received_docs WHERE id = %s;", (doc_id,))
+            conn.commit()
+
+            recalculate_tax_docs_status(cust_id, t_year)
+        return {"success": True, "deleted_id": doc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
 @app.post("/api/tax-requirements/copy-from-year")
 async def copy_tax_requirements_from_year(request: Request):
     """Copy all requirements from a source tax year to a target tax year for a customer."""
