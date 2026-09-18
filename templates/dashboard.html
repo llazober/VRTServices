@@ -8526,15 +8526,10 @@
                         </div>
                     </div>
 
-                    <!-- Sub-tabs -->
-                    <div style="display: flex; gap: 2px; padding: 10px 18px 0; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                        <button id="taxDocTabBtn-reqs" onclick="switchTaxDocTab('reqs')" style="padding: 7px 16px; border-radius: 8px 8px 0 0; font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(248,113,113,0.4); border-bottom: none; background: rgba(248,113,113,0.15); color: #f87171;">📋 Requirements</button>
-                        <button id="taxDocTabBtn-received" onclick="switchTaxDocTab('received')" style="padding: 7px 16px; border-radius: 8px 8px 0 0; font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.08); border-bottom: none; background: rgba(255,255,255,0.03); color: #64748b;">📥 Received Docs</button>
-                    </div>
-
-                    <!-- Requirements Tab -->
+                    <!-- Requirements Panel -->
                     <div id="taxDocPanel-reqs" style="padding: 14px 18px;">
-                        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px;">
+                            <button onclick="scanExistingTaxDocs()" id="btnScanInboxDocs" style="padding: 6px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Scan customer Inbox folder for tax documents to classify and match requirements">🔍 Scan & Classify Inbox Docs</button>
                             <button onclick="openAddTaxRequirementModal()" style="padding: 6px 14px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: #f87171; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer;">+ Add Document</button>
                         </div>
                         <div id="taxReqTableWrap" style="width: 100%; overflow: hidden;">
@@ -8549,30 +8544,6 @@
                                 </thead>
                                 <tbody id="taxReqTableBody">
                                     <tr><td colspan="4" style="padding: 16px; text-align: center; color: #475569;">Loading requirements…</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Received Docs Tab -->
-                    <div id="taxDocPanel-received" style="padding: 14px 18px; display: none;">
-                        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-                            <button onclick="scanExistingTaxDocs()" id="btnScanInboxDocs" style="padding: 6px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Scan customer Inbox folder & emails for unclassified documents">🔍 Scan & Classify Inbox Docs</button>
-                        </div>
-                        <div id="taxRecTableWrap" style="width: 100%; overflow: hidden;">
-                            <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.82rem;">
-                                <thead>
-                                    <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                                        <th style="padding: 6px 8px; width: 18%;">Original File</th>
-                                        <th style="padding: 6px 8px; width: 18%;">→ Renamed As</th>
-                                        <th style="padding: 6px 8px; width: 15%;">Detected Type</th>
-                                        <th style="padding: 6px 8px; width: 10%;">Confidence</th>
-                                        <th style="padding: 6px 8px; width: 14%;">Status</th>
-                                        <th style="padding: 6px 8px; text-align: right; width: 25%;">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="taxRecTableBody">
-                                    <tr><td colspan="6" style="padding: 16px; text-align: center; color: #475569;">No received documents yet.</td></tr>
                                 </tbody>
                             </table>
                         </div>

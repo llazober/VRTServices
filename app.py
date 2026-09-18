@@ -12742,60 +12742,18 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
         ocr_text = _ocr_pdf_to_text_for_classification(file_key)
         doc_type, confidence = _detect_tax_doc_type(ocr_text)
 
-        # Determine new filename
+        # Determine status and display filename without performing any S3 file movement/renaming
+        renamed_filename = original_filename
+        clean_key = clean_s3_key(file_key)
+
         if doc_type:
-            renamed_filename = f"{doc_type}_{tax_year}.pdf"
             status = "Matched"
-            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) -> renaming to '{renamed_filename}'")
+            print(f"[TAX CLASSIFY] Detected '{doc_type}' (conf={confidence:.2f}) for file '{original_filename}'")
         else:
-            renamed_filename = f"{base_name}_review.pdf"
             status = "Needs Review"
-            print(f"[TAX CLASSIFY] Could not detect type -> flagging as '{renamed_filename}'")
+            print(f"[TAX CLASSIFY] Could not detect type for file '{original_filename}'")
 
-        new_file_key = None
-        if client_s3:
-            clean_key = clean_s3_key(file_key)
-            folder_dir = os.path.dirname(clean_key)
-
-            if doc_type:
-                # Look up customer's root folder to build Tax Documents path
-                try:
-                    _conn2 = get_db_connection()
-                    with _conn2.cursor(cursor_factory=RealDictCursor) as _c2:
-                        _c2.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
-                        cust_row = _c2.fetchone()
-                    _conn2.close()
-                    root_folder = get_customer_root_folder_path(cust_row) if cust_row else None
-                    if root_folder:
-                        if not root_folder.endswith("/"):
-                            root_folder += "/"
-                        tax_docs_folder = f"{root_folder}Tax Documents/Tax Year {tax_year}/"
-                    else:
-                        tax_docs_folder = folder_dir + "/"
-                except Exception:
-                    tax_docs_folder = folder_dir + "/"
-
-                new_file_key = f"{tax_docs_folder}{renamed_filename}"
-            else:
-                # Stay in Inbox/, just rename with _review suffix
-                new_file_key = f"{folder_dir}/{renamed_filename}"
-
-            # Copy to new location, delete old
-            try:
-                new_file_key = clean_s3_key(new_file_key)
-                client_s3.copy_object(
-                    Bucket=bucket,
-                    CopySource={"Bucket": bucket, "Key": clean_key},
-                    Key=new_file_key,
-                    ACL="private"
-                )
-                # Delete source file if it was a temporary _review file, but preserve original Inbox files
-                if new_file_key != clean_key and (clean_key.lower().endswith("_review.pdf") or "/inbox/" not in clean_key.lower()):
-                    client_s3.delete_object(Bucket=bucket, Key=clean_key)
-                print(f"[TAX CLASSIFY] Copied '{clean_key}' -> '{new_file_key}'")
-            except Exception as mv_err:
-                print(f"[TAX CLASSIFY S3 MOVE ERROR] {mv_err}")
-                new_file_key = clean_key  # fallback: keep original key
+        fk_check = clean_key
 
         # Match to a requirement
         req_id = None
