@@ -13399,7 +13399,7 @@ async def clear_all_received_tax_docs(customer_id: int, request: Request, tax_ye
 
 @app.post("/api/tax-requirements/copy-from-year")
 async def copy_tax_requirements_from_year(request: Request):
-    """Copy all requirements from a source tax year to a target tax year for a customer without duplicates."""
+    """Copy ALL requirements 1:1 from a source tax year to a target tax year for a customer."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -13425,7 +13425,8 @@ async def copy_tax_requirements_from_year(request: Request):
             cur.execute("""
                 SELECT doc_type, doc_label, source_description, notes, is_required
                 FROM tax_return_requirements
-                WHERE customer_id = %s AND tax_year = %s;
+                WHERE customer_id = %s AND tax_year = %s
+                ORDER BY id;
             """, (customer_id, from_year))
             source_reqs = cur.fetchall()
 
@@ -13434,28 +13435,20 @@ async def copy_tax_requirements_from_year(request: Request):
                     "success": True,
                     "copied_count": 0,
                     "from_count": 0,
-                    "existing_count": 0,
                     "from_year": from_year,
                     "to_year": to_year,
                     "message": f"Tax Year {from_year} has no requirements defined."
                 }
 
-            # 2. Fetch existing target year requirements
+            # 2. Clear target year existing requirements so we get an exact 1:1 copy
             cur.execute("""
-                SELECT doc_type, COALESCE(source_description, '') as source_desc
-                FROM tax_return_requirements
+                DELETE FROM tax_return_requirements
                 WHERE customer_id = %s AND tax_year = %s;
             """, (customer_id, to_year))
-            target_existing = set((r["doc_type"], r["source_desc"]) for r in cur.fetchall())
 
+            # 3. Copy every single record 1:1
             copied_count = 0
-            existing_count = 0
             for sr in source_reqs:
-                key = (sr["doc_type"], (sr.get("source_description") or "").strip())
-                if key in target_existing:
-                    existing_count += 1
-                    continue
-
                 cur.execute("""
                     INSERT INTO tax_return_requirements
                         (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
@@ -13469,7 +13462,6 @@ async def copy_tax_requirements_from_year(request: Request):
                     sr.get("notes"),
                     sr.get("is_required", True)
                 ))
-                target_existing.add(key)
                 copied_count += 1
 
             conn.commit()
@@ -13481,7 +13473,6 @@ async def copy_tax_requirements_from_year(request: Request):
             "success": True,
             "copied_count": copied_count,
             "from_count": len(source_reqs),
-            "existing_count": existing_count,
             "from_year": from_year,
             "to_year": to_year,
             "message": f"Copied {copied_count} requirement(s) from Tax Year {from_year} -> {to_year}."
