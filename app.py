@@ -7066,6 +7066,7 @@ async def download_file_proxy(key: str, request: Request):
 async def upload_customer_storage_file(
     customer_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     target_prefix: str = Form(None)
 ):
@@ -7126,6 +7127,14 @@ async def upload_customer_storage_file(
             check_and_match_tax_requirement_on_rename(real_cust_id, "", final_key, filename)
         except Exception as _um_err:
             print(f"[UPLOAD REQ MATCH ERR]: {_um_err}")
+
+        # Auto-classify tax document in background task
+        background_tasks.add_task(
+            classify_and_rename_tax_document,
+            customer_id=real_cust_id,
+            file_key=final_key,
+            original_filename=filename
+        )
 
         return {"message": "File uploaded successfully", "key": final_key, "pdf_converted": bool(pdf_fk)}
     except HTTPException as he:
@@ -12937,11 +12946,44 @@ def recalculate_tax_docs_status(customer_id: int, tax_year: int):
             conn.close()
 
 
+def _detect_doc_type_from_filename(filename: str) -> str | None:
+    """Detects tax doc_type directly from filename string as a reliable fallback."""
+    if not filename:
+        return None
+    fn_clean = filename.lower().replace("_", "-").replace(" ", "-")
+    fn_compact = fn_clean.replace("-", "")
+
+    patterns = [
+        ("W2", ["w2", "w-2", "wage-tax"]),
+        ("1099-NEC", ["1099-nec", "1099nec"]),
+        ("1099-MISC", ["1099-misc", "1099misc"]),
+        ("1099-INT", ["1099-int", "1099int"]),
+        ("1099-DIV", ["1099-div", "1099div"]),
+        ("1099-R", ["1099-r", "1099r"]),
+        ("1099-G", ["1099-g", "1099g"]),
+        ("1099-B", ["1099-b", "1099b"]),
+        ("1099-K", ["1099-k", "1099k"]),
+        ("SSA-1099", ["ssa-1099", "ssa1099", "1099-ssa", "1099ssa"]),
+        ("1098-T", ["1098-t", "1098t"]),
+        ("1098-E", ["1098-e", "1098e"]),
+        ("1098", ["1098"]),
+        ("1095-A", ["1095-a", "1095a"]),
+        ("1095-B", ["1095-b", "1095b"]),
+        ("1095-C", ["1095-c", "1095c"]),
+        ("K-1", ["k-1", "k1", "schedule-k1"])
+    ]
+
+    for dt, keywords in patterns:
+        if any(kw in fn_clean or kw in fn_compact for kw in keywords):
+            return dt
+    return None
+
+
 def classify_and_rename_tax_document(customer_id: int, file_key: str, original_filename: str = "", tax_year: int = None):
     """
     Core tax document classification pipeline:
     1. OCR the file via Google Vision.
-    2. Detect doc type from patterns.
+    2. Detect doc type from OCR or filename pattern.
     3. Rename & move the file on S3 accordingly.
     4. Record in tax_return_received_docs.
     5. Recalculate completion status.
@@ -12958,6 +13000,13 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
 
         ocr_text = _ocr_pdf_to_text_for_classification(file_key)
         doc_type, confidence = _detect_tax_doc_type(ocr_text)
+
+        # Fallback: Detect doc_type from original_filename if OCR text didn't match
+        if not doc_type:
+            doc_type = _detect_doc_type_from_filename(original_filename)
+            if doc_type:
+                confidence = 0.95
+                print(f"[TAX CLASSIFY] Detected doc_type '{doc_type}' from filename: '{original_filename}'")
 
         # Determine status and rename file in-place inside Inbox/ if detected; leave original name if unclassified
         clean_key = clean_s3_key(file_key)
@@ -12980,8 +13029,15 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                         exists_already = False
 
                     if exists_already:
-                        target_renamed = f"{doc_type}_{tax_year}_{base_name}{ext}"
-                        new_file_key = clean_s3_key(f"{folder_dir}/{target_renamed}" if folder_dir else target_renamed)
+                        counter = 2
+                        while exists_already and counter < 100:
+                            target_renamed = f"{doc_type}_{tax_year}_{counter}{ext}"
+                            new_file_key = clean_s3_key(f"{folder_dir}/{target_renamed}" if folder_dir else target_renamed)
+                            try:
+                                client_s3.head_object(Bucket=bucket, Key=new_file_key)
+                                counter += 1
+                            except Exception:
+                                exists_already = False
 
                     client_s3.copy_object(
                         Bucket=bucket,
