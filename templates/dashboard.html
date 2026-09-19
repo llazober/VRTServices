@@ -6112,10 +6112,15 @@
             const spinner = document.getElementById('storageLoadingSpinner');
             if (spinner) {
                 spinner.style.display = 'block';
-                spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Uploading ${fileList.length} file(s)...`;
+                spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Uploading 1 of ${fileList.length} file(s)...<br><span style="font-size:0.9rem;opacity:0.8;">Processing OCR, please wait...</span>`;
             }
 
-            const uploadPromises = fileList.map(async (file) => {
+            for (let i = 0; i < fileList.length; i++) {
+                const file = fileList[i];
+                if (spinner) {
+                    spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Uploading ${i + 1} of ${fileList.length} file(s)...<br><span style="font-size:0.9rem;opacity:0.8;">Processing OCR for ${file.name}, please wait...</span>`;
+                }
+
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('target_prefix', targetPrefix);
@@ -6131,9 +6136,7 @@
                 } catch (err) {
                     errors.push(`${file.name}: ${err.message}`);
                 }
-            });
-
-            await Promise.all(uploadPromises);
+            }
 
             event.target.value = '';
             await refreshCurrentStorageFolder();
@@ -6186,6 +6189,12 @@
             const trimmed = newName.trim();
             if (!trimmed || trimmed === oldName) return;
 
+            const spinner = document.getElementById('storageLoadingSpinner');
+            if (spinner) {
+                spinner.style.display = 'block';
+                spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Renaming file to '${trimmed}'...<br><span style="font-size:0.9rem;opacity:0.8;">Processing OCR, please wait...</span>`;
+            }
+
             try {
                 const res = await fetch(`/api/customers/${currentStorageCustomerId}/storage/rename-file`, {
                     method: 'POST',
@@ -6202,6 +6211,9 @@
                 }
             } catch (err) {
                 alert(`❌ Rename Error: ${err.message}`);
+            } finally {
+                const spinner = document.getElementById('storageLoadingSpinner');
+                if (spinner) spinner.style.display = 'none';
             }
         }
 
