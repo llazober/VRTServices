@@ -13017,6 +13017,7 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
             status = "Matched"
             target_renamed = f"{doc_type}_{tax_year}{ext}"
             new_file_key = clean_s3_key(f"{folder_dir}/{target_renamed}" if folder_dir else target_renamed)
+            renamed_filename = target_renamed
 
             if client_s3 and new_file_key != clean_key:
                 try:
@@ -13038,6 +13039,7 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                                 counter += 1
                             except Exception:
                                 exists_already = False
+                        renamed_filename = target_renamed
 
                     client_s3.copy_object(
                         Bucket=bucket,
@@ -13046,12 +13048,9 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                         ACL="private"
                     )
                     client_s3.delete_object(Bucket=bucket, Key=clean_key)
-                    renamed_filename = target_renamed
                     print(f"[TAX CLASSIFY] Renamed in-place in Inbox: '{clean_key}' -> '{new_file_key}'")
                 except Exception as r_err:
-                    print(f"[TAX CLASSIFY S3 RENAME ERROR] {r_err}")
-                    renamed_filename = original_filename
-                    new_file_key = clean_key
+                    print(f"[TAX CLASSIFY S3 RENAME WARNING] {r_err}")
             else:
                 renamed_filename = target_renamed
                 new_file_key = clean_key
