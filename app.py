@@ -13399,32 +13399,95 @@ async def clear_all_received_tax_docs(customer_id: int, request: Request, tax_ye
 
 @app.post("/api/tax-requirements/copy-from-year")
 async def copy_tax_requirements_from_year(request: Request):
-    """Copy all requirements from a source tax year to a target tax year for a customer."""
+    """Copy all requirements from a source tax year to a target tax year for a customer without duplicates."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
     customer_id = data.get("customer_id")
-    from_year = data.get("from_year")
-    to_year = data.get("to_year") or datetime.datetime.now().year - 1
+    try:
+        from_year = int(data.get("from_year"))
+    except (ValueError, TypeError):
+        from_year = None
+    try:
+        to_year = int(data.get("to_year")) if data.get("to_year") is not None else datetime.datetime.now().year - 1
+    except (ValueError, TypeError):
+        to_year = datetime.datetime.now().year - 1
+
     if not customer_id or not from_year:
         raise HTTPException(status_code=400, detail="customer_id and from_year are required")
+
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch source year requirements
             cur.execute("""
-                INSERT INTO tax_return_requirements
-                    (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
-                SELECT customer_id, %s, doc_type, doc_label, source_description, notes, is_required
+                SELECT doc_type, doc_label, source_description, notes, is_required
                 FROM tax_return_requirements
-                WHERE customer_id = %s AND tax_year = %s
-                ON CONFLICT (customer_id, tax_year, doc_type, source_description) DO NOTHING;
-            """, (to_year, customer_id, from_year))
-            copied = cur.rowcount
+                WHERE customer_id = %s AND tax_year = %s;
+            """, (customer_id, from_year))
+            source_reqs = cur.fetchall()
+
+            if not source_reqs:
+                return {
+                    "success": True,
+                    "copied_count": 0,
+                    "from_count": 0,
+                    "existing_count": 0,
+                    "from_year": from_year,
+                    "to_year": to_year,
+                    "message": f"Tax Year {from_year} has no requirements defined."
+                }
+
+            # 2. Fetch existing target year requirements
+            cur.execute("""
+                SELECT doc_type, COALESCE(source_description, '') as source_desc
+                FROM tax_return_requirements
+                WHERE customer_id = %s AND tax_year = %s;
+            """, (customer_id, to_year))
+            target_existing = set((r["doc_type"], r["source_desc"]) for r in cur.fetchall())
+
+            copied_count = 0
+            existing_count = 0
+            for sr in source_reqs:
+                key = (sr["doc_type"], (sr.get("source_description") or "").strip())
+                if key in target_existing:
+                    existing_count += 1
+                    continue
+
+                cur.execute("""
+                    INSERT INTO tax_return_requirements
+                        (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                """, (
+                    customer_id,
+                    to_year,
+                    sr["doc_type"],
+                    sr.get("doc_label"),
+                    sr.get("source_description"),
+                    sr.get("notes"),
+                    sr.get("is_required", True)
+                ))
+                target_existing.add(key)
+                copied_count += 1
+
             conn.commit()
-        return {"success": True, "copied_count": copied, "from_year": from_year, "to_year": to_year}
+
+        # Recalculate status for target year
+        recalculate_tax_docs_status(customer_id, to_year)
+
+        return {
+            "success": True,
+            "copied_count": copied_count,
+            "from_count": len(source_reqs),
+            "existing_count": existing_count,
+            "from_year": from_year,
+            "to_year": to_year,
+            "message": f"Copied {copied_count} requirement(s) from Tax Year {from_year} -> {to_year}."
+        }
     except Exception as e:
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()

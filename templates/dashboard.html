@@ -8144,7 +8144,19 @@
         async function copyTaxRequirementsFromYear() {
             if (!currentChecklistCustomerId) return;
             const fromYear = _taxDocCurrentYear - 1;
-            if (!confirm(`Copy all requirements from tax year ${fromYear} to ${_taxDocCurrentYear}?`)) return;
+            let confirmCopy = true;
+            if (typeof showCustomConfirm === 'function') {
+                confirmCopy = await showCustomConfirm(
+                    `Copy all tax document requirements from Tax Year ${fromYear} to Tax Year ${_taxDocCurrentYear}?`,
+                    'Copy Last Year Requirements',
+                    '📋 Yes, Copy Requirements',
+                    'Cancel'
+                );
+            } else if (!confirm(`Copy all requirements from tax year ${fromYear} to ${_taxDocCurrentYear}?`)) {
+                return;
+            }
+            if (!confirmCopy) return;
+
             try {
                 const res = await fetch('/api/tax-requirements/copy-from-year', {
                     method: 'POST',
@@ -8152,11 +8164,34 @@
                     body: JSON.stringify({ customer_id: currentChecklistCustomerId, from_year: fromYear, to_year: _taxDocCurrentYear })
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Copy failed');
-                alert(`✅ Copied ${data.copied_count} requirement(s) from ${fromYear} → ${_taxDocCurrentYear}`);
+                if (!res.ok) throw new Error(data.detail || data.message || 'Copy failed');
+
+                if (data.copied_count > 0) {
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('Copy Successful', `Successfully copied ${data.copied_count} requirement(s) from Tax Year ${fromYear} to Tax Year ${_taxDocCurrentYear}!`, 'success');
+                    } else {
+                        alert(`✅ Copied ${data.copied_count} requirement(s) from ${fromYear} → ${_taxDocCurrentYear}`);
+                    }
+                } else if (data.from_count === 0) {
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('No Requirements Found', `Tax Year ${fromYear} has no tax document requirements defined yet to copy from.`, 'info');
+                    } else {
+                        alert(`ℹ️ Tax Year ${fromYear} has no requirements defined.`);
+                    }
+                } else {
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('Already Copied', `All ${data.from_count || data.existing_count} requirement(s) from Tax Year ${fromYear} are already present in Tax Year ${_taxDocCurrentYear}.`, 'info');
+                    } else {
+                        alert(`ℹ️ All requirements from ${fromYear} are already present in ${_taxDocCurrentYear}.`);
+                    }
+                }
                 await loadTaxDocTracking(currentChecklistCustomerId);
             } catch (err) {
-                alert(`❌ Error: ${err.message}`);
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert('Error Copying Requirements', err.message || 'Failed to copy requirements.', 'error');
+                } else {
+                    alert(`❌ Error: ${err.message}`);
+                }
             }
         }
 
