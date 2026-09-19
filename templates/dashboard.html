@@ -8138,14 +8138,14 @@
             req.received_status = req.manual_status; // Optimistic UI update
             renderTaxReqTable();
             
+            const payload = isChecked ? { manual_status: 'Received' } : { clear_received: true };
+            
             try {
                 const res = await fetch('/api/tax-requirements/' + reqId, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({
-                        manual_status: req.manual_status
-                    })
+                    body: JSON.stringify(payload)
                 });
                 if (!res.ok) {
                     const data = await res.json();
