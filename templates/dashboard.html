@@ -8011,20 +8011,24 @@
             const tbody = document.getElementById('taxReqTableBody');
             if (!tbody) return;
             if (!_taxDocReqs.length) {
-                tbody.innerHTML = `<tr><td colspan="4" style="padding:16px;text-align:center;color:#475569;font-size:0.82rem;">No requirements defined yet. Click "+ Add Document" to start.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="padding:16px;text-align:center;color:#475569;font-size:0.82rem;">No requirements defined yet. Click "+ Add Document" to start.</td></tr>`;
                 return;
             }
             tbody.innerHTML = _taxDocReqs.map(r => {
-                const received = r.received_status === 'Matched';
+                const received = r.received_status === 'Matched' || r.received_status === 'Received';
                 const needsReview = r.received_status === 'Needs Review';
                 let statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(148,163,184,0.12);color:#94a3b8;border:1px solid rgba(148,163,184,0.25);">Pending</span>`;
                 if (received) statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(0,230,118,0.12);color:#00e676;border:1px solid rgba(0,230,118,0.25);">✅ Received</span>`;
                 if (needsReview) statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(250,204,21,0.12);color:#facc15;border:1px solid rgba(250,204,21,0.25);">🔍 Review</span>`;
                 const labelText = r.doc_label || '';
                 const sourceText = r.source_description ? ` (${r.source_description})` : '';
+                const isManuallyReceived = r.manual_status === 'Received';
                 return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
                     <td style="padding:8px;color:#f8fafc;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.doc_type}</td>
                     <td style="padding:8px;color:#94a3b8;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${labelText}${sourceText}">${labelText}${sourceText ? `<em style="color:#64748b;">${sourceText}</em>` : ''}</td>
+                    <td style="padding:8px; text-align:center;">
+                        <input type="checkbox" onchange="updateTaxRequirementManualStatus(${r.id}, this.checked)" ${isManuallyReceived ? 'checked' : ''} style="width:16px;height:16px;accent-color:#00e676;cursor:pointer;">
+                    </td>
                     <td style="padding:8px;">${statusBadge}</td>
                     <td style="padding:8px;text-align:right;white-space:nowrap;">
                         <button type="button" onclick="deleteTaxRequirement(${r.id}); event.stopPropagation();" title="Delete requirement" style="padding:4px 10px;background:rgba(248,113,113,0.2);border:1px solid rgba(248,113,113,0.4);color:#f87171;border-radius:6px;font-size:0.75rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">🗑 Delete</button>
@@ -8121,6 +8125,36 @@
             } catch (err) {
                 console.error('[TAX DELETE]', err);
                 alert(`❌ Delete failed: ${err.message}`);
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            }
+        }
+
+        async function updateTaxRequirementManualStatus(reqId, isChecked) {
+            if (!reqId) return;
+            const req = _taxDocReqs.find(r => r.id === reqId);
+            if (!req) return;
+            
+            req.manual_status = isChecked ? 'Received' : 'Pending';
+            req.received_status = req.manual_status; // Optimistic UI update
+            renderTaxReqTable();
+            
+            try {
+                const res = await fetch('/api/tax-requirements/' + reqId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        manual_status: req.manual_status
+                    })
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || `Server error ${res.status}`);
+                }
+                await loadTaxDocTracking(currentChecklistCustomerId);
+            } catch (err) {
+                console.error('[TAX UPDATE STATUS]', err);
+                alert(`❌ Update failed: ${err.message}`);
                 await loadTaxDocTracking(currentChecklistCustomerId);
             }
         }
@@ -8627,9 +8661,10 @@
                             <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.82rem;">
                                 <thead>
                                     <tr style="text-align: left; color: #64748b; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07);">
-                                        <th style="padding: 6px 8px; width: 25%;">Type</th>
-                                        <th style="padding: 6px 8px; width: 35%;">Label / Source</th>
-                                        <th style="padding: 6px 8px; width: 22%;">Status</th>
+                                        <th style="padding: 6px 8px; width: 22%;">Type</th>
+                                        <th style="padding: 6px 8px; width: 33%;">Label / Source</th>
+                                        <th style="padding: 6px 8px; width: 10%; text-align: center;">Done</th>
+                                        <th style="padding: 6px 8px; width: 17%;">Status</th>
                                         <th style="padding: 6px 8px; text-align: right; width: 18%;">Actions</th>
                                     </tr>
                                 </thead>
