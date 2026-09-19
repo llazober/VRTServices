@@ -13072,14 +13072,16 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                     _c3.execute("""
                         SELECT r.id FROM tax_return_requirements r
                         LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
-                        WHERE r.customer_id = %s AND r.tax_year = %s AND r.doc_type = %s AND r.is_required = TRUE AND rd.id IS NULL
+                        WHERE r.customer_id = %s AND r.tax_year = %s AND r.is_required = TRUE AND rd.id IS NULL
+                          AND UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
                         ORDER BY r.id LIMIT 1;
                     """, (customer_id, tax_year, doc_type))
                     rr = _c3.fetchone()
                     if not rr:
                         _c3.execute("""
                             SELECT id FROM tax_return_requirements
-                            WHERE customer_id = %s AND tax_year = %s AND doc_type = %s AND is_required = TRUE
+                            WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE
+                              AND UPPER(REPLACE(REPLACE(doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
                             ORDER BY id LIMIT 1;
                         """, (customer_id, tax_year, doc_type))
                         rr = _c3.fetchone()
@@ -13152,13 +13154,21 @@ async def get_tax_requirements(customer_id: int, request: Request, tax_year: int
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT r.*, rd.renamed_filename, rd.status AS received_status, rd.matched_at,
+                SELECT r.*, rd.renamed_filename, COALESCE(rd.status, 'Pending') AS received_status, rd.matched_at,
                        rd.doc_type_detected, rd.ocr_confidence
                 FROM tax_return_requirements r
                 LEFT JOIN LATERAL (
-                    SELECT renamed_filename, status, matched_at, doc_type_detected, ocr_confidence
+                    SELECT id, renamed_filename, status, matched_at, doc_type_detected, ocr_confidence
                     FROM tax_return_received_docs
-                    WHERE requirement_id = r.id
+                    WHERE customer_id = r.customer_id AND tax_year = r.tax_year
+                      AND (
+                          requirement_id = r.id
+                          OR (
+                              requirement_id IS NULL 
+                              AND status = 'Matched' 
+                              AND UPPER(REPLACE(REPLACE(doc_type_detected, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', ''))
+                          )
+                      )
                     ORDER BY created_at DESC LIMIT 1
                 ) rd ON TRUE
                 WHERE r.customer_id = %s AND r.tax_year = %s
