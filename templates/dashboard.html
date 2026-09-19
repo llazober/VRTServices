@@ -5980,6 +5980,7 @@
         function updateStorageBatchSelectionState() {
             const chks = document.querySelectorAll('.storage-item-select-chk:checked');
             const mergeBtn = document.getElementById('storageMergePdfBtn');
+            const moveBtn = document.getElementById('storageBatchMoveBtn');
             const selectAllChk = document.getElementById('storageSelectAllChk');
             const allChks = document.querySelectorAll('.storage-item-select-chk');
 
@@ -5991,15 +5992,60 @@
                     mergeBtn.style.display = 'none';
                 }
             }
+            if (moveBtn) {
+                if (chks.length > 0) {
+                    moveBtn.style.display = 'inline-block';
+                    moveBtn.innerHTML = `🚚 Move Selected (${chks.length})`;
+                } else {
+                    moveBtn.style.display = 'none';
+                }
+            }
             if (selectAllChk && allChks.length > 0) {
                 selectAllChk.checked = (chks.length === allChks.length);
             }
         }
 
-        function toggleStorageSelectAll(masterChk) {
-            const chks = document.querySelectorAll('.storage-item-select-chk');
-            chks.forEach(c => { c.checked = masterChk.checked; });
-            updateStorageBatchSelectionState();
+        async function moveSelectedStorageFiles() {
+            const chks = Array.from(document.querySelectorAll('.storage-item-select-chk:checked'));
+            if (!chks.length) {
+                alert('Please select at least one file to move.');
+                return;
+            }
+            const keys = chks.map(c => c.getAttribute('data-key')).filter(Boolean);
+            if (!keys.length) return;
+
+            const targetFolder = prompt(
+                `Move ${keys.length} selected file(s) to folder:\n\nExamples:\n• Tax Documents/Tax Year ${_taxDocCurrentYear || 2025}\n• Inbox\n• Raw_Originals\n\nEnter target folder:`,
+                `Tax Documents/Tax Year ${_taxDocCurrentYear || 2025}`
+            );
+            if (!targetFolder || !targetFolder.trim()) return;
+
+            let destPrefix = targetFolder.trim();
+            if (currentStorageCustomerId && currentStoragePrefix) {
+                const parts = (currentStoragePrefix || '').split('/').filter(Boolean);
+                if (parts.length >= 2) {
+                    const rootCustomerPath = parts.slice(0, 2).join('/') + '/';
+                    destPrefix = rootCustomerPath + destPrefix.replace(/^\/+/, '');
+                }
+            }
+
+            try {
+                if (typeof showToast === 'function') showToast(`Moving ${keys.length} file(s)...`, 'info');
+                const res = await fetch('/api/storage/batch-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: keys, destination_prefix: destPrefix })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Move failed');
+                if (typeof showToast === 'function') showToast(data.message || 'Files moved successfully!', 'success');
+                refreshCurrentStorageFolder();
+                if (currentChecklistCustomerId) {
+                    loadTaxDocTracking(currentChecklistCustomerId);
+                }
+            } catch (err) {
+                alert('Batch Move Error: ' + err.message);
+            }
         }
 
         async function convertSingleStorageFileToPdf(key) {
@@ -8260,6 +8306,7 @@
                 <button onclick="document.getElementById('storageFileInput').click()" style="padding: 7px 16px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">📤 Upload Files</button>
                 <button onclick="createStorageFolder()" style="padding: 7px 14px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Create a new subfolder in the current directory">📁 New Folder</button>
                 <button id="storageMergePdfBtn" onclick="mergeSelectedStorageImagesToPdf()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Merge checked image files into 1 PDF document">📑 Merge Selected (0) -> PDF</button>
+                <button id="storageBatchMoveBtn" onclick="moveSelectedStorageFiles()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Move selected files to another directory">🚚 Move Selected (0)</button>
                 <button id="storageBatchConvertBtn" onclick="batchConvertInboxToPdf()" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Convert all non-PDF files in this directory to PDF">📄 Convert Inbox to PDF</button>
                 <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>

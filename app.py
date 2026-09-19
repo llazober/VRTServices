@@ -7809,6 +7809,62 @@ async def api_merge_images_to_pdf(request: Request):
     }
 
 
+@app.post("/api/storage/batch-move")
+async def api_batch_move_storage_files(request: Request):
+    """Moves multiple selected S3 files to a destination directory."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    keys = data.get("keys") or []
+    destination_prefix = (data.get("destination_prefix") or "").strip()
+
+    if not keys or not destination_prefix:
+        raise HTTPException(status_code=400, detail="keys list and destination_prefix are required")
+
+    client_s3, err = get_s3_client()
+    if not client_s3:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    dest_prefix_clean = clean_s3_key(destination_prefix)
+    if not dest_prefix_clean.endswith("/"):
+        dest_prefix_clean += "/"
+
+    moved_count = 0
+    failed_count = 0
+
+    for k in keys:
+        clean_k = clean_s3_key(k)
+        fname = os.path.basename(clean_k)
+        if not fname:
+            continue
+        new_key = clean_s3_key(f"{dest_prefix_clean}{fname}")
+        if new_key == clean_k:
+            continue
+        try:
+            client_s3.copy_object(
+                Bucket=bucket,
+                CopySource={"Bucket": bucket, "Key": clean_k},
+                Key=new_key,
+                ACL="private"
+            )
+            client_s3.delete_object(Bucket=bucket, Key=clean_k)
+            moved_count += 1
+            print(f"[STORAGE BATCH MOVE] Moved '{clean_k}' -> '{new_key}'")
+        except Exception as e:
+            print(f"[STORAGE BATCH MOVE ERROR] '{clean_k}' -> '{new_key}': {e}")
+            failed_count += 1
+
+    return {
+        "success": True,
+        "message": f"Successfully moved {moved_count} file(s) to '{dest_prefix_clean}'",
+        "moved_count": moved_count,
+        "failed_count": failed_count
+    }
+
+
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
 def format_period_label(period_str, workflow_mode="bookkeeping"):
     if not period_str:
@@ -12790,7 +12846,7 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
 
         fk_check = new_file_key
 
-        # Match to a requirement
+        # Match to an unmatched requirement first for this doc_type
         req_id = None
         matched_at = None
         if doc_type:
@@ -12798,17 +12854,25 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                 _conn3 = get_db_connection()
                 with _conn3.cursor() as _c3:
                     _c3.execute("""
-                        SELECT id FROM tax_return_requirements
-                        WHERE customer_id = %s AND tax_year = %s AND doc_type = %s AND is_required = TRUE
-                        ORDER BY id LIMIT 1;
+                        SELECT r.id FROM tax_return_requirements r
+                        LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
+                        WHERE r.customer_id = %s AND r.tax_year = %s AND r.doc_type = %s AND r.is_required = TRUE AND rd.id IS NULL
+                        ORDER BY r.id LIMIT 1;
                     """, (customer_id, tax_year, doc_type))
                     rr = _c3.fetchone()
+                    if not rr:
+                        _c3.execute("""
+                            SELECT id FROM tax_return_requirements
+                            WHERE customer_id = %s AND tax_year = %s AND doc_type = %s AND is_required = TRUE
+                            ORDER BY id LIMIT 1;
+                        """, (customer_id, tax_year, doc_type))
+                        rr = _c3.fetchone()
                     if rr:
                         req_id = rr[0]
                         matched_at = datetime.datetime.now()
                 _conn3.close()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[TAX REQ MATCH ERROR] {e}")
 
         # Record in tax_return_received_docs (Upsert pattern)
         conn = get_db_connection()
