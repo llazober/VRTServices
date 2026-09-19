@@ -7819,6 +7819,7 @@ async def api_batch_move_storage_files(request: Request):
     data = await request.json()
     keys = data.get("keys") or []
     destination_prefix = (data.get("destination_prefix") or "").strip()
+    customer_id = data.get("customer_id")
 
     if not keys or not destination_prefix:
         raise HTTPException(status_code=400, detail="keys list and destination_prefix are required")
@@ -7831,6 +7832,23 @@ async def api_batch_move_storage_files(request: Request):
     dest_prefix_clean = clean_s3_key(destination_prefix)
     if not dest_prefix_clean.endswith("/"):
         dest_prefix_clean += "/"
+
+    conn = None
+    real_cust_id = None
+    if customer_id:
+        try:
+            conn = get_db_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cid_str = str(customer_id).strip()
+                if cid_str.isdigit():
+                    cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+                else:
+                    cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+                cust = cur.fetchone()
+                if cust:
+                    real_cust_id = cust["id"]
+        except Exception:
+            pass
 
     moved_count = 0
     failed_count = 0
@@ -7853,9 +7871,18 @@ async def api_batch_move_storage_files(request: Request):
             client_s3.delete_object(Bucket=bucket, Key=clean_k)
             moved_count += 1
             print(f"[STORAGE BATCH MOVE] Moved '{clean_k}' -> '{new_key}'")
+
+            if conn and real_cust_id:
+                sync_file_rename_in_communications(conn, real_cust_id, clean_k, new_key)
         except Exception as e:
             print(f"[STORAGE BATCH MOVE ERROR] '{clean_k}' -> '{new_key}': {e}")
             failed_count += 1
+
+    if conn:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return {
         "success": True,
@@ -7863,6 +7890,7 @@ async def api_batch_move_storage_files(request: Request):
         "moved_count": moved_count,
         "failed_count": failed_count
     }
+
 
 
 # ── Customer Bookkeeping Task Checklist Endpoints ────────────────────────────────
