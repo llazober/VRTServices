@@ -13052,6 +13052,15 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                     )
                     client_s3.delete_object(Bucket=bucket, Key=clean_key)
                     print(f"[TAX CLASSIFY] Renamed in-place in Inbox: '{clean_key}' -> '{new_file_key}'")
+
+                    # Keep DB communications in sync so the Inbox UI reflects the renamed file
+                    try:
+                        sync_conn = get_db_connection()
+                        sync_file_rename_in_communications(sync_conn, customer_id, clean_key, new_file_key)
+                        sync_conn.close()
+                    except Exception as sync_err:
+                        print(f"[TAX CLASSIFY DB SYNC WARNING] {sync_err}")
+
                 except Exception as r_err:
                     print(f"[TAX CLASSIFY S3 RENAME WARNING] {r_err}")
             else:
