@@ -13716,10 +13716,14 @@ async def send_tax_requirements_email(request: Request):
 
             if resend_key:
                 try:
+                    raw_reply_to = get_resend_reply_to_email()
+                    reply_list = [r.strip() for r in raw_reply_to.split(",") if r.strip()]
+                    reply_to_payload = reply_list if len(reply_list) > 1 else (reply_list[0] if reply_list else raw_reply_to)
+
                     payload = {
                         "from": format_resend_from_header(f"{parent_name} Tax Team"),
                         "to": [cust_email],
-                        "reply_to": get_resend_reply_to_email(),
+                        "reply_to": reply_to_payload,
                         "subject": subject,
                         "html": html_body,
                         "text": text_body
