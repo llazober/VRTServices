@@ -8086,7 +8086,19 @@
 
         async function sendTaxRequirementsEmail() {
             if (!currentChecklistCustomerId) return;
-            if (!confirm(`Send tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`)) return;
+            let confirmSend = true;
+            if (typeof showCustomConfirm === 'function') {
+                confirmSend = await showCustomConfirm(
+                    `Are you sure you want to send the tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`,
+                    'Send Tax Requirements Email',
+                    '📧 Yes, Send Email',
+                    'Cancel'
+                );
+            } else if (!confirm(`Send tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`)) {
+                return;
+            }
+            if (!confirmSend) return;
+
             const btn = document.getElementById('btnSendTaxEmail');
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
             try {
@@ -8096,15 +8108,33 @@
                     body: JSON.stringify({ customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear })
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Send failed');
-                if (data.errors && data.errors.length > 0) {
-                    alert(`⚠️ ${data.message}\n\nErrors:\n${data.errors.join('\n')}`);
+                if (!res.ok) throw new Error(data.detail || data.message || 'Send failed');
+
+                if (data.sent_count > 0 || data.success) {
+                    let alertMsg = data.message || `Tax requirements email successfully sent for tax year ${_taxDocCurrentYear}!`;
+                    if (data.errors && data.errors.length > 0) {
+                        alertMsg += `\n\nWarnings:\n` + data.errors.join('\n');
+                    }
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('Email Sent Successfully', alertMsg, 'success');
+                    } else {
+                        alert(`✅ ${alertMsg}`);
+                    }
                 } else {
-                    alert(`✅ ${data.message}`);
+                    let errorDetails = (data.errors && data.errors.length > 0) ? data.errors.join('\n') : (data.message || 'Send failed');
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('Email Not Sent', errorDetails, 'error');
+                    } else {
+                        alert(`❌ ${errorDetails}`);
+                    }
                 }
                 await loadTaxDocTracking(currentChecklistCustomerId);
             } catch (err) {
-                alert(`❌ Error: ${err.message}`);
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert('Error Sending Email', err.message || 'An unexpected error occurred while sending email.', 'error');
+                } else {
+                    alert(`❌ Error: ${err.message}`);
+                }
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = '📧 Send Requirements Email'; }
             }

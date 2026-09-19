@@ -13714,6 +13714,7 @@ async def send_tax_requirements_email(request: Request):
 
             subject = f"Tax Year {tax_year} — Documents Required [{cust_ref}]"
 
+            email_sent_ok = False
             if resend_key:
                 try:
                     raw_reply_to = get_resend_reply_to_email()
@@ -13731,66 +13732,87 @@ async def send_tax_requirements_email(request: Request):
                     req_http = urllib.request.Request(
                         "https://api.resend.com/emails",
                         data=json.dumps(payload).encode("utf-8"),
-                        headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                        headers={
+                            "Authorization": f"Bearer {resend_key}",
+                            "Content-Type": "application/json",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        },
                         method="POST"
                     )
                     with urllib.request.urlopen(req_http) as resp:
                         resp.read()
                     sent_count += 1
+                    email_sent_ok = True
                     print(f"[TAX EMAIL SENT] -> {cust_email} ({cust.get('legal_name')})")
+                except urllib.error.HTTPError as he:
+                    err_detail = ""
+                    try:
+                        err_detail = he.read().decode('utf-8', errors='ignore')
+                    except Exception:
+                        pass
+                    err_msg = f"Resend HTTP {he.code}: {he.reason}" + (f" ({err_detail})" if err_detail else "")
+                    errors.append(f"Email send failed for {cust.get('legal_name')}: {err_msg}")
+                    print(f"[TAX EMAIL ERROR] {err_msg}")
                 except Exception as me:
                     errors.append(f"Email send failed for {cust.get('legal_name')}: {me}")
                     print(f"[TAX EMAIL ERROR] {me}")
             else:
                 errors.append(f"No Resend API key configured — skipped {cust.get('legal_name')}.")
 
-            # Update checklist: mark tax_docs_requested + log sent timestamp
-            try:
-                _uc = get_db_connection()
-                with _uc.cursor() as _ucur:
-                    period = f"{tax_year}-01"
-                    _ucur.execute("""
-                        INSERT INTO customer_task_checklist
-                            (customer_id, period, tax_docs_requested, tax_req_email_sent_at, updated_at)
-                        VALUES (%s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        ON CONFLICT (customer_id, period) DO UPDATE SET
-                            tax_docs_requested = TRUE,
-                            tax_req_email_sent_at = CURRENT_TIMESTAMP,
-                            updated_at = CURRENT_TIMESTAMP;
-                    """, (cid, period))
-                    _uc.commit()
-                _uc.close()
-            except Exception as ue:
-                print(f"[TAX EMAIL CHECKLIST UPDATE ERROR] {ue}")
+            # Update checklist ONLY if email was sent successfully!
+            if email_sent_ok:
+                try:
+                    _uc = get_db_connection()
+                    with _uc.cursor() as _ucur:
+                        period = f"{tax_year}-01"
+                        _ucur.execute("""
+                            INSERT INTO customer_task_checklist
+                                (customer_id, period, tax_docs_requested, tax_req_email_sent_at, updated_at)
+                            VALUES (%s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            ON CONFLICT (customer_id, period) DO UPDATE SET
+                                tax_docs_requested = TRUE,
+                                tax_req_email_sent_at = CURRENT_TIMESTAMP,
+                                updated_at = CURRENT_TIMESTAMP;
+                        """, (cid, period))
+                        _uc.commit()
+                    _uc.close()
+                except Exception as ue:
+                    print(f"[TAX EMAIL CHECKLIST UPDATE ERROR] {ue}")
 
-            # Log to customer_communications as OUTBOUND
-            try:
-                _cc = get_db_connection()
-                with _cc.cursor() as _ccur:
-                    _ccur.execute("""
-                        INSERT INTO customer_communications
-                            (customer_id, direction, sender_email, recipient_email, reply_to_email,
-                             subject, body_text, status, is_read, created_at)
-                        VALUES (%s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', TRUE, CURRENT_TIMESTAMP);
-                    """, (
-                        cid,
-                        get_resend_from_email(),
-                        cust_email,
-                        get_resend_reply_to_email(),
-                        subject,
-                        text_body
-                    ))
-                    _cc.commit()
-                _cc.close()
-            except Exception as ce:
-                print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
+                # Log to customer_communications as OUTBOUND
+                try:
+                    _cc = get_db_connection()
+                    with _cc.cursor() as _ccur:
+                        _ccur.execute("""
+                            INSERT INTO customer_communications
+                                (customer_id, direction, sender_email, recipient_email, reply_to_email,
+                                 subject, body_text, status, is_read, created_at)
+                            VALUES (%s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', TRUE, CURRENT_TIMESTAMP);
+                        """, (
+                            cid,
+                            get_resend_from_email(),
+                            cust_email,
+                            get_resend_reply_to_email(),
+                            subject,
+                            text_body
+                        ))
+                        _cc.commit()
+                    _cc.close()
+                except Exception as ce:
+                    print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
+
+        is_success = (sent_count > 0)
+        if sent_count > 0:
+            msg = f"Tax requirements email sent successfully to {sent_count}/{len(customers)} customer(s) for tax year {tax_year}."
+        else:
+            msg = errors[0] if errors else "Failed to send tax requirements email."
 
         return {
-            "success": True,
+            "success": is_success,
             "sent_count": sent_count,
             "total_customers": len(customers),
             "errors": errors,
-            "message": f"Tax requirements email sent to {sent_count}/{len(customers)} customer(s) for tax year {tax_year}."
+            "message": msg
         }
     except Exception as e:
         import traceback; traceback.print_exc()
