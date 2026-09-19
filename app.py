@@ -13416,11 +13416,32 @@ async def get_tax_docs_status(customer_id: int, request: Request, tax_year: int 
             received = [dict(r) for r in cur.fetchall()]
 
             cur.execute("""
-                SELECT COUNT(*) as total FROM tax_return_requirements
-                WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE;
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN reqs.received_status IN ('Matched', 'Received') THEN 1 ELSE 0 END) as total_received
+                FROM (
+                    SELECT r.id, COALESCE(r.manual_status, rd.status, 'Pending') AS received_status
+                    FROM tax_return_requirements r
+                    LEFT JOIN LATERAL (
+                        SELECT status
+                        FROM tax_return_received_docs
+                        WHERE customer_id = r.customer_id AND tax_year = r.tax_year
+                          AND (
+                              requirement_id = r.id
+                              OR (
+                                  requirement_id IS NULL 
+                                  AND status = 'Matched' 
+                                  AND UPPER(REPLACE(REPLACE(doc_type_detected, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', ''))
+                              )
+                          )
+                        ORDER BY created_at DESC LIMIT 1
+                    ) rd ON TRUE
+                    WHERE r.customer_id = %s AND r.tax_year = %s AND r.is_required = TRUE
+                ) AS reqs;
             """, (customer_id, tax_year))
-            total_required = (cur.fetchone() or {}).get("total", 0)
-
+            req_stats = cur.fetchone() or {}
+            total_required = req_stats.get("total", 0)
+            total_received_matched = req_stats.get("total_received", 0) or 0
             cur.execute("""
                 SELECT tax_docs_status, tax_docs_all_complete, tax_notes, tax_req_email_sent_at
                 FROM customer_task_checklist
@@ -13428,7 +13449,7 @@ async def get_tax_docs_status(customer_id: int, request: Request, tax_year: int 
             """, (customer_id, f"{tax_year}-01"))
             chk = dict(cur.fetchone() or {})
 
-        total_received_matched = sum(1 for r in received if r.get("status") == "Matched")
+
         needs_review = sum(1 for r in received if r.get("status") == "Needs Review")
 
         return {
