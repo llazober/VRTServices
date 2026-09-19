@@ -1374,7 +1374,7 @@ def init_tax_document_tracking_tables():
                     source_description  VARCHAR(300),
                     is_required         BOOLEAN NOT NULL DEFAULT TRUE,
                     notes               TEXT,
-                    manual_status       VARCHAR(30) DEFAULT 'Pending',
+                    manual_status       VARCHAR(30),
                     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(customer_id, tax_year, doc_type, source_description)
@@ -13173,7 +13173,7 @@ async def get_tax_requirements(customer_id: int, request: Request, tax_year: int
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT r.*, rd.renamed_filename, COALESCE(rd.status, r.manual_status, 'Pending') AS received_status, rd.matched_at,
+                SELECT r.*, rd.renamed_filename, COALESCE(r.manual_status, rd.status, 'Pending') AS received_status, rd.matched_at,
                        rd.doc_type_detected, rd.ocr_confidence
                 FROM tax_return_requirements r
                 LEFT JOIN LATERAL (
