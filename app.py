@@ -13645,41 +13645,89 @@ async def send_tax_requirements_email(request: Request):
                 errors.append(f"Customer {cid} ({cust.get('legal_name')}) has no email — skipped.")
                 continue
 
-            # Fetch their requirements for this year
+            # Fetch their requirements + received status for this year
             try:
                 _rc = get_db_connection()
                 with _rc.cursor(cursor_factory=RealDictCursor) as _rcur:
                     _rcur.execute("""
-                        SELECT doc_type, doc_label, source_description, notes
-                        FROM tax_return_requirements
-                        WHERE customer_id = %s AND tax_year = %s AND is_required = TRUE
-                        ORDER BY doc_type;
+                        SELECT 
+                            r.id, r.doc_type, r.doc_label, r.source_description, r.notes,
+                            COALESCE(rd.status, r.manual_status, 'Pending') AS received_status
+                        FROM tax_return_requirements r
+                        LEFT JOIN LATERAL (
+                            SELECT status
+                            FROM tax_return_received_docs
+                            WHERE customer_id = r.customer_id AND tax_year = r.tax_year
+                              AND (
+                                  requirement_id = r.id
+                                  OR (
+                                      requirement_id IS NULL 
+                                      AND status = 'Matched' 
+                                      AND UPPER(REPLACE(REPLACE(doc_type_detected, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', ''))
+                                  )
+                              )
+                            ORDER BY created_at DESC LIMIT 1
+                        ) rd ON TRUE
+                        WHERE r.customer_id = %s AND r.tax_year = %s AND r.is_required = TRUE
+                        ORDER BY r.doc_type, r.id;
                     """, (cid, tax_year))
                     reqs = [dict(r) for r in _rcur.fetchall()]
                 _rc.close()
-            except Exception:
+            except Exception as req_err:
+                print(f"[TAX EMAIL REQS QUERY ERROR] {req_err}")
                 reqs = []
+
+            total_req_count = len(reqs)
+            total_received_count = sum(1 for r in reqs if r.get("received_status") in ("Matched", "Received"))
+
+            # Skip sending email if document collection is already 100% COMPLETED!
+            if total_req_count > 0 and total_received_count >= total_req_count:
+                errors.append(f"Customer '{cust.get('legal_name') or cid}' tax document collection for Tax Year {tax_year} is already COMPLETED ({total_received_count}/{total_req_count} received) — email omitted.")
+                continue
 
             raw_ref = str(cust.get('custumer_number') or cust.get('id')).strip()
             cust_ref = raw_ref if raw_ref.upper().startswith("CUST-") else f"CUST-{raw_ref}"
             parent_name = (cust.get("parent_name") or "VRT Services").strip()
 
-            # Build requirements HTML list
+            # Build requirements HTML & text list with Pending / Received status tags
             if reqs:
-                req_html_items = "".join(
-                    f"""<li style="padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem;">
-                        <strong>{r['doc_type']}</strong>
-                        {'— ' + r['doc_label'] if r.get('doc_label') else ''}
-                        {' <span style="color:#64748b;">(' + r['source_description'] + ')</span>' if r.get('source_description') else ''}
-                        {' <em style="color:#94a3b8;">— ' + r['notes'] + '</em>' if r.get('notes') else ''}
-                    </li>"""
-                    for r in reqs
-                )
+                req_html_list = []
+                req_text_list = []
+                for r in reqs:
+                    is_done = r.get("received_status") in ("Matched", "Received")
+                    status_badge = (
+                        '<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;white-space:nowrap;">✅ Received</span>'
+                        if is_done else
+                        '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;white-space:nowrap;">⏳ Pending</span>'
+                    )
+                    doc_label_part = f" — {r['doc_label']}" if r.get("doc_label") else ""
+                    source_part = f" <span style='color:#64748b;'>({r['source_description']})</span>" if r.get("source_description") else ""
+                    notes_part = f" <em style='color:#94a3b8;'>— {r['notes']}</em>" if r.get("notes") else ""
+
+                    req_html_list.append(
+                        f"""<li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.88rem; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <div>
+                                <strong>{r['doc_type']}</strong>{doc_label_part}{source_part}{notes_part}
+                            </div>
+                            <div>{status_badge}</div>
+                        </li>"""
+                    )
+
+                    status_str = "[Received]" if is_done else "[Pending]"
+                    req_text_list.append(f"- {r['doc_type']}{doc_label_part} {status_str}")
+
+                req_html_items = "".join(req_html_list)
+                req_text_summary = "\n".join(req_text_list)
+                progress_badge_html = f'<span style="font-size:0.8rem;font-weight:600;color:#64748b;">({total_received_count}/{total_req_count} Received)</span>'
+                progress_text_hdr = f"({total_received_count}/{total_req_count} Received)"
             else:
                 req_html_items = "<li style='padding:6px 0;color:#64748b;'>Please contact our office for your personalized document list.</li>"
+                req_text_summary = "- Please contact our office for your personalized document list."
+                progress_badge_html = ""
+                progress_text_hdr = ""
 
             html_body = f"""
-            <div style="font-family:'Plus Jakarta Sans',Arial,sans-serif;line-height:1.6;color:#1e293b;max-width:620px;margin:0 auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+            <div style="font-family:'Plus Jakarta Sans',Arial,sans-serif;line-height:1.6;color:#1e293b;max-width:620px;margin:0 auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
               <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:28px 32px;">
                 <h1 style="color:#fff;margin:0;font-size:1.3rem;font-weight:700;">{parent_name}</h1>
                 <p style="color:#bfdbfe;margin:6px 0 0;font-size:0.9rem;">Tax Year {tax_year} — Document Collection Notice</p>
@@ -13690,29 +13738,44 @@ async def send_tax_requirements_email(request: Request):
                   It's time to gather your tax documents for the <strong>{tax_year} Income Tax Return</strong>.
                   Please submit the following documents at your earliest convenience so we can prepare your return accurately and on time.
                 </p>
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
-                  <h3 style="margin:0 0 12px;font-size:1rem;color:#0f172a;">📋 Required Documents — Tax Year {tax_year}</h3>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+                  <h3 style="margin:0 0 12px;font-size:0.98rem;color:#0f172a;display:flex;align-items:center;justify-content:space-between;">
+                    <span>📋 Required Documents — Tax Year {tax_year}</span>
+                    {progress_badge_html}
+                  </h3>
                   <ul style="list-style:none;margin:0;padding:0;">{req_html_items}</ul>
                 </div>
-                <p style="font-size:0.9rem;color:#475569;margin-bottom:16px;">You can submit your documents in two ways:</p>
-                <div style="display:flex;gap:12px;margin-bottom:24px;">
-                  <a href="https://vrtservices12.com" style="background:#2563eb;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;">📁 Upload via Client Portal</a>
-                  <a href="mailto:{get_resend_reply_to_email()}?subject=Tax Documents {tax_year} [{cust_ref}]" style="background:#f1f5f9;color:#1e293b;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;border:1px solid #cbd5e1;">📧 Reply by Email</a>
+                <p style="font-size:0.9rem;color:#475569;margin-bottom:12px;">You can submit your documents in two ways:</p>
+                <div style="display:flex;gap:12px;margin-bottom:20px;">
+                  <a href="https://vrtservices12.com" style="background:#2563eb;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;display:inline-block;">📁 Upload via Client Portal</a>
+                  <a href="mailto:{get_resend_reply_to_email()}?subject=Tax Documents {tax_year} [{cust_ref}]" style="background:#f1f5f9;color:#1e293b;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;border:1px solid #cbd5e1;display:inline-block;">📧 Reply by Email</a>
                 </div>
-                <p style="font-size:0.8rem;color:#94a3b8;">Account Reference: {cust_ref} &nbsp;|&nbsp; Please include this reference when replying by email.</p>
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:0.88rem;color:#1e40af;line-height:1.5;">
+                  <strong>🔐 Portal Login Information:</strong><br/>
+                  To log in to your client portal, you will need your <strong>Customer ID</strong> and <strong>Email Address</strong>:<br/>
+                  <div style="margin-top:8px;padding:8px 12px;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;font-size:0.88rem;color:#0f172a;">
+                    • <strong>Customer ID:</strong> <code style="font-family:monospace;font-size:0.95rem;color:#2563eb;font-weight:700;">{cust_ref}</code><br/>
+                    • <strong>Email Address:</strong> <code style="font-family:monospace;font-size:0.95rem;color:#2563eb;font-weight:700;">{cust_email}</code>
+                  </div>
+                </div>
+                <p style="font-size:0.8rem;color:#94a3b8;margin:0;">Account Reference: {cust_ref} &nbsp;|&nbsp; Please include this reference when replying by email.</p>
               </div>
               <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;font-size:0.78rem;color:#94a3b8;">
-                <p style="margin:0;">This is an automated notice from <strong>{parent_name}</strong>. Please do not reply to this email — use the portal link or the reply-by-email link above.</p>
+                <p style="margin:0;">This is an automated notice from <strong>{parent_name}</strong>. Please do not reply directly to this notice — use the portal link or the reply-by-email link above.</p>
               </div>
             </div>
             """
 
             text_body = (
                 f"Hello {cust.get('legal_name') or 'Valued Client'},\n\n"
-                f"It's time to gather your tax documents for the {tax_year} Income Tax Return.\n"
-                f"Required documents: {', '.join(r['doc_type'] for r in reqs) if reqs else 'Please contact our office.'}\n\n"
+                f"It's time to gather your tax documents for the {tax_year} Income Tax Return.\n\n"
+                f"Required Documents — Tax Year {tax_year} {progress_text_hdr}:\n"
+                f"{req_text_summary}\n\n"
                 f"Submit via portal: https://vrtservices12.com\n"
                 f"Or reply to this email with your documents attached.\n\n"
+                f"🔐 Portal Login Credentials:\n"
+                f"- Customer ID: {cust_ref}\n"
+                f"- Email Address: {cust_email}\n\n"
                 f"Account Ref: {cust_ref}\n{parent_name}"
             )
 
