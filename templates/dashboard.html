@@ -2469,15 +2469,8 @@
                                 </div>
                             </div>
                             <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px;">
-                                Send personalized tax requirement notification emails to all active <strong>Individual & Joint Account</strong> clients for the selected tax year. Emails include Customer ID portal login note, dynamic document badges (received vs pending), and auto-skips completed accounts.
+                                Send personalized tax requirement notification emails to all active <strong>Individual & Joint Account</strong> clients for the active tax season. Emails include Customer ID portal login note, dynamic document badges (received vs pending), and auto-skips completed accounts.
                             </p>
-
-                            <!-- Selector Container -->
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); padding: 16px; border-radius: 14px; margin-bottom: 16px;">
-                                <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #60a5fa; text-transform: uppercase; margin-bottom: 6px;">Target Tax Year</label>
-                                <select id="util_email_tax_year" style="width: 100%; background: #090d16; border: 1px solid rgba(59, 130, 246, 0.4); color: #fff; border-radius: 8px; padding: 10px; font-weight: 700; font-family: 'Outfit', sans-serif;">
-                                </select>
-                            </div>
                         </div>
 
                         <div>
@@ -2497,13 +2490,11 @@
                     const currentYear = new Date().getFullYear();
                     const srcSel = document.getElementById('util_copy_source_year');
                     const tgtSel = document.getElementById('util_copy_target_year');
-                    const emailSel = document.getElementById('util_email_tax_year');
 
-                    if (!srcSel || !tgtSel || !emailSel) return;
+                    if (!srcSel || !tgtSel) return;
 
                     srcSel.innerHTML = '';
                     tgtSel.innerHTML = '';
-                    emailSel.innerHTML = '';
 
                     for (let y = currentYear + 2; y >= 2020; y--) {
                         const optSrc = document.createElement('option');
@@ -2517,12 +2508,6 @@
                         optTgt.textContent = `Tax Year ${y}`;
                         if (y === currentYear) optTgt.selected = true;
                         tgtSel.appendChild(optTgt);
-
-                        const optEmail = document.createElement('option');
-                        optEmail.value = y;
-                        optEmail.textContent = `Tax Year ${y}`;
-                        if (y === currentYear) optEmail.selected = true;
-                        emailSel.appendChild(optEmail);
                     }
                 }
 
@@ -2614,10 +2599,7 @@
                 }
 
                 async function runBulkSendTaxRequirementsEmail() {
-                    const emailSel = document.getElementById('util_email_tax_year');
-                    if (!emailSel) return;
-
-                    const taxYear = parseInt(emailSel.value);
+                    const taxYear = new Date().getFullYear() - 1;
 
                     let confirmSend = true;
                     if (typeof showCustomConfirm === 'function') {
