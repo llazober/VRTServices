@@ -8022,12 +8022,12 @@
                 if (needsReview) statusBadge = `<span style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:800;background:rgba(250,204,21,0.12);color:#facc15;border:1px solid rgba(250,204,21,0.25);">🔍 Review</span>`;
                 const labelText = r.doc_label || '';
                 const sourceText = r.source_description ? ` (${r.source_description})` : '';
-                const isManuallyReceived = r.manual_status === 'Received';
+                const isChecked = r.received_status === 'Matched' || r.received_status === 'Received';
                 return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
                     <td style="padding:8px;color:#f8fafc;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.doc_type}</td>
                     <td style="padding:8px;color:#94a3b8;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${labelText}${sourceText}">${labelText}${sourceText ? `<em style="color:#64748b;">${sourceText}</em>` : ''}</td>
                     <td style="padding:8px; text-align:center;">
-                        <input type="checkbox" onchange="updateTaxRequirementManualStatus(${r.id}, this.checked)" ${isManuallyReceived ? 'checked' : ''} style="width:16px;height:16px;accent-color:#00e676;cursor:pointer;">
+                        <input type="checkbox" onchange="updateTaxRequirementManualStatus(${r.id}, this.checked)" ${isChecked ? 'checked' : ''} style="width:16px;height:16px;accent-color:#00e676;cursor:pointer;">
                     </td>
                     <td style="padding:8px;">${statusBadge}</td>
                     <td style="padding:8px;text-align:right;white-space:nowrap;">
