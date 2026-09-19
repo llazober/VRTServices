@@ -13255,6 +13255,7 @@ async def update_tax_requirement(req_id: int, request: Request):
     notes = (data.get("notes") or "").strip() or None
     is_required = data.get("is_required")
     clear_received = data.get("clear_received")
+    manual_status = data.get("manual_status")
     conn = None
     try:
         conn = get_db_connection()
