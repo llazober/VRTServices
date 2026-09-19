@@ -6137,8 +6137,9 @@
 
             event.target.value = '';
             await refreshCurrentStorageFolder();
-            if (typeof loadTaxDocTracking === 'function' && currentChecklistCustomerId) {
-                loadTaxDocTracking(currentChecklistCustomerId);
+            const taxCid1 = currentStorageCustomerId || currentChecklistCustomerId;
+            if (typeof loadTaxDocTracking === 'function' && taxCid1) {
+                loadTaxDocTracking(taxCid1);
             }
 
             if (errors.length === 0) {
@@ -6195,8 +6196,9 @@
                 if (!res.ok) throw new Error(data.detail || data.message || 'Rename failed');
 
                 await refreshCurrentStorageFolder();
-                if (typeof loadTaxDocTracking === 'function' && currentChecklistCustomerId) {
-                    loadTaxDocTracking(currentChecklistCustomerId);
+                const taxCid2 = currentStorageCustomerId || currentChecklistCustomerId;
+                if (typeof loadTaxDocTracking === 'function' && taxCid2) {
+                    loadTaxDocTracking(taxCid2);
                 }
             } catch (err) {
                 alert(`❌ Rename Error: ${err.message}`);
@@ -6374,8 +6376,9 @@
 
                 closeMoveFileModal();
                 await refreshCurrentStorageFolder();
-                if (typeof loadTaxDocTracking === 'function' && currentChecklistCustomerId) {
-                    loadTaxDocTracking(currentChecklistCustomerId);
+                const taxCid3 = currentStorageCustomerId || currentChecklistCustomerId;
+                if (typeof loadTaxDocTracking === 'function' && taxCid3) {
+                    loadTaxDocTracking(taxCid3);
                 }
             } catch (err) {
                 alert(`❌ Move Error: ${err.message}`);
