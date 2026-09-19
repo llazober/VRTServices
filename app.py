@@ -12894,14 +12894,32 @@ def recalculate_tax_docs_status(customer_id: int, tax_year: int):
             if total_required == 0:
                 return  # No requirements defined yet — skip
 
-            # Count distinct matched doc types
+            # Count distinct matched doc types or manual received
             cur.execute("""
-                SELECT COUNT(DISTINCT requirement_id) as received
-                FROM tax_return_received_docs
-                WHERE customer_id = %s AND tax_year = %s AND status = 'Matched';
+                SELECT 
+                    SUM(CASE WHEN reqs.received_status IN ('Matched', 'Received') THEN 1 ELSE 0 END) as total_received
+                FROM (
+                    SELECT r.id, COALESCE(rd.status, r.manual_status, 'Pending') AS received_status
+                    FROM tax_return_requirements r
+                    LEFT JOIN LATERAL (
+                        SELECT status
+                        FROM tax_return_received_docs
+                        WHERE customer_id = r.customer_id AND tax_year = r.tax_year
+                          AND (
+                              requirement_id = r.id
+                              OR (
+                                  requirement_id IS NULL 
+                                  AND status = 'Matched' 
+                                  AND UPPER(REPLACE(REPLACE(doc_type_detected, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', ''))
+                              )
+                          )
+                        ORDER BY created_at DESC LIMIT 1
+                    ) rd ON TRUE
+                    WHERE r.customer_id = %s AND r.tax_year = %s AND r.is_required = TRUE
+                ) AS reqs;
             """, (customer_id, tax_year))
             rec_row = cur.fetchone()
-            total_received = rec_row["received"] if rec_row else 0
+            total_received = rec_row["total_received"] if rec_row and rec_row["total_received"] else 0
 
             # Count needs review
             cur.execute("""
@@ -13235,6 +13253,7 @@ async def create_tax_requirement(request: Request):
             """, (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required))
             row = dict(cur.fetchone())
             conn.commit()
+        recalculate_tax_docs_status(row["customer_id"], row["tax_year"])
         return {"success": True, "requirement": row}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -13285,6 +13304,7 @@ async def update_tax_requirement(req_id: int, request: Request):
             if not row:
                 raise HTTPException(status_code=404, detail="Requirement not found")
             conn.commit()
+        recalculate_tax_docs_status(row["customer_id"], row["tax_year"])
         return {"success": True, "requirement": dict(row)}
     except HTTPException:
         raise
