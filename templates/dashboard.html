@@ -6105,13 +6105,17 @@
             let successCount = 0;
             let errors = [];
 
+            if (typeof showToast === 'function') {
+                showToast(`Uploading ${fileList.length} file(s)...`, 'info');
+            }
+
             const spinner = document.getElementById('storageLoadingSpinner');
             if (spinner) {
                 spinner.style.display = 'block';
                 spinner.innerHTML = `<div style="font-size: 1.8rem; margin-bottom: 10px;">⏳</div>Uploading ${fileList.length} file(s)...`;
             }
 
-            for (const file of fileList) {
+            const uploadPromises = fileList.map(async (file) => {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('target_prefix', targetPrefix);
@@ -6127,16 +6131,21 @@
                 } catch (err) {
                     errors.push(`${file.name}: ${err.message}`);
                 }
-            }
+            });
+
+            await Promise.all(uploadPromises);
 
             event.target.value = '';
             await refreshCurrentStorageFolder();
+            if (typeof loadTaxDocTracking === 'function' && currentChecklistCustomerId) {
+                loadTaxDocTracking(currentChecklistCustomerId);
+            }
 
             if (errors.length === 0) {
-                if (fileList.length === 1) {
-                    alert(`✅ File "${fileList[0].name}" uploaded successfully!`);
+                if (typeof showToast === 'function') {
+                    showToast(`✅ ${fileList.length === 1 ? `File "${fileList[0].name}"` : `All ${successCount} files`} uploaded successfully!`, 'success');
                 } else {
-                    alert(`✅ All ${successCount} files uploaded successfully!`);
+                    alert(`✅ Uploaded ${successCount} file(s) successfully!`);
                 }
             } else {
                 alert(`⚠️ Uploaded ${successCount} of ${fileList.length} files.\n\nErrors:\n` + errors.join('\n'));
@@ -6186,6 +6195,9 @@
                 if (!res.ok) throw new Error(data.detail || data.message || 'Rename failed');
 
                 await refreshCurrentStorageFolder();
+                if (typeof loadTaxDocTracking === 'function' && currentChecklistCustomerId) {
+                    loadTaxDocTracking(currentChecklistCustomerId);
+                }
             } catch (err) {
                 alert(`❌ Rename Error: ${err.message}`);
             }
