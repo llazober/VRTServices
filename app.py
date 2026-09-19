@@ -13604,7 +13604,11 @@ async def send_tax_requirements_email(request: Request):
 
     data = await request.json()
     customer_id_filter = data.get("customer_id")  # None = send to all eligible
-    tax_year = data.get("tax_year") or (datetime.datetime.now().year - 1)
+    raw_year = data.get("tax_year")
+    try:
+        tax_year = int(raw_year) if raw_year is not None else (datetime.datetime.now().year - 1)
+    except (ValueError, TypeError):
+        tax_year = datetime.datetime.now().year - 1
     user_parent = get_user_parent_name(username) or "VRT Services"
 
     conn = None
@@ -13692,7 +13696,7 @@ async def send_tax_requirements_email(request: Request):
                 </div>
                 <p style="font-size:0.9rem;color:#475569;margin-bottom:16px;">You can submit your documents in two ways:</p>
                 <div style="display:flex;gap:12px;margin-bottom:24px;">
-                  <a href="https://portal.datalazo.net/portal?cust={cust_ref}" style="background:#2563eb;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;">📁 Upload via Client Portal</a>
+                  <a href="https://vrtservices12.com" style="background:#2563eb;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;">📁 Upload via Client Portal</a>
                   <a href="mailto:{get_resend_reply_to_email()}?subject=Tax Documents {tax_year} [{cust_ref}]" style="background:#f1f5f9;color:#1e293b;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.88rem;border:1px solid #cbd5e1;">📧 Reply by Email</a>
                 </div>
                 <p style="font-size:0.8rem;color:#94a3b8;">Account Reference: {cust_ref} &nbsp;|&nbsp; Please include this reference when replying by email.</p>
@@ -13707,7 +13711,7 @@ async def send_tax_requirements_email(request: Request):
                 f"Hello {cust.get('legal_name') or 'Valued Client'},\n\n"
                 f"It's time to gather your tax documents for the {tax_year} Income Tax Return.\n"
                 f"Required documents: {', '.join(r['doc_type'] for r in reqs) if reqs else 'Please contact our office.'}\n\n"
-                f"Submit via portal: https://portal.datalazo.net/portal?cust={cust_ref}\n"
+                f"Submit via portal: https://vrtservices12.com\n"
                 f"Or reply to this email with your documents attached.\n\n"
                 f"Account Ref: {cust_ref}\n{parent_name}"
             )
