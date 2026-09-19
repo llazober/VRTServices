@@ -7109,27 +7109,30 @@ async def upload_customer_storage_file(
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         file.file.seek(0)
         file_bytes = await file.read()
-        client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
 
-        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
-        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
-        final_key = pdf_fk or file_key
+        def _do_upload():
+            client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+            pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
+            fk = pdf_fk or file_key
 
-        # Auto-update checklist milestones based on folder/file path & detected period
-        detected_period = extract_period_from_key(final_key)
-        lower_key = final_key.lower()
-        print(f"[CHECKLIST AUTO-UPDATE] Customer: {real_cust_id}, FileKey: '{final_key}', Period: '{detected_period}'")
+            detected_period = extract_period_from_key(fk)
+            lower_key = fk.lower()
+            print(f"[CHECKLIST AUTO-UPDATE] Customer: {real_cust_id}, FileKey: '{fk}', Period: '{detected_period}'")
 
-        if "check" in lower_key:
-            update_customer_checklist_milestone(real_cust_id, detected_period, "checks_received")
-        if "bank statement" in lower_key or "statement" in lower_key or (lower_key.endswith(".pdf") and "check" not in lower_key and "tax" not in lower_key):
-            update_customer_checklist_milestone(real_cust_id, detected_period, "statement_received")
+            if "check" in lower_key:
+                update_customer_checklist_milestone(real_cust_id, detected_period, "checks_received")
+            if "bank statement" in lower_key or "statement" in lower_key or (lower_key.endswith(".pdf") and "check" not in lower_key and "tax" not in lower_key):
+                update_customer_checklist_milestone(real_cust_id, detected_period, "statement_received")
 
-        # Auto-match tax requirement if filename matches requirement patterns
-        try:
-            check_and_match_tax_requirement_on_rename(real_cust_id, "", final_key, filename)
-        except Exception as _um_err:
-            print(f"[UPLOAD REQ MATCH ERR]: {_um_err}")
+            try:
+                check_and_match_tax_requirement_on_rename(real_cust_id, "", fk, filename)
+            except Exception as _um_err:
+                print(f"[UPLOAD REQ MATCH ERR]: {_um_err}")
+                
+            return fk, bool(pdf_fk)
+
+        from fastapi.concurrency import run_in_threadpool
+        final_key, pdf_converted = await run_in_threadpool(_do_upload)
 
         # Auto-classify tax document in background task
         background_tasks.add_task(
@@ -7395,28 +7398,28 @@ async def rename_customer_storage_file(customer_id: str, request: Request):
         new_key = f"{parent_dir}{new_name}"
 
         client, err = get_s3_client()
-        if not client:
-            local_old_path = os.path.join("storage", old_key)
-            local_new_path = os.path.join("storage", new_key)
-            if os.path.exists(local_old_path):
-                os.makedirs(os.path.dirname(local_new_path), exist_ok=True)
-                os.rename(local_old_path, local_new_path)
-        else:
-            bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-            # Copy to new_key and delete old_key
-            client.copy_object(
-                Bucket=bucket,
-                CopySource={'Bucket': bucket, 'Key': old_key},
-                Key=new_key,
-                ACL='private'
-            )
-            client.delete_object(Bucket=bucket, Key=old_key)
+        def _do_rename():
+            if not client:
+                local_old_path = os.path.join("storage", old_key)
+                local_new_path = os.path.join("storage", new_key)
+                if os.path.exists(local_old_path):
+                    os.makedirs(os.path.dirname(local_new_path), exist_ok=True)
+                    os.rename(local_old_path, local_new_path)
+            else:
+                bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                client.copy_object(
+                    Bucket=bucket,
+                    CopySource={'Bucket': bucket, 'Key': old_key},
+                    Key=new_key,
+                    ACL='private'
+                )
+                client.delete_object(Bucket=bucket, Key=old_key)
 
-        # Update customer_communications attachments_json, subject, and body_text
-        sync_file_rename_in_communications(conn, real_cust_id, old_key, new_key)
-
-        # Check and match tax return requirement if doc_type matches
-        check_and_match_tax_requirement_on_rename(real_cust_id, old_key, new_key, new_name)
+            sync_file_rename_in_communications(conn, real_cust_id, old_key, new_key)
+            check_and_match_tax_requirement_on_rename(real_cust_id, old_key, new_key, new_name)
+            
+        from fastapi.concurrency import run_in_threadpool
+        await run_in_threadpool(_do_rename)
 
         print(f"[DO SPACES] Renamed file '{old_key}' -> '{new_key}' for customer {real_cust_id}")
         return {
