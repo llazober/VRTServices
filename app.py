@@ -3906,6 +3906,7 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
 @app.post("/api/portal/upload")
 async def portal_upload_file(
     request: Request,
+    background_tasks: BackgroundTasks,
     customer_id: str = Form(...),
     file: UploadFile = File(...),
     subfolder: str = Form("Inbox")
@@ -3985,13 +3986,11 @@ async def portal_upload_file(
         # Auto-match & classify tax document in background task without blocking UI response
         try:
             check_and_match_tax_requirement_on_rename(cust["id"], "", final_key, filename)
-            asyncio.create_task(
-                asyncio.to_thread(
-                    classify_and_rename_tax_document,
-                    customer_id=cust["id"],
-                    file_key=final_key,
-                    original_filename=filename
-                )
+            background_tasks.add_task(
+                classify_and_rename_tax_document,
+                customer_id=cust["id"],
+                file_key=final_key,
+                original_filename=filename
             )
         except Exception as _cl_err:
             print(f"[PORTAL AUTO-CLASSIFY ERR] {filename}: {_cl_err}")
@@ -12162,14 +12161,11 @@ def process_inbound_post_processing(
                             # Quick requirement check on inbound filename
                             check_and_match_tax_requirement_on_rename(customer_id, "", _sa_key, _sa_orig)
 
-                            # Async OCR classification so inbound HTTP response does not block or freeze
-                            asyncio.create_task(
-                                asyncio.to_thread(
-                                    classify_and_rename_tax_document,
-                                    customer_id=customer_id,
-                                    file_key=_sa_key,
-                                    original_filename=_sa_orig
-                                )
+                            # Run classification synchronously (already running inside a background thread)
+                            classify_and_rename_tax_document(
+                                customer_id=customer_id,
+                                file_key=_sa_key,
+                                original_filename=_sa_orig
                             )
                         except Exception as _cd_err:
                             print(f"[TAX AUTO-CLASSIFY INBOUND ERROR] {_sa_key}: {_cd_err}")
