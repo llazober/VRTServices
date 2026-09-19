@@ -3471,6 +3471,21 @@ async def read_company_profile_page(request: Request, msg: str = "", error: str 
         context=ctx
     )
 
+@app.get("/utilities", response_class=HTMLResponse)
+@app.get("/system-utilities", response_class=HTMLResponse)
+async def read_utilities_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "utilities"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
 @app.post("/company-profile", response_class=HTMLResponse)
 async def save_company_profile_form(
     request: Request,
@@ -13476,6 +13491,130 @@ async def copy_tax_requirements_from_year(request: Request):
             "from_year": from_year,
             "to_year": to_year,
             "message": f"Copied {copied_count} requirement(s) from Tax Year {from_year} -> {to_year}."
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+@app.post("/api/tax-requirements/bulk-copy-from-year")
+async def bulk_copy_tax_requirements_from_year(request: Request):
+    """
+    Bulk copy 1:1 tax requirements from source tax year to target tax year
+    for ALL active Individual and Joint Account customers belonging to the user's organization.
+    """
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    try:
+        from_year = int(data.get("from_year"))
+    except (ValueError, TypeError):
+        from_year = None
+    try:
+        to_year = int(data.get("to_year")) if data.get("to_year") is not None else datetime.datetime.now().year - 1
+    except (ValueError, TypeError):
+        to_year = datetime.datetime.now().year - 1
+
+    if not from_year or not to_year:
+        raise HTTPException(status_code=400, detail="from_year and to_year are required")
+
+    user_parent = get_user_parent_name(username) or "VRT Services"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch all eligible Individual & Joint Account customers
+            cur.execute("""
+                SELECT id, legal_name, custumer_number
+                FROM customer
+                WHERE LOWER(customer_type) IN ('individual', 'joint account')
+                  AND status = 'Active'
+                  AND (parent_name = %s OR parent_name IS NULL OR parent_name = '')
+                ORDER BY legal_name;
+            """, (user_parent,))
+            customers = [dict(r) for r in cur.fetchall()]
+
+        if not customers:
+            return {
+                "success": False,
+                "message": "No active Individual or Joint Account customers found.",
+                "total_customers": 0,
+                "updated_customers": 0,
+                "skipped_customers": 0,
+                "total_copied_records": 0
+            }
+
+        total_copied_records = 0
+        updated_customers_count = 0
+        skipped_customers_count = 0
+
+        for cust in customers:
+            cid = cust["id"]
+            cust_name = cust.get("legal_name") or f"Customer #{cid}"
+            
+            _cconn = get_db_connection()
+            with _cconn.cursor(cursor_factory=RealDictCursor) as _ccur:
+                # Fetch source year requirements for this customer
+                _ccur.execute("""
+                    SELECT doc_type, doc_label, source_description, notes, is_required
+                    FROM tax_return_requirements
+                    WHERE customer_id = %s AND tax_year = %s
+                    ORDER BY id;
+                """, (cid, from_year))
+                source_reqs = _ccur.fetchall()
+
+                if not source_reqs:
+                    skipped_customers_count += 1
+                    _cconn.close()
+                    continue
+
+                # Delete existing target year requirements for exact 1:1 copy
+                _ccur.execute("""
+                    DELETE FROM tax_return_requirements
+                    WHERE customer_id = %s AND tax_year = %s;
+                """, (cid, to_year))
+
+                # Insert source requirements 1:1
+                cust_copied = 0
+                for sr in source_reqs:
+                    _ccur.execute("""
+                        INSERT INTO tax_return_requirements
+                            (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """, (
+                        cid,
+                        to_year,
+                        sr["doc_type"],
+                        sr.get("doc_label"),
+                        sr.get("source_description"),
+                        sr.get("notes"),
+                        sr.get("is_required", True)
+                    ))
+                    cust_copied += 1
+
+                _cconn.commit()
+            _cconn.close()
+
+            # Recalculate tracking status for to_year
+            recalculate_tax_docs_status(cid, to_year)
+
+            total_copied_records += cust_copied
+            updated_customers_count += 1
+
+        return {
+            "success": True,
+            "from_year": from_year,
+            "to_year": to_year,
+            "total_customers": len(customers),
+            "updated_customers": updated_customers_count,
+            "skipped_customers": skipped_customers_count,
+            "total_copied_records": total_copied_records,
+            "message": f"Successfully updated {updated_customers_count}/{len(customers)} Individual & Joint Account customer(s). Total requirements copied: {total_copied_records}."
         }
     except Exception as e:
         import traceback; traceback.print_exc()

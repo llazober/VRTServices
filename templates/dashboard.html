@@ -931,6 +931,16 @@
                 <span class="nav-text" style="font-weight: 800;">Company Profile</span>
             </a>
 
+            <a href="/utilities" class="nav-item {% if active_tab == 'utilities' %}active{% endif %}" title="System Utilities & Bulk Operations">
+                <div class="icon-box" style="color: #06b6d4;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.4-2.4c.4-.4.4-1 0-1.3z"/>
+                    </svg>
+                </div>
+                <span class="nav-text" style="font-weight: 800;">Utilities</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff;">TOOLS</span>
+            </a>
+
             <button class="nav-item" onclick="openSupportModal()" title="Support Request">
                 <div class="icon-box" style="color: #00f2fe;">
                     <svg viewBox="0 0 24 24">
@@ -956,7 +966,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% elif active_tab == 'wu_checks' %}Western Union Check Automation (Strategy 1){% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% elif active_tab == 'wu_checks' %}Western Union Check Automation (Strategy 1){% elif active_tab == 'utilities' %}System Utilities & Bulk Operations{% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -2385,6 +2395,304 @@
                 function startWUPolling() {
                     setInterval(refreshWUCheckFiles, 5000);
                 }
+            </script>
+            {% elif active_tab == 'utilities' %}
+            <!-- ── DEDICATED UTILITIES & BULK OPERATIONS VIEW ─────────────────────── -->
+            <div style="display: flex; flex-direction: column; gap: 24px; padding-bottom: 40px;">
+                <!-- Header Banner -->
+                <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(14, 116, 144, 0.25) 100%); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 20px; padding: 28px 32px; backdrop-filter: blur(12px); box-shadow: 0 15px 35px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <span style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: #000; font-weight: 800; font-size: 0.75rem; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;">Batch Automation Engine</span>
+                            <span style="color: #94a3b8; font-size: 0.88rem;">Individual & Joint Accounts Only</span>
+                        </div>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin: 0 0 6px;">System Utilities & Bulk Operations</h2>
+                        <p style="color: #cbd5e1; margin: 0; font-size: 0.95rem; max-width: 720px;">
+                            Execute high-impact bulk tools across all active <strong>Individual</strong> and <strong>Joint Account</strong> clients, including 1:1 requirement duplication and automated email notifications.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Two-Column Cards Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 24px;">
+
+                    <!-- CARD 1: Bulk Copy Last Year Requirements -->
+                    <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: #38bdf8; font-size: 1.3rem; display: flex; align-items: center; justify-content: center;">
+                                    📋
+                                </div>
+                                <div>
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">Copy Last Year Requirements</h3>
+                                    <span style="color: #94a3b8; font-size: 0.82rem;">Bulk Requirement Cloning</span>
+                                </div>
+                            </div>
+                            <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px;">
+                                Select the Source Tax Year and Target Tax Year below. This utility will iterate through all active <strong>Individual & Joint Account</strong> clients and perform an exact 1:1 replica copy of all tax document requirements. Any existing requirements in the target tax year will be replaced.
+                            </p>
+
+                            <!-- Selectors Container -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); padding: 16px; border-radius: 14px; margin-bottom: 16px;">
+                                <div>
+                                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px;">Source Tax Year (From)</label>
+                                    <select id="util_copy_source_year" style="width: 100%; background: #090d16; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 8px; padding: 10px; font-weight: 700; font-family: 'Outfit', sans-serif;">
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 6px;">Target Tax Year (To)</label>
+                                    <select id="util_copy_target_year" style="width: 100%; background: #090d16; border: 1px solid rgba(6, 182, 212, 0.4); color: #fff; border-radius: 8px; padding: 10px; font-weight: 700; font-family: 'Outfit', sans-serif;">
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button id="btn_bulk_copy" onclick="runBulkCopyTaxRequirements()" style="width: 100%; background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff; border: none; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                                <span>📋</span> Copy Last Year Requirements (All Clients)
+                            </button>
+
+                            <div id="bulk_copy_status_box" style="display: none; margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;"></div>
+                        </div>
+                    </div>
+
+                    <!-- CARD 2: Bulk Send Requirement Emails -->
+                    <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; font-size: 1.3rem; display: flex; align-items: center; justify-content: center;">
+                                    📧
+                                </div>
+                                <div>
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">Send Requirement Emails</h3>
+                                    <span style="color: #94a3b8; font-size: 0.82rem;">Bulk Email Dispatch</span>
+                                </div>
+                            </div>
+                            <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px;">
+                                Send personalized tax requirement notification emails to all active <strong>Individual & Joint Account</strong> clients for the selected tax year. Emails include Customer ID portal login note, dynamic document badges (received vs pending), and auto-skips completed accounts.
+                            </p>
+
+                            <!-- Selector Container -->
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); padding: 16px; border-radius: 14px; margin-bottom: 16px;">
+                                <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #60a5fa; text-transform: uppercase; margin-bottom: 6px;">Target Tax Year</label>
+                                <select id="util_email_tax_year" style="width: 100%; background: #090d16; border: 1px solid rgba(59, 130, 246, 0.4); color: #fff; border-radius: 8px; padding: 10px; font-weight: 700; font-family: 'Outfit', sans-serif;">
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button id="btn_bulk_send_email" onclick="runBulkSendTaxRequirementsEmail()" style="width: 100%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; border: none; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                                <span>🚀</span> Send Requirement Emails (All Clients)
+                            </button>
+
+                            <div id="bulk_email_status_box" style="display: none; margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <script>
+                function populateUtilitiesYearSelects() {
+                    const currentYear = new Date().getFullYear();
+                    const srcSel = document.getElementById('util_copy_source_year');
+                    const tgtSel = document.getElementById('util_copy_target_year');
+                    const emailSel = document.getElementById('util_email_tax_year');
+
+                    if (!srcSel || !tgtSel || !emailSel) return;
+
+                    srcSel.innerHTML = '';
+                    tgtSel.innerHTML = '';
+                    emailSel.innerHTML = '';
+
+                    for (let y = currentYear + 2; y >= 2020; y--) {
+                        const optSrc = document.createElement('option');
+                        optSrc.value = y;
+                        optSrc.textContent = `Tax Year ${y}`;
+                        if (y === currentYear - 1) optSrc.selected = true;
+                        srcSel.appendChild(optSrc);
+
+                        const optTgt = document.createElement('option');
+                        optTgt.value = y;
+                        optTgt.textContent = `Tax Year ${y}`;
+                        if (y === currentYear) optTgt.selected = true;
+                        tgtSel.appendChild(optTgt);
+
+                        const optEmail = document.createElement('option');
+                        optEmail.value = y;
+                        optEmail.textContent = `Tax Year ${y}`;
+                        if (y === currentYear) optEmail.selected = true;
+                        emailSel.appendChild(optEmail);
+                    }
+                }
+
+                async function runBulkCopyTaxRequirements() {
+                    const srcSel = document.getElementById('util_copy_source_year');
+                    const tgtSel = document.getElementById('util_copy_target_year');
+                    if (!srcSel || !tgtSel) return;
+
+                    const fromYear = parseInt(srcSel.value);
+                    const toYear = parseInt(tgtSel.value);
+
+                    if (fromYear === toYear) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert('Invalid Selection', 'Source tax year and target tax year must be different.', 'warning');
+                        } else {
+                            alert('Source and target tax year must be different.');
+                        }
+                        return;
+                    }
+
+                    let confirmCopy = true;
+                    if (typeof showCustomConfirm === 'function') {
+                        confirmCopy = await showCustomConfirm(
+                            `Are you sure you want to bulk copy tax document requirements from Tax Year ${fromYear} to Tax Year ${toYear} for ALL active Individual & Joint Account clients?\n\nExisting requirements for Tax Year ${toYear} will be updated to match Tax Year ${fromYear} 1:1.`,
+                            'Bulk Copy Requirements',
+                            '📋 Yes, Run Bulk Copy',
+                            'Cancel'
+                        );
+                    } else if (!confirm(`Copy requirements from ${fromYear} to ${toYear} for all Individual & Joint accounts?`)) {
+                        return;
+                    }
+                    if (!confirmCopy) return;
+
+                    const btn = document.getElementById('btn_bulk_copy');
+                    const statusBox = document.getElementById('bulk_copy_status_box');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '⏳ Copying Requirements...';
+                    }
+                    if (statusBox) {
+                        statusBox.style.display = 'block';
+                        statusBox.style.background = 'rgba(6, 182, 212, 0.15)';
+                        statusBox.style.border = '1px solid rgba(6, 182, 212, 0.3)';
+                        statusBox.style.color = '#38bdf8';
+                        statusBox.innerHTML = `🔄 Processing bulk copy for all Individual & Joint accounts from ${fromYear} to ${toYear}...`;
+                    }
+
+                    try {
+                        const res = await fetch('/api/tax-requirements/bulk-copy-from-year', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ from_year: fromYear, to_year: toYear })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || data.message || 'Bulk copy failed');
+
+                        if (statusBox) {
+                            statusBox.style.background = 'rgba(34, 197, 94, 0.15)';
+                            statusBox.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+                            statusBox.style.color = '#4ade80';
+                            statusBox.innerHTML = `✅ ${data.message || 'Bulk copy complete!'}`;
+                        }
+
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(
+                                'Bulk Copy Complete',
+                                `Successfully updated requirements for ${data.clients_processed || 0} Individual & Joint client(s) with ${data.total_requirements_copied || 0} requirement record(s) copied from ${fromYear} to ${toYear}!`,
+                                'success'
+                            );
+                        }
+                    } catch (err) {
+                        if (statusBox) {
+                            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+                            statusBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                            statusBox.style.color = '#f87171';
+                            statusBox.innerHTML = `❌ Error: ${err.message}`;
+                        }
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert('Bulk Copy Error', err.message, 'error');
+                        } else {
+                            alert('Bulk copy failed: ' + err.message);
+                        }
+                    } finally {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '📋 Copy Last Year Requirements (All Clients)';
+                        }
+                    }
+                }
+
+                async function runBulkSendTaxRequirementsEmail() {
+                    const emailSel = document.getElementById('util_email_tax_year');
+                    if (!emailSel) return;
+
+                    const taxYear = parseInt(emailSel.value);
+
+                    let confirmSend = true;
+                    if (typeof showCustomConfirm === 'function') {
+                        confirmSend = await showCustomConfirm(
+                            `Are you sure you want to send Requirement Notification emails for Tax Year ${taxYear} to ALL active Individual & Joint Account clients?\n\n• Accounts with completed requirements will be automatically skipped.\n• Customer ID portal login note and document checklists will be included.`,
+                            'Bulk Send Requirement Emails',
+                            '🚀 Yes, Send Bulk Emails',
+                            'Cancel'
+                        );
+                    } else if (!confirm(`Send requirement emails for Tax Year ${taxYear} to all active Individual & Joint accounts?`)) {
+                        return;
+                    }
+                    if (!confirmSend) return;
+
+                    const btn = document.getElementById('btn_bulk_send_email');
+                    const statusBox = document.getElementById('bulk_email_status_box');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '⏳ Dispatching Bulk Emails...';
+                    }
+                    if (statusBox) {
+                        statusBox.style.display = 'block';
+                        statusBox.style.background = 'rgba(59, 130, 246, 0.15)';
+                        statusBox.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                        statusBox.style.color = '#60a5fa';
+                        statusBox.innerHTML = `📧 Dispatching requirement emails for Tax Year ${taxYear} to active Individual & Joint Account clients...`;
+                    }
+
+                    try {
+                        const res = await fetch('/api/tax-requirements/send-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ year: taxYear })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || data.message || 'Bulk email dispatch failed');
+
+                        if (statusBox) {
+                            statusBox.style.background = 'rgba(34, 197, 94, 0.15)';
+                            statusBox.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+                            statusBox.style.color = '#4ade80';
+                            statusBox.innerHTML = `✅ ${data.message || 'Bulk email dispatch complete!'}`;
+                        }
+
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(
+                                'Bulk Email Dispatch Complete',
+                                `Sent: ${data.sent_count || 0} | Skipped: ${data.skipped_count || 0} | Failed: ${data.failed_count || 0}\n\n${data.message || ''}`,
+                                'success'
+                            );
+                        }
+                    } catch (err) {
+                        if (statusBox) {
+                            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+                            statusBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                            statusBox.style.color = '#f87171';
+                            statusBox.innerHTML = `❌ Error: ${err.message}`;
+                        }
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert('Bulk Email Error', err.message, 'error');
+                        } else {
+                            alert('Bulk email dispatch failed: ' + err.message);
+                        }
+                    } finally {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '🚀 Send Requirement Emails (All Clients)';
+                        }
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    populateUtilitiesYearSelects();
+                });
+                populateUtilitiesYearSelects();
             </script>
             {% else %}
             <!-- Hero Banner -->
