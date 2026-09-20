@@ -80,7 +80,7 @@ async def add_security_and_cache_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https:;"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     
-    if request.url.path in ["/", "/index", "/dashboard", "/customers", "/company-profile", "/western-union-checks", "/wu-checks"]:
+    if not request.url.path.startswith("/static"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
