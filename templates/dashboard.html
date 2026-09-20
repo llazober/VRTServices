@@ -4336,8 +4336,12 @@
 
         // ── RAG ASSISTANT MODAL CONTROLLER ──────────────────────────────────────────
         function openRagAssistantModal() {
+            console.log("[RAG MODAL] Opening RAG assistant modal...");
             const modal = document.getElementById('ragAssistantModal');
-            if (!modal) return;
+            if (!modal) {
+                console.error("[RAG MODAL] ragAssistantModal element not found in DOM!");
+                return;
+            }
             modal.style.display = 'flex';
             modal.style.opacity = '1';
             modal.style.zIndex = '2147483647';
@@ -10195,13 +10199,19 @@
         }
 
         async function openCreateEsignatureModal(preselectCustomerId = null) {
+            console.log("[ESIGN MODAL] Opening e-signature modal...");
             const modal = document.getElementById('esignatureModal');
-            if (!modal) return;
+            if (!modal) {
+                console.error("[ESIGN MODAL] esignatureModal element not found in DOM!");
+                return;
+            }
 
             modal.style.display = 'flex';
             modal.style.opacity = '1';
             modal.style.zIndex = '2147483647';
-            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            if (modal.children && modal.children[0]) {
+                modal.children[0].style.transform = 'scale(1)';
+            }
 
             try {
                 const res = await fetch('/api/customers');
@@ -10221,8 +10231,12 @@
                 console.error('Error fetching customers for e-signature modal:', err);
             }
 
-            if (preselectCustomerId || document.getElementById('esignCustomerSelect')?.value) {
-                onEsignCustomerChange();
+            try {
+                if (preselectCustomerId || document.getElementById('esignCustomerSelect')?.value) {
+                    onEsignCustomerChange();
+                }
+            } catch (e) {
+                console.error("Error in onEsignCustomerChange:", e);
             }
         }
 
@@ -10348,30 +10362,45 @@
         }
 
         async function openVerifyIdentityModal(customerId, customerName) {
+            console.log("[VERIFY ID MODAL] Opening for customer:", customerId, customerName);
             const modal = document.getElementById('verifyIdentityModal');
-            if (!modal) return;
-
-            document.getElementById('vIdCustomerId').value = customerId;
-            document.getElementById('vIdCustomerName').value = customerName || 'Customer #' + customerId;
-            document.getElementById('vIdRevokeBtn').style.display = 'none';
-
-            document.getElementById('vIdType').value = "Driver's License";
-            document.getElementById('vIdStateIssuer').value = 'FL';
-            document.getElementById('vIdExpiration').value = '';
-            document.getElementById('vIdLast4').value = '';
-            document.getElementById('vIdNotes').value = '';
-
-            if (document.getElementById('vIdSecondCustomerName')) document.getElementById('vIdSecondCustomerName').value = '';
-            if (document.getElementById('vIdSecondType')) document.getElementById('vIdSecondType').value = "Driver's License";
-            if (document.getElementById('vIdSecondStateIssuer')) document.getElementById('vIdSecondStateIssuer').value = '';
-            if (document.getElementById('vIdSecondExpiration')) document.getElementById('vIdSecondExpiration').value = '';
-            if (document.getElementById('vIdSecondLast4')) document.getElementById('vIdSecondLast4').value = '';
-            if (document.getElementById('vIdSecondSignerContainer')) document.getElementById('vIdSecondSignerContainer').style.display = 'none';
+            if (!modal) {
+                console.error("[VERIFY ID MODAL] verifyIdentityModal element not found in DOM!");
+                return;
+            }
 
             modal.style.display = 'flex';
             modal.style.opacity = '1';
             modal.style.zIndex = '2147483647';
-            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            if (modal.children && modal.children[0]) {
+                modal.children[0].style.transform = 'scale(1)';
+            }
+
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val !== undefined && val !== null ? val : '';
+            };
+
+            setVal('vIdCustomerId', customerId);
+            setVal('vIdCustomerName', customerName || ('Customer #' + customerId));
+            
+            const revokeBtn = document.getElementById('vIdRevokeBtn');
+            if (revokeBtn) revokeBtn.style.display = 'none';
+
+            setVal('vIdType', "Driver's License");
+            setVal('vIdStateIssuer', 'FL');
+            setVal('vIdExpiration', '');
+            setVal('vIdLast4', '');
+            setVal('vIdNotes', '');
+
+            setVal('vIdSecondCustomerName', '');
+            setVal('vIdSecondType', "Driver's License");
+            setVal('vIdSecondStateIssuer', '');
+            setVal('vIdSecondExpiration', '');
+            setVal('vIdSecondLast4', '');
+            
+            const secContainer = document.getElementById('vIdSecondSignerContainer');
+            if (secContainer) secContainer.style.display = 'none';
 
             try {
                 const res = await fetch(`/api/customers/${customerId}/identity-status`);
@@ -10379,27 +10408,22 @@
                     const data = await res.json();
 
                     const isJoint = data.customer_type === 'Joint Account' || Boolean(data.second_signer_name);
-                    const secContainer = document.getElementById('vIdSecondSignerContainer');
-                    if (secContainer) {
-                        secContainer.style.display = isJoint ? 'flex' : 'none';
-                    }
-                    if (isJoint && document.getElementById('vIdSecondCustomerName')) {
-                        document.getElementById('vIdSecondCustomerName').value = data.second_signer_name || 'Spouse / Second Signer';
-                    }
+                    if (secContainer) secContainer.style.display = isJoint ? 'flex' : 'none';
+                    if (isJoint) setVal('vIdSecondCustomerName', data.second_signer_name || 'Spouse / Second Signer');
 
                     if (data.identity_verified) {
-                        document.getElementById('vIdType').value = data.id_type || "Driver's License";
-                        document.getElementById('vIdStateIssuer').value = data.id_state_issuer || '';
-                        document.getElementById('vIdExpiration').value = data.id_expiration ? data.id_expiration.split('T')[0] : '';
-                        document.getElementById('vIdLast4').value = data.id_last4 || '';
-                        document.getElementById('vIdNotes').value = data.identity_notes || '';
-                        document.getElementById('vIdRevokeBtn').style.display = 'inline-block';
+                        setVal('vIdType', data.id_type || "Driver's License");
+                        setVal('vIdStateIssuer', data.id_state_issuer || '');
+                        setVal('vIdExpiration', data.id_expiration ? String(data.id_expiration).split('T')[0] : '');
+                        setVal('vIdLast4', data.id_last4 || '');
+                        setVal('vIdNotes', data.identity_notes || '');
+                        if (revokeBtn) revokeBtn.style.display = 'inline-block';
 
                         if (isJoint) {
-                            if (document.getElementById('vIdSecondType')) document.getElementById('vIdSecondType').value = data.second_signer_id_type || "Driver's License";
-                            if (document.getElementById('vIdSecondStateIssuer')) document.getElementById('vIdSecondStateIssuer').value = data.second_signer_id_state || '';
-                            if (document.getElementById('vIdSecondExpiration')) document.getElementById('vIdSecondExpiration').value = data.second_signer_id_expiration ? data.second_signer_id_expiration.split('T')[0] : '';
-                            if (document.getElementById('vIdSecondLast4')) document.getElementById('vIdSecondLast4').value = data.second_signer_id_last4 || '';
+                            setVal('vIdSecondType', data.second_signer_id_type || "Driver's License");
+                            setVal('vIdSecondStateIssuer', data.second_signer_id_state || '');
+                            setVal('vIdSecondExpiration', data.second_signer_id_expiration ? String(data.second_signer_id_expiration).split('T')[0] : '');
+                            setVal('vIdSecondLast4', data.second_signer_id_last4 || '');
                         }
                     }
                 }
