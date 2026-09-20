@@ -8701,7 +8701,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Classify failed');
-                alert(`✅ ${data.message} — OCR processing started.`);
+                showCustomAlert(`✅ ${data.message} — OCR classification is running in the background.`, 'success');
                 [1000, 3500, 7000].forEach(delay => {
                     setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), delay);
                 });
@@ -8760,7 +8760,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Scan failed');
-                alert(`✅ ${data.message} — OCR classification results will appear shortly.`);
+                showCustomAlert(`✅ ${data.message} — OCR classification is running in the background.`, 'success');
                 setTimeout(() => loadTaxDocTracking(currentChecklistCustomerId), 4000);
             } catch (err) {
                 alert(`❌ Error scanning docs: ${err.message}`);

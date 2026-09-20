@@ -36,6 +36,9 @@ import pyotp
 import qrcode
 from extractor import run_extraction, extract_check_images
 
+import concurrent.futures
+_OCR_THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_prefix="ocr-worker")
+
 app = FastAPI(title="Bank Statement OCR Extractor")
 
 @app.exception_handler(RequestValidationError)
@@ -4003,7 +4006,7 @@ async def portal_upload_file(
         try:
             check_and_match_tax_requirement_on_rename(cust["id"], "", final_key, filename)
             background_tasks.add_task(
-                classify_and_rename_tax_document,
+                classify_and_rename_tax_document_async,
                 customer_id=cust["id"],
                 file_key=final_key,
                 original_filename=filename
@@ -7214,7 +7217,7 @@ async def upload_customer_storage_file(
 
         # Auto-classify tax document in background task
         background_tasks.add_task(
-            classify_and_rename_tax_document,
+            classify_and_rename_tax_document_async,
             customer_id=real_cust_id,
             file_key=final_key,
             original_filename=filename
@@ -12082,6 +12085,26 @@ def try_recover_resend_attachment_by_key(key: str) -> bytes:
         print(f"[RECOVERY ERROR] {e_rec}")
     return None
 
+async def process_inbound_post_processing_async(
+    email_id: str,
+    comm_id: int,
+    customer_id: int,
+    legal_name: str,
+    parent_name: str,
+    subject: str,
+    sender_email: str,
+    body_text: str,
+    raw_body: dict,
+    data: dict,
+    attachments: list
+):
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        _OCR_THREAD_POOL,
+        process_inbound_post_processing,
+        email_id, comm_id, customer_id, legal_name, parent_name, subject, sender_email, body_text, raw_body, data, attachments
+    )
+
 def process_inbound_post_processing(
     email_id: str,
     comm_id: int,
@@ -12637,7 +12660,7 @@ async def resend_inbound_webhook(request: Request, background_tasks: BackgroundT
         }
 
         background_tasks.add_task(
-            process_inbound_post_processing,
+            process_inbound_post_processing_async,
             email_id=str(email_id) if email_id else "",
             comm_id=comm_id,
             customer_id=customer_id,
@@ -12796,6 +12819,8 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "PRIOR-RETURN", "keywords": ["u.s. individual income tax return", "form 1040", "adjusted gross income", "taxable income", "filing status"], "min_matches": 2},
 ]
 
+_OCR_TEXT_CACHE = {}  # (file_key, file_size) -> text
+
 def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
     """
     Downloads a PDF or Image from S3 and runs Google Vision OCR on it.
@@ -12815,6 +12840,9 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
         try:
             s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
             file_bytes = s3_obj["Body"].read()
+            cache_key = (file_key, len(file_bytes))
+            if cache_key in _OCR_TEXT_CACHE:
+                return _OCR_TEXT_CACHE[cache_key]
         except Exception as s3_err:
             dir_name = os.path.dirname(clean_key)
             base_name = os.path.splitext(os.path.basename(clean_key))[0]
@@ -12830,6 +12858,9 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
                     s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_s3_key(fb))
                     file_bytes = s3_obj["Body"].read()
                     if file_bytes:
+                        cache_key = (file_key, len(file_bytes))
+                        if cache_key in _OCR_TEXT_CACHE:
+                            return _OCR_TEXT_CACHE[cache_key]
                         clean_key = clean_s3_key(fb)
                         print(f"[TAX OCR S3 FALLBACK SUCCESS] '{file_key}' -> found at '{clean_key}'")
                         break
@@ -12867,7 +12898,11 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
                 except Exception as oe:
                     print(f"[TAX OCR IMAGE ERROR] '{clean_key}': {oe}")
 
-                return " ".join(all_text_parts).lower()
+                final_text = " ".join(all_text_parts).lower()
+                _OCR_TEXT_CACHE[cache_key] = final_text
+                if len(_OCR_TEXT_CACHE) > 128:
+                    _OCR_TEXT_CACHE.pop(next(iter(_OCR_TEXT_CACHE)))
+                return final_text
 
             # 2. PDF handling (.pdf)
             pdf_path = os.path.join(tmpdir, "doc.pdf")
@@ -12878,7 +12913,7 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
             try:
                 import fitz
                 doc = fitz.open(pdf_path)
-                for page_idx in range(min(3, len(doc))):
+                for page_idx in range(min(1, len(doc))):
                     page = doc.load_page(page_idx)
                     pix = page.get_pixmap(dpi=200)
                     png_path = os.path.join(tmpdir, f"page_{page_idx}.png")
@@ -12888,7 +12923,7 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
             except Exception:
                 try:
                     from pdf2image import convert_from_path
-                    converted_imgs = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=3)
+                    converted_imgs = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=1)
                     for i, page_img in enumerate(converted_imgs):
                         png_path = os.path.join(tmpdir, f"page_{i}.png")
                         page_img.save(png_path, "PNG")
@@ -12905,7 +12940,11 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
                 except Exception as oe:
                     print(f"[TAX OCR PAGE ERROR] {png_path}: {oe}")
 
-            return " ".join(all_text_parts).lower()
+            final_text = " ".join(all_text_parts).lower()
+            _OCR_TEXT_CACHE[cache_key] = final_text
+            if len(_OCR_TEXT_CACHE) > 128:
+                _OCR_TEXT_CACHE.pop(next(iter(_OCR_TEXT_CACHE)))
+            return final_text
     except Exception as e:
         print(f"[TAX OCR FATAL ERROR] Could not OCR '{file_key}': {e}")
         return ""
@@ -13072,6 +13111,14 @@ def _detect_doc_type_from_filename(filename: str) -> str | None:
             return dt
     return None
 
+
+async def classify_and_rename_tax_document_async(customer_id: int, file_key: str, original_filename: str = "", tax_year: int = None):
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        _OCR_THREAD_POOL,
+        classify_and_rename_tax_document,
+        customer_id, file_key, original_filename, tax_year
+    )
 
 def classify_and_rename_tax_document(customer_id: int, file_key: str, original_filename: str = "", tax_year: int = None):
     """
@@ -13774,7 +13821,7 @@ async def manual_classify_tax_doc(request: Request, background_tasks: Background
     if not customer_id or not file_key:
         raise HTTPException(status_code=400, detail="customer_id and file_key are required")
     background_tasks.add_task(
-        classify_and_rename_tax_document,
+        classify_and_rename_tax_document_async,
         customer_id=int(customer_id),
         file_key=file_key,
         original_filename=original_filename,
@@ -13837,7 +13884,7 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
     for fk in found_files:
         orig = os.path.basename(fk)
         background_tasks.add_task(
-            classify_and_rename_tax_document,
+            classify_and_rename_tax_document_async,
             customer_id=int(customer_id),
             file_key=fk,
             original_filename=orig,
