@@ -6996,13 +6996,22 @@ async def view_pdf_proxy(key: str, request: Request):
             raise HTTPException(status_code=500, detail="Failed to fetch compliance PDF")
 
     filename = os.path.basename(actual_key)
+    content_type = "application/octet-stream"
+    if lower_key.endswith(".pdf"):
+        content_type = "application/pdf"
+    elif lower_key.endswith(".png"):
+        content_type = "image/png"
+    elif lower_key.endswith(".jpg") or lower_key.endswith(".jpeg"):
+        content_type = "image/jpeg"
+
     try:
         presigned_url = client.generate_presigned_url(
             'get_object',
             Params={
                 'Bucket': bucket,
                 'Key': actual_key,
-                'ResponseContentDisposition': f'inline; filename="{filename}"'
+                'ResponseContentDisposition': f'inline; filename="{filename}"',
+                'ResponseContentType': content_type
             },
             ExpiresIn=3600
         )
