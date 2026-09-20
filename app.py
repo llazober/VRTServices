@@ -6933,6 +6933,21 @@ async def view_pdf_proxy(key: str, request: Request):
             except Exception: pass
 
         if not actual_key:
+            print(f"[FALLBACK] Key '{clean_key}' not found in DO Spaces. Attempting direct dynamic recovery...")
+            recovered = try_recover_resend_attachment_by_key(clean_key)
+            if recovered and len(recovered) > 100:
+                filename = os.path.basename(clean_key)
+                headers = {
+                    "Content-Disposition": f'inline; filename="{filename}"',
+                    "Cache-Control": "public, max-age=3600",
+                    "X-Frame-Options": "SAMEORIGIN",
+                    "Access-Control-Allow-Origin": "*"
+                }
+                return StreamingResponse(
+                    io.BytesIO(recovered),
+                    media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
+                    headers=headers
+                )
             raise HTTPException(status_code=404, detail=f"File not found in storage: {clean_key}")
         print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
 
@@ -7046,6 +7061,19 @@ async def download_file_proxy(key: str, request: Request):
             except Exception: pass
 
         if not actual_key:
+            print(f"[FALLBACK] Key '{clean_key}' not found in DO Spaces. Attempting direct dynamic recovery...")
+            recovered = try_recover_resend_attachment_by_key(clean_key)
+            if recovered and len(recovered) > 100:
+                filename = os.path.basename(clean_key)
+                headers = {
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "public, max-age=3600"
+                }
+                return StreamingResponse(
+                    io.BytesIO(recovered),
+                    media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
+                    headers=headers
+                )
             raise HTTPException(status_code=404, detail=f"File not found in storage: {clean_key}")
         print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
 
