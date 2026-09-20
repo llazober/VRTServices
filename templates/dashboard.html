@@ -5917,26 +5917,26 @@
                         <div style="display: inline-block; position: relative;">
                             <button onclick="toggleCustomerActionMenu(event, ${c.id})" style="padding: 5px 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #e2e8f0; border-radius: 6px; font-size: 0.72rem; font-weight: 800; cursor: pointer;" title="More Actions">•••</button>
                             <div id="custActionMenu-${c.id}" class="cust-action-dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 1000; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); min-width: 195px; text-align: left; padding: 6px 0; backdrop-filter: blur(12px);">
-                                <a href="#" onclick="openVerifyIdentityModal(${c.id}, '${(c.legal_name || '').replace(/'/g, "\\'")}'); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: ${c.identity_verified ? '#34d399' : '#fbbf24'}; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleVerifyIdentityAction(${c.id}); return false;" style="display: block; padding: 8px 14px; color: ${c.identity_verified ? '#34d399' : '#fbbf24'}; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     🛡️ ${c.identity_verified ? 'ID Verified' : 'Verify Photo ID'}
                                 </a>
-                                ${c.phone ? `<a href="tel:${c.phone.replace(/[^0-9+]/g, '')}" onclick="toggleCustomerActionMenu(event, ${c.id})" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">📞 Call Customer</a>` : ''}
-                                <a href="#" onclick="openCustomerChecklistModal(event, ${c.id}, null, '${(c.customer_type || c.type || 'Business').replace(/'/g, "\\'")}'); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #c084fc; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                ${c.phone ? `<a href="tel:${c.phone.replace(/[^0-9+]/g, '')}" onclick="document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">📞 Call Customer</a>` : ''}
+                                <a href="#" onclick="handleCustomerChecklistAction(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #c084fc; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     📋 Workflow Checklist
                                 </a>
-                                <a href="#" onclick="openSendCustomerEmailModal(event, ${c.id}); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleSendEmailAction(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     ✉️ Send Email
                                 </a>
-                                <a href="#" onclick="openCustomerCommsHistoryModal(${c.id}); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #c084fc; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleCommsHistoryAction(${c.id}); return false;" style="display: block; padding: 8px 14px; color: #c084fc; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     💬 Comms History ${(window.currentUnreadMap && window.currentUnreadMap[c.id] && window.currentUnreadMap[c.id].unread_count > 0) ? `<span class="unread-history-badge" id="unreadHistoryDot-${c.id}" data-cid="${c.id}" style="background: #22c55e; color: #000; font-size: 0.62rem; padding: 1px 5px; border-radius: 8px; font-weight: 900; margin-left: 4px;">${window.currentUnreadMap[c.id].unread_count} NEW</span>` : ''}
                                 </a>
-                                <a href="#" onclick="initCustomerStorage(event, ${c.id}); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleInitStorageAction(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     ${c.do_storage_status === 'Initialized' ? '⚡ Re-Init Storage' : '☁️ Init Storage'}
                                 </a>
-                                <a href="#" onclick="editCustomerRecord(${c.id}); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #e100ff; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleEditCustomerAction(${c.id}); return false;" style="display: block; padding: 8px 14px; color: #e100ff; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                     ✏️ Edit Account
                                 </a>
-                                <a href="#" onclick="deleteCustomerRecord(event, ${c.id}, '${(c.custumer_number || '').replace(/'/g, "\\'")}', '${(c.legal_name || '').replace(/'/g, "\\'")}'); toggleCustomerActionMenu(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #f87171; font-size: 0.78rem; font-weight: 600; text-decoration: none;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='transparent'">
+                                <a href="#" onclick="handleDeleteCustomerAction(event, ${c.id}); return false;" style="display: block; padding: 8px 14px; color: #f87171; font-size: 0.78rem; font-weight: 600; text-decoration: none;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='transparent'">
                                     🗑️ Delete Customer
                                 </a>
                             </div>
@@ -5950,6 +5950,45 @@
             if (typeof checkUnreadCommunicationsAlerts === 'function') {
                 checkUnreadCommunicationsAlerts();
             }
+        }
+
+        function handleVerifyIdentityAction(customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            const c = (currentCustomerRecords || []).find(x => Number(x.id) === Number(customerId));
+            openVerifyIdentityModal(customerId, c ? c.legal_name : '');
+        }
+
+        function handleCustomerChecklistAction(event, customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            const c = (currentCustomerRecords || []).find(x => Number(x.id) === Number(customerId));
+            const cType = c ? (c.customer_type || c.type || 'Business') : 'Business';
+            openCustomerChecklistModal(event, customerId, null, cType);
+        }
+
+        function handleSendEmailAction(event, customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            openSendCustomerEmailModal(event, customerId);
+        }
+
+        function handleCommsHistoryAction(customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            openCustomerCommsHistoryModal(customerId);
+        }
+
+        function handleInitStorageAction(event, customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            initCustomerStorage(event, customerId);
+        }
+
+        function handleEditCustomerAction(customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            editCustomerRecord(customerId);
+        }
+
+        function handleDeleteCustomerAction(event, customerId) {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+            const c = (currentCustomerRecords || []).find(x => Number(x.id) === Number(customerId));
+            deleteCustomerRecord(event, customerId, c ? (c.custumer_number || '') : '', c ? (c.legal_name || '') : '');
         }
 
         function toggleCustomerActionMenu(event, customerId) {
