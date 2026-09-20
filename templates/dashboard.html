@@ -3188,7 +3188,7 @@
     </div>
 
     <!-- ── RAG AI CHATBOT ASSISTANT MODAL ────────────────────────── -->
-    <div id="ragAssistantModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div id="ragAssistantModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2147483647; justify-content: center; align-items: center;">
         <div style="background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 24px; max-width: 95%; width: 920px; max-height: 90vh; display: flex; flex-direction: column; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); transform: scale(0.95); transition: transform 0.3s ease; gap: 16px; color: #fff;">
             <!-- Modal Header -->
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
@@ -4344,9 +4344,13 @@
             }
             modal.style.display = 'flex';
             modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
             modal.style.zIndex = '2147483647';
             const content = modal.firstElementChild;
-            if (content) content.style.transform = 'scale(1)';
+            if (content) {
+                content.style.transform = 'scale(1)';
+                content.style.opacity = '1';
+            }
         }
 
         function closeRagAssistantModal() {
@@ -10208,9 +10212,11 @@
 
             modal.style.display = 'flex';
             modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
             modal.style.zIndex = '2147483647';
             if (modal.children && modal.children[0]) {
                 modal.children[0].style.transform = 'scale(1)';
+                modal.children[0].style.opacity = '1';
             }
 
             try {
@@ -10371,9 +10377,11 @@
 
             modal.style.display = 'flex';
             modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
             modal.style.zIndex = '2147483647';
             if (modal.children && modal.children[0]) {
                 modal.children[0].style.transform = 'scale(1)';
+                modal.children[0].style.opacity = '1';
             }
 
             const setVal = (id, val) => {
