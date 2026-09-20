@@ -1028,6 +1028,14 @@
                         </p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; max-width: 720px;">
                             <input type="text" id="customerPageSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 16px; color: #fff; font-size: 0.9rem; flex: 1; outline: none;" oninput="fetchCustomerRecords(true)">
+                            <div style="display: flex; align-items: center; gap: 6px; background: rgba(0, 230, 118, 0.12); border: 1px solid rgba(0, 230, 118, 0.35); border-radius: 12px; padding: 6px 12px;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: #00e676;">⚡ Status:</span>
+                                <select id="customerPageStatusSelect" onchange="onCustomerStatusFilterChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
+                                    <option value="Active" selected style="background: #0f172a; color: #00e676;">Active Only</option>
+                                    <option value="Inactive" style="background: #0f172a; color: #ffb300;">Inactive Only</option>
+                                    <option value="all" style="background: #0f172a; color: #fff;">All Statuses</option>
+                                </select>
+                            </div>
                             <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 6px 12px;">
                                 <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 Tax Prep:</span>
                                 <select id="customerPageAssignedUserSelect" onchange="renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
@@ -3030,8 +3038,16 @@
 
             <!-- Controls bar -->
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                <div style="display: flex; gap: 10px; align-items: center; flex: 1; flex-wrap: wrap;">
                     <input type="text" id="customerSearchInput" placeholder="Search by customer #, legal name, email, phone..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 14px; font-size: 0.88rem; color: #fff; width: 100%; max-width: 380px; outline: none;" oninput="fetchCustomerRecords()">
+                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(0, 230, 118, 0.12); border: 1px solid rgba(0, 230, 118, 0.35); border-radius: 10px; padding: 6px 12px;">
+                        <span style="font-size: 0.78rem; font-weight: 700; color: #00e676;">⚡ Status:</span>
+                        <select id="customerModalStatusSelect" onchange="onCustomerStatusFilterChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 0.82rem; font-weight: 700; outline: none; cursor: pointer;">
+                            <option value="Active" selected style="background: #0f172a; color: #00e676;">Active Only</option>
+                            <option value="Inactive" style="background: #0f172a; color: #ffb300;">Inactive Only</option>
+                            <option value="all" style="background: #0f172a; color: #fff;">All Statuses</option>
+                        </select>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                     <button id="toggleCustomerFormBtn" onclick="toggleCustomerForm()" style="padding: 8px 18px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225, 0, 255, 0.3);">
@@ -5858,6 +5874,14 @@
             }
         }
 
+        function onCustomerStatusFilterChange(sourceVal) {
+            const pageSel = document.getElementById('customerPageStatusSelect');
+            const modalSel = document.getElementById('customerModalStatusSelect');
+            if (pageSel && pageSel.value !== sourceVal) pageSel.value = sourceVal;
+            if (modalSel && modalSel.value !== sourceVal) modalSel.value = sourceVal;
+            renderCustomerTable();
+        }
+
         function renderCustomerTable() {
             const modalTbody = document.getElementById('customerTableBody');
             const pageTbody = document.getElementById('customerPageTableBody');
@@ -5865,6 +5889,19 @@
             const pageCount = document.getElementById('customerPageTotalCount');
 
             let recordsToDisplay = currentCustomerRecords || [];
+
+            // Filter by Status (Default: Active)
+            const pageStatusSel = document.getElementById('customerPageStatusSelect');
+            const modalStatusSel = document.getElementById('customerModalStatusSelect');
+            const selectedStatus = (pageStatusSel ? pageStatusSel.value : null) || (modalStatusSel ? modalStatusSel.value : 'Active');
+
+            if (selectedStatus === 'Active') {
+                recordsToDisplay = recordsToDisplay.filter(c => String(c.status || 'Active').trim().toLowerCase() === 'active');
+            } else if (selectedStatus === 'Inactive') {
+                recordsToDisplay = recordsToDisplay.filter(c => String(c.status || '').trim().toLowerCase() !== 'active');
+            }
+
+            // Tax Prep Filter
             const userFilterSelect = document.getElementById('customerPageAssignedUserSelect');
             const selectedUserFilter = userFilterSelect ? userFilterSelect.value : 'all';
 
@@ -10311,7 +10348,6 @@
         }
 
         async function openVerifyIdentityModal(customerId, customerName) {
-            closeAllAppModals();
             const modal = document.getElementById('verifyIdentityModal');
             if (!modal) return;
 
@@ -10333,7 +10369,9 @@
             if (document.getElementById('vIdSecondSignerContainer')) document.getElementById('vIdSecondSignerContainer').style.display = 'none';
 
             modal.style.display = 'flex';
-            setTimeout(() => { modal.style.opacity = '1'; }, 10);
+            modal.style.opacity = '1';
+            modal.style.zIndex = '2147483647';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
 
             try {
                 const res = await fetch(`/api/customers/${customerId}/identity-status`);
