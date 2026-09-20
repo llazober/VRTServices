@@ -1041,9 +1041,6 @@
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
-                            <button onclick="sendTaxBulkEmail()" id="btnBulkTaxEmailPage" title="Send tax document requirements email to all Individual & Joint Account customers" style="padding: 12px 20px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 16px rgba(56,189,248,0.35); transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;">
-                                📧 Bulk Tax Email
-                            </button>
                             <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
                                 ➕ Add New Customer
                             </button>
@@ -3039,9 +3036,6 @@
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                     <button id="toggleCustomerFormBtn" onclick="toggleCustomerForm()" style="padding: 8px 18px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(225, 0, 255, 0.3);">
                         ➕ Add New Customer
-                    </button>
-                    <button onclick="sendTaxBulkEmail()" id="btnBulkTaxEmail" title="Send tax document requirements email to all Individual & Joint Account customers" style="padding: 8px 18px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-size: 0.8rem; font-weight: 800; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 12px rgba(56,189,248,0.3); display: flex; align-items: center; gap: 7px;">
-                        📧 Bulk Tax Email
                     </button>
                 </div>
 
@@ -10338,6 +10332,9 @@
             if (document.getElementById('vIdSecondLast4')) document.getElementById('vIdSecondLast4').value = '';
             if (document.getElementById('vIdSecondSignerContainer')) document.getElementById('vIdSecondSignerContainer').style.display = 'none';
 
+            modal.style.display = 'flex';
+            setTimeout(() => { modal.style.opacity = '1'; }, 10);
+
             try {
                 const res = await fetch(`/api/customers/${customerId}/identity-status`);
                 if (res.ok) {
@@ -10371,9 +10368,6 @@
             } catch (err) {
                 console.error('Error fetching customer identity status:', err);
             }
-
-            modal.style.display = 'flex';
-            setTimeout(() => { modal.style.opacity = '1'; }, 10);
         }
 
         function closeVerifyIdentityModal() {
