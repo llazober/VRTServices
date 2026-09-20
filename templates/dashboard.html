@@ -5954,11 +5954,25 @@
 
         function toggleCustomerActionMenu(event, customerId) {
             if (event) event.stopPropagation();
+            const btn = event ? event.currentTarget : null;
             const targetMenu = document.getElementById(`custActionMenu-${customerId}`);
             const isVisible = targetMenu && targetMenu.style.display !== 'none';
             document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
             if (targetMenu && !isVisible) {
                 targetMenu.style.display = 'block';
+                targetMenu.style.position = 'fixed';
+                targetMenu.style.zIndex = '99999';
+                if (btn) {
+                    const rect = btn.getBoundingClientRect();
+                    targetMenu.style.top = (rect.bottom + 4) + 'px';
+                    targetMenu.style.left = 'auto';
+                    targetMenu.style.right = (window.innerWidth - rect.right) + 'px';
+                    
+                    const menuHeight = targetMenu.offsetHeight || 280;
+                    if (rect.bottom + 4 + menuHeight > window.innerHeight) {
+                        targetMenu.style.top = Math.max(10, rect.top - menuHeight - 4) + 'px';
+                    }
+                }
             }
         }
 
@@ -5967,6 +5981,9 @@
                 document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
             }
         });
+        window.addEventListener('scroll', function() {
+            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+        }, true);
 
         async function initCustomerStorage(event, customerId) {
             if (event) event.stopPropagation();
