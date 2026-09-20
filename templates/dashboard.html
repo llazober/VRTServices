@@ -4339,11 +4339,10 @@
             const modal = document.getElementById('ragAssistantModal');
             if (!modal) return;
             modal.style.display = 'flex';
-            requestAnimationFrame(() => {
-                modal.style.opacity = '1';
-                const content = modal.firstElementChild;
-                if (content) content.style.transform = 'scale(1)';
-            });
+            modal.style.opacity = '1';
+            modal.style.zIndex = '2147483647';
+            const content = modal.firstElementChild;
+            if (content) content.style.transform = 'scale(1)';
         }
 
         function closeRagAssistantModal() {
@@ -10196,9 +10195,13 @@
         }
 
         async function openCreateEsignatureModal(preselectCustomerId = null) {
-            closeAllAppModals();
             const modal = document.getElementById('esignatureModal');
             if (!modal) return;
+
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+            modal.style.zIndex = '2147483647';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
 
             try {
                 const res = await fetch('/api/customers');
@@ -10208,7 +10211,7 @@
                     const select = document.getElementById('esignCustomerSelect');
                     if (select) {
                         select.innerHTML = '<option value="">-- Select Customer --</option>' + 
-                            allCustomersCache.map(c => `<option value="${c.id}">${escapeHtml(c.legal_name)} (${c.parent_name || 'No Parent'})</option>`).join('');
+                            allCustomersCache.map(c => `<option value="${c.id}">${escapeHtml(c.legal_name || '')} (${c.parent_name || 'No Parent'})</option>`).join('');
                         if (preselectCustomerId) {
                             select.value = preselectCustomerId;
                         }
@@ -10221,9 +10224,6 @@
             if (preselectCustomerId || document.getElementById('esignCustomerSelect')?.value) {
                 onEsignCustomerChange();
             }
-
-            modal.style.display = 'flex';
-            setTimeout(() => { modal.style.opacity = '1'; }, 10);
         }
 
         function closeCreateEsignatureModal() {
