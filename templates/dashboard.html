@@ -7305,7 +7305,7 @@
 
             // Use in-app view-pdf and download streaming endpoints to stream files with correct headers
             const keyParam = encodeURIComponent(s3KeyOrUrl || '');
-            const inlineViewUrl = `/api/storage/view-pdf?key=${keyParam}`;
+            const inlineViewUrl = `/api/storage/view-pdf?key=${keyParam}#view=FitH`;
             const downloadUrl = `/api/storage/download?key=${keyParam}`;
 
             if (titleEl) titleEl.textContent = fileName || 'PDF Document Viewer';
