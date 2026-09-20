@@ -6890,7 +6890,7 @@ def ensure_storage_pdf_has_irs_cover(clean_key: str, body_bytes: bytes) -> bytes
 
 @app.get("/api/storage/view-pdf")
 async def view_pdf_proxy(key: str, request: Request):
-    """Streams a PDF document from DigitalOcean Spaces with inline Content-Disposition for in-app modal previewing."""
+    """Generates a DO Spaces Pre-signed URL for the PDF and redirects the user, falling back to proxy if dynamic recovery/compliance generation is needed."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6899,187 +6899,221 @@ async def view_pdf_proxy(key: str, request: Request):
         raise HTTPException(status_code=400, detail="Key parameter is required")
 
     clean_key = clean_s3_key(key)
-
     client, err = get_s3_client()
     if not client:
         raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
 
     bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    actual_key = clean_key
+
     try:
-        try:
-            s3_obj = client.get_object(Bucket=bucket, Key=clean_key)
-            actual_key = clean_key
-        except Exception as e_direct:
-            filename = os.path.basename(clean_key)
-            parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
-            actual_key = None
-            if parent_prefix:
+        client.head_object(Bucket=bucket, Key=actual_key)
+    except Exception:
+        filename = os.path.basename(clean_key)
+        parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
+        actual_key = None
+        if parent_prefix:
+            try:
                 list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
                 for item in list_res.get('Contents', []):
                     item_key = item['Key']
                     if os.path.basename(item_key).lower() == filename.lower():
                         actual_key = item_key
                         break
-            if not actual_key:
-                try:
-                    list_all = client.list_objects_v2(Bucket=bucket, Prefix="VRT Services/", MaxKeys=200)
-                    for item in list_all.get('Contents', []):
-                        item_key = item['Key']
-                        if os.path.basename(item_key).lower() == filename.lower():
-                            actual_key = item_key
-                            break
-                except Exception as list_err:
-                    print(f"[PDF FALLBACK SCAN WARNING]: {list_err}")
-            if actual_key:
-                print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
-                s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
-            else:
-                raise e_direct
-
-        # Check if S3 object is empty or contains raw JSON placeholder text instead of real binary file
-        body_bytes = s3_obj["Body"].read()
-        if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
-            print(f"[CORRUPT S3 FILE DETECTED] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
-            recovered = try_recover_resend_attachment_by_key(clean_key)
-            if recovered and len(recovered) > 100:
-                body_bytes = recovered
-                try:
-                    client.put_object(Bucket=bucket, Key=actual_key or clean_key, Body=body_bytes)
-                    print(f"[DYNAMIC RECOVERY REPAIRED S3] Key '{actual_key or clean_key}' ({len(body_bytes)} bytes)")
-                except Exception as e_rep:
-                    print(f"[DYNAMIC RECOVERY S3 UPDATE ERROR] {e_rep}")
-
-        # Ensure Audit Certificate PDF has IRS Pub 1345 Cover Page attached
-        body_bytes = ensure_storage_pdf_has_irs_cover(actual_key or clean_key, body_bytes)
-
-        filename = os.path.basename(actual_key or clean_key)
-        content_type = s3_obj.get("ContentType") or "application/pdf"
-        lower_name = (actual_key or clean_key).lower()
-        if lower_name.endswith(".pdf"):
-            content_type = "application/pdf"
-        elif lower_name.endswith(".png"):
-            content_type = "image/png"
-        elif lower_name.endswith(".jpg") or lower_name.endswith(".jpeg"):
-            content_type = "image/jpeg"
-
-        headers = {
-            "Content-Disposition": f'inline; filename="{filename}"',
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "X-Frame-Options": "SAMEORIGIN",
-            "Access-Control-Allow-Origin": "*"
-        }
-        return StreamingResponse(
-            io.BytesIO(body_bytes),
-            media_type=content_type,
-            headers=headers
-        )
-    except Exception as e:
-        # Fallback: If S3 object failed or was missing, attempt dynamic recovery directly
-        print(f"Error fetching PDF key '{key}' from storage: {e}. Attempting direct dynamic recovery...")
-        recovered = try_recover_resend_attachment_by_key(clean_key)
-        if recovered and len(recovered) > 100:
-            filename = os.path.basename(clean_key)
-            headers = {
-                "Content-Disposition": f'inline; filename="{filename}"',
-                "Cache-Control": "public, max-age=3600",
-                "X-Frame-Options": "SAMEORIGIN",
-                "Access-Control-Allow-Origin": "*"
-            }
-            return StreamingResponse(
-                io.BytesIO(recovered),
-                media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
-                headers=headers
-            )
-        raise HTTPException(status_code=500, detail=f"Failed to fetch PDF document: {e}")
-
-@app.get("/api/storage/download")
-async def download_file_proxy(key: str, request: Request):
-    """Streams any storage file or email attachment from DigitalOcean Spaces with attachment Content-Disposition for browser download."""
-    username = get_current_username(request)
-    if not username:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    if not key or not key.strip():
-        raise HTTPException(status_code=400, detail="Key parameter is required")
-
-    clean_key = clean_s3_key(key)
-
-    client, err = get_s3_client()
-    if not client:
-        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
-
-    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-    try:
-        try:
-            s3_obj = client.get_object(Bucket=bucket, Key=clean_key)
-            actual_key = clean_key
-        except Exception as e_direct:
-            filename = os.path.basename(clean_key)
-            parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
-            actual_key = None
-            if parent_prefix:
-                list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
-                for item in list_res.get('Contents', []):
-                    item_key = item['Key']
-                    if os.path.basename(item_key).lower() == filename.lower():
-                        actual_key = item_key
-                        break
-            if not actual_key:
-                list_all = client.list_objects_v2(Bucket=bucket)
+            except Exception: pass
+            
+        if not actual_key:
+            try:
+                list_all = client.list_objects_v2(Bucket=bucket, Prefix="VRT Services/", MaxKeys=200)
                 for item in list_all.get('Contents', []):
                     item_key = item['Key']
                     if os.path.basename(item_key).lower() == filename.lower():
                         actual_key = item_key
                         break
-            if actual_key:
-                s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
-            else:
-                raise e_direct
+            except Exception: pass
 
-        # Check if S3 object is empty or contains raw JSON placeholder text instead of real binary file
-        body_bytes = s3_obj["Body"].read()
-        if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
-            print(f"[CORRUPT S3 FILE DETECTED IN DOWNLOAD] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
-            recovered = try_recover_resend_attachment_by_key(clean_key)
-            if recovered and len(recovered) > 100:
-                body_bytes = recovered
-                try:
-                    client.put_object(Bucket=bucket, Key=actual_key or clean_key, Body=body_bytes)
-                except Exception: pass
+        if not actual_key:
+            raise HTTPException(status_code=404, detail=f"File not found in storage: {clean_key}")
+        print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
 
-        # Ensure Audit Certificate PDF has IRS Pub 1345 Cover Page attached
-        body_bytes = ensure_storage_pdf_has_irs_cover(actual_key or clean_key, body_bytes)
+    lower_key = actual_key.lower()
+    
+    if "audit_certificate" in lower_key or "esignatures" in lower_key or "8879" in lower_key or "8878" in lower_key:
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
+            body_bytes = s3_obj["Body"].read()
+            
+            if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
+                print(f"[CORRUPT S3 FILE DETECTED] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
+                recovered = try_recover_resend_attachment_by_key(clean_key)
+                if recovered and len(recovered) > 100:
+                    body_bytes = recovered
+                    try:
+                        client.put_object(Bucket=bucket, Key=actual_key, Body=body_bytes)
+                    except Exception: pass
+                        
+            body_bytes = ensure_storage_pdf_has_irs_cover(actual_key, body_bytes)
+            
+            filename = os.path.basename(actual_key)
+            content_type = s3_obj.get("ContentType") or "application/pdf"
+            if lower_key.endswith(".pdf"):
+                content_type = "application/pdf"
+            elif lower_key.endswith(".png"):
+                content_type = "image/png"
+            elif lower_key.endswith(".jpg") or lower_key.endswith(".jpeg"):
+                content_type = "image/jpeg"
 
-        filename = os.path.basename(actual_key or clean_key)
-        headers = {
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-        return StreamingResponse(
-            io.BytesIO(body_bytes),
-            media_type=s3_obj.get("ContentType") or "application/octet-stream",
-            headers=headers
-        )
-    except Exception as e:
-        print(f"Error downloading file key '{key}' from storage: {e}. Attempting direct dynamic recovery...")
-        recovered = try_recover_resend_attachment_by_key(clean_key)
-        if recovered and len(recovered) > 100:
-            filename = os.path.basename(clean_key)
             headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Cache-Control": "public, max-age=3600"
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Frame-Options": "SAMEORIGIN",
+                "Access-Control-Allow-Origin": "*"
             }
             return StreamingResponse(
-                io.BytesIO(recovered),
-                media_type="application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream",
+                io.BytesIO(body_bytes),
+                media_type=content_type,
                 headers=headers
             )
-        raise HTTPException(status_code=500, detail=f"Failed to download file: {e}")
+        except Exception as e:
+            print(f"Error proxying compliance PDF '{actual_key}': {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch compliance PDF")
 
+    filename = os.path.basename(actual_key)
+    try:
+        presigned_url = client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': bucket,
+                'Key': actual_key,
+                'ResponseContentDisposition': f'inline; filename="{filename}"'
+            },
+            ExpiresIn=3600
+        )
+        
+        base_endpoint = os.environ.get("DO_SPACES_ENDPOINT", "https://nyc3.digitaloceanspaces.com")
+        cdn_endpoint = base_endpoint.replace("nyc3.digitaloceanspaces", "datalazocrm.nyc3.cdn.digitaloceanspaces")
+        if base_endpoint in presigned_url:
+            presigned_url = presigned_url.replace(f"{base_endpoint}/{bucket}", cdn_endpoint)
+
+        return RedirectResponse(url=presigned_url)
+    except Exception as e:
+        print(f"Error generating pre-signed URL for '{actual_key}': {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate file link")
+@app.get("/api/storage/download")
+async def download_file_proxy(key: str, request: Request):
+    """Generates a DO Spaces Pre-signed URL for downloading the file, falling back to proxy if dynamic recovery/compliance generation is needed."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if not key or not key.strip():
+        raise HTTPException(status_code=400, detail="Key parameter is required")
+
+    clean_key = clean_s3_key(key)
+    client, err = get_s3_client()
+    if not client:
+        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
+
+    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+    actual_key = clean_key
+
+    try:
+        client.head_object(Bucket=bucket, Key=actual_key)
+    except Exception:
+        filename = os.path.basename(clean_key)
+        parent_prefix = clean_key.split('/')[0] if '/' in clean_key else ""
+        actual_key = None
+        if parent_prefix:
+            try:
+                list_res = client.list_objects_v2(Bucket=bucket, Prefix=parent_prefix)
+                for item in list_res.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            except Exception: pass
+            
+        if not actual_key:
+            try:
+                list_all = client.list_objects_v2(Bucket=bucket, Prefix="VRT Services/", MaxKeys=200)
+                for item in list_all.get('Contents', []):
+                    item_key = item['Key']
+                    if os.path.basename(item_key).lower() == filename.lower():
+                        actual_key = item_key
+                        break
+            except Exception: pass
+
+        if not actual_key:
+            raise HTTPException(status_code=404, detail=f"File not found in storage: {clean_key}")
+        print(f"[SMART PDF FALLBACK SUCCESS] '{key}' -> '{actual_key}'")
+
+    lower_key = actual_key.lower()
+    
+    if "audit_certificate" in lower_key or "esignatures" in lower_key or "8879" in lower_key or "8878" in lower_key:
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
+            body_bytes = s3_obj["Body"].read()
+            
+            if len(body_bytes) < 500 and (body_bytes.strip().startswith(b"{") or body_bytes.strip().startswith(b"[")):
+                print(f"[CORRUPT S3 FILE DETECTED IN DOWNLOAD] Key '{clean_key}' contains JSON text. Triggering dynamic recovery...")
+                recovered = try_recover_resend_attachment_by_key(clean_key)
+                if recovered and len(recovered) > 100:
+                    body_bytes = recovered
+                    try:
+                        client.put_object(Bucket=bucket, Key=actual_key, Body=body_bytes)
+                    except Exception: pass
+                        
+            body_bytes = ensure_storage_pdf_has_irs_cover(actual_key, body_bytes)
+            
+            filename = os.path.basename(actual_key)
+            content_type = s3_obj.get("ContentType") or "application/pdf"
+            if lower_key.endswith(".pdf"):
+                content_type = "application/pdf"
+            elif lower_key.endswith(".png"):
+                content_type = "image/png"
+            elif lower_key.endswith(".jpg") or lower_key.endswith(".jpeg"):
+                content_type = "image/jpeg"
+
+            headers = {
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Frame-Options": "SAMEORIGIN",
+                "Access-Control-Allow-Origin": "*"
+            }
+            return StreamingResponse(
+                io.BytesIO(body_bytes),
+                media_type=content_type,
+                headers=headers
+            )
+        except Exception as e:
+            print(f"Error proxying compliance PDF '{actual_key}': {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch compliance PDF")
+
+    filename = os.path.basename(actual_key)
+    try:
+        presigned_url = client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': bucket,
+                'Key': actual_key,
+                'ResponseContentDisposition': f'attachment; filename="{filename}"'
+            },
+            ExpiresIn=3600
+        )
+        
+        base_endpoint = os.environ.get("DO_SPACES_ENDPOINT", "https://nyc3.digitaloceanspaces.com")
+        cdn_endpoint = base_endpoint.replace("nyc3.digitaloceanspaces", "datalazocrm.nyc3.cdn.digitaloceanspaces")
+        if base_endpoint in presigned_url:
+            presigned_url = presigned_url.replace(f"{base_endpoint}/{bucket}", cdn_endpoint)
+
+        return RedirectResponse(url=presigned_url)
+    except Exception as e:
+        print(f"Error generating pre-signed URL for '{actual_key}': {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate file link")
 @app.post("/api/customers/{customer_id}/storage/upload")
 async def upload_customer_storage_file(
     customer_id: str,
