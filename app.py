@@ -7007,10 +7007,6 @@ async def view_pdf_proxy(key: str, request: Request):
             ExpiresIn=3600
         )
         
-        base_endpoint = os.environ.get("DO_SPACES_ENDPOINT", "https://nyc3.digitaloceanspaces.com")
-        cdn_endpoint = base_endpoint.replace("nyc3.digitaloceanspaces", "datalazocrm.nyc3.cdn.digitaloceanspaces")
-        if base_endpoint in presigned_url:
-            presigned_url = presigned_url.replace(f"{base_endpoint}/{bucket}", cdn_endpoint)
 
         return RedirectResponse(url=presigned_url)
     except Exception as e:
@@ -7133,10 +7129,6 @@ async def download_file_proxy(key: str, request: Request):
             ExpiresIn=3600
         )
         
-        base_endpoint = os.environ.get("DO_SPACES_ENDPOINT", "https://nyc3.digitaloceanspaces.com")
-        cdn_endpoint = base_endpoint.replace("nyc3.digitaloceanspaces", "datalazocrm.nyc3.cdn.digitaloceanspaces")
-        if base_endpoint in presigned_url:
-            presigned_url = presigned_url.replace(f"{base_endpoint}/{bucket}", cdn_endpoint)
 
         return RedirectResponse(url=presigned_url)
     except Exception as e:
