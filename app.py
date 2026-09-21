@@ -12882,6 +12882,12 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
         try:
             s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
             file_bytes = s3_obj["Body"].read()
+            
+            # Prevent OOM (Out Of Memory) crashes by skipping OCR for massive files
+            if len(file_bytes) > 3 * 1024 * 1024:
+                print(f"[TAX OCR SKIP] File '{clean_key}' is too large ({len(file_bytes)} bytes). Skipping OCR to prevent OOM crash.")
+                return ""
+                
             cache_key = (file_key, len(file_bytes))
             if cache_key in _OCR_TEXT_CACHE:
                 return _OCR_TEXT_CACHE[cache_key]
@@ -12900,6 +12906,9 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
                     s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_s3_key(fb))
                     file_bytes = s3_obj["Body"].read()
                     if file_bytes:
+                        if len(file_bytes) > 3 * 1024 * 1024:
+                            print(f"[TAX OCR SKIP] Fallback '{fb}' is too large ({len(file_bytes)} bytes).")
+                            return ""
                         cache_key = (file_key, len(file_bytes))
                         if cache_key in _OCR_TEXT_CACHE:
                             return _OCR_TEXT_CACHE[cache_key]
@@ -13239,12 +13248,15 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                     print(f"[TAX CLASSIFY] Renamed in-place in Inbox: '{clean_key}' -> '{new_file_key}'")
 
                     # Keep DB communications in sync so the Inbox UI reflects the renamed file
+                    sync_conn = None
                     try:
                         sync_conn = get_db_connection()
                         sync_file_rename_in_communications(sync_conn, customer_id, clean_key, new_file_key)
-                        sync_conn.close()
                     except Exception as sync_err:
                         print(f"[TAX CLASSIFY DB SYNC WARNING] {sync_err}")
+                    finally:
+                        if sync_conn:
+                            sync_conn.close()
 
                 except Exception as r_err:
                     print(f"[TAX CLASSIFY S3 RENAME WARNING] {r_err}")
@@ -13263,6 +13275,7 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
         req_id = None
         matched_at = None
         if doc_type:
+            _conn3 = None
             try:
                 _conn3 = get_db_connection()
                 with _conn3.cursor() as _c3:
@@ -13295,47 +13308,53 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
                         req_id = rr[0]
                         tax_year = rr[1]  # align tax year to matched requirement
                         matched_at = datetime.datetime.now()
-                _conn3.close()
             except Exception as e:
                 print(f"[TAX REQ MATCH ERROR] {e}")
+            finally:
+                if _conn3:
+                    _conn3.close()
 
         # Record in tax_return_received_docs (Upsert pattern)
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id FROM tax_return_received_docs
-                WHERE customer_id = %s AND (file_key = %s OR file_key = %s OR original_filename = %s OR renamed_filename = %s);
-            """, (customer_id, fk_check, file_key, original_filename, renamed_filename))
-            existing = cur.fetchone()
-            if existing:
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE tax_return_received_docs SET
-                        requirement_id = %s,
-                        tax_year = %s,
-                        renamed_filename = %s,
-                        file_key = %s,
-                        doc_type_detected = %s,
-                        ocr_confidence = %s,
-                        status = %s,
-                        matched_at = %s
-                    WHERE id = %s;
-                """, (
-                    req_id, tax_year, renamed_filename, fk_check, doc_type or "UNKNOWN",
-                    round(confidence, 3), status, matched_at, existing[0]
-                ))
-            else:
-                cur.execute("""
-                    INSERT INTO tax_return_received_docs
-                        (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
-                         file_key, doc_type_detected, ocr_confidence, status, matched_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                """, (
-                    customer_id, req_id, tax_year, original_filename, renamed_filename,
-                    fk_check, doc_type or "UNKNOWN", round(confidence, 3), status,
-                    matched_at
-                ))
-            conn.commit()
-        conn.close()
+                    SELECT id FROM tax_return_received_docs
+                    WHERE customer_id = %s AND (file_key = %s OR file_key = %s OR original_filename = %s OR renamed_filename = %s);
+                """, (customer_id, fk_check, file_key, original_filename, renamed_filename))
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute("""
+                        UPDATE tax_return_received_docs SET
+                            requirement_id = %s,
+                            tax_year = %s,
+                            renamed_filename = %s,
+                            file_key = %s,
+                            doc_type_detected = %s,
+                            ocr_confidence = %s,
+                            status = %s,
+                            matched_at = %s
+                        WHERE id = %s;
+                    """, (
+                        req_id, tax_year, renamed_filename, fk_check, doc_type or "UNKNOWN",
+                        round(confidence, 3), status, matched_at, existing[0]
+                    ))
+                else:
+                    cur.execute("""
+                        INSERT INTO tax_return_received_docs
+                            (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
+                             file_key, doc_type_detected, ocr_confidence, status, matched_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """, (
+                        customer_id, req_id, tax_year, original_filename, renamed_filename,
+                        fk_check, doc_type or "UNKNOWN", round(confidence, 3), status,
+                        matched_at
+                    ))
+                conn.commit()
+        finally:
+            if conn:
+                conn.close()
 
         # Recalculate completion
         recalculate_tax_docs_status(customer_id, tax_year)
