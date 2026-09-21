@@ -1340,18 +1340,25 @@
             btn.disabled = false;
             btn.innerHTML = '🚀 Upload to Inbox Folder';
 
-            if (successCount > 0) {
+            if (successCount > 0 && errors.length === 0) {
                 statusEl.style.background = 'rgba(16, 185, 129, 0.15)';
                 statusEl.style.color = '#34d399';
                 statusEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
                 statusEl.innerHTML = `🎉 Successfully uploaded ${successCount} file(s) to your <strong>Inbox/</strong> folder!`;
                 PORTAL_SELECTED_FILES = [];
                 renderPortalFileList();
+            } else if (successCount > 0 && errors.length > 0) {
+                statusEl.style.background = 'rgba(250, 204, 21, 0.15)';
+                statusEl.style.color = '#facc15';
+                statusEl.style.border = '1px solid rgba(250, 204, 21, 0.3)';
+                statusEl.innerHTML = `⚠️ Uploaded ${successCount} file(s), but ${errors.length} failed:<br><span style="font-size:0.75rem; color:#f87171;">${errors.join('<br>')}</span>`;
+                PORTAL_SELECTED_FILES = []; // clear successful ones, or keep failed? Let's just clear for now, or maybe not.
+                renderPortalFileList();
             } else {
                 statusEl.style.background = 'rgba(244, 63, 94, 0.15)';
                 statusEl.style.color = '#fb7185';
                 statusEl.style.border = '1px solid rgba(244, 63, 94, 0.3)';
-                statusEl.innerHTML = `❌ Failed to upload files: ${errors.join(', ')}`;
+                statusEl.innerHTML = `❌ Failed to upload files:<br><span style="font-size:0.75rem;">${errors.join('<br>')}</span>`;
             }
         };
     </script>
