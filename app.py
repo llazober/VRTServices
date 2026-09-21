@@ -4011,7 +4011,7 @@ async def portal_upload_file(
         return {
             "status": "ok",
             "message": f"File '{filename}' uploaded successfully to {folder_name} folder. Email history logged.",
-            "file_key": final_key,
+            "file_key": file_key,
             "customer_name": cust.get("legal_name")
         }
     except HTTPException:
