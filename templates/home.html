@@ -1329,11 +1329,26 @@
                         method: 'POST',
                         body: formData
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                    const contentType = res.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                    } else {
+                        const text = await res.text();
+                        if (!res.ok) {
+                            if (res.status === 413) throw new Error('File is too large for the server (Nginx 413 limit)');
+                            if (res.status === 429) throw new Error('Rate limited by Cloudflare. Please wait.');
+                            throw new Error(`Server Error ${res.status}`);
+                        }
+                    }
                     successCount++;
                 } catch (err) {
                     errors.push(`${file.name}: ${err.message}`);
+                }
+                
+                // Add a small delay between rapid uploads to prevent Cloudflare/Traefik from blocking us (429 Rate Limit)
+                if (i < PORTAL_SELECTED_FILES.length - 1) {
+                    await new Promise(r => setTimeout(r, 800));
                 }
             }
 
