@@ -12813,7 +12813,6 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "PRIOR-RETURN", "keywords": ["u.s. individual income tax return", "form 1040", "adjusted gross income", "taxable income", "filing status"], "min_matches": 2},
     {"doc_type": "W-9",          "keywords": ["w-9", "w9", "form w-9", "request for taxpayer identification number"], "min_matches": 1},
     {"doc_type": "W-4",          "keywords": ["w-4", "w4", "form w-4", "employee's withholding certificate", "withholding certificate"], "min_matches": 1},
-    {"doc_type": "FORM",         "keywords": ["form"], "min_matches": 1},
 ]
 
 _OCR_TEXT_CACHE = {}  # (file_key, file_size) -> text
@@ -12994,7 +12993,19 @@ def _detect_tax_doc_type(ocr_text: str) -> tuple[str | None, float]:
                 best_conf = conf
                 best_type = pattern["doc_type"]
 
-    return best_type, best_conf
+    if best_type:
+        return best_type, best_conf
+
+    # 3. Dynamic Form Extraction Catch-All
+    # If no specific pattern matched, dynamically extract any text following "form "
+    dyn_match = re.search(r'\bform\s+([a-z0-9]{2,8}(?:-[a-z0-9]{1,4})?)\b', clean_ocr)
+    if dyn_match:
+        extracted = dyn_match.group(1).upper()
+        # Filter out common English stop words that might follow "form" in a sentence
+        if extracted not in ["OF", "TO", "FOR", "IN", "ON", "THE", "IS", "YOUR", "A", "AN", "THIS", "MUST", "AND", "OR"]:
+            return extracted, 0.85
+
+    return None, 0.0
 
 
 def recalculate_tax_docs_status(customer_id: int, tax_year: int):
