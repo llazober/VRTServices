@@ -12812,6 +12812,7 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "K-1",          "keywords": ["schedule k-1", "partner's share", "shareholder's share", "form 1065", "form 1120-s", "form 1041"], "min_matches": 1},
     {"doc_type": "PRIOR-RETURN", "keywords": ["u.s. individual income tax return", "form 1040", "adjusted gross income", "taxable income", "filing status"], "min_matches": 2},
     {"doc_type": "W-9",          "keywords": ["w-9", "w9", "form w-9", "request for taxpayer identification number"], "min_matches": 1},
+    {"doc_type": "W-4",          "keywords": ["w-4", "w4", "form w-4", "employee's withholding certificate", "withholding certificate"], "min_matches": 1},
     {"doc_type": "FORM",         "keywords": ["form"], "min_matches": 1},
 ]
 
@@ -13107,6 +13108,7 @@ def _detect_doc_type_from_filename(filename: str) -> str | None:
         ("1095-C", ["1095-c", "1095c"]),
         ("K-1", ["k-1", "k1", "schedule-k1"]),
         ("W-9", ["w-9", "w9", "w_9", "form-w9"]),
+        ("W-4", ["w-4", "w4", "w_4", "form-w4"]),
         ("FORM", ["form"])
     ]
 
