@@ -3922,55 +3922,6 @@ def send_portal_file_upload_notification(cust: dict, filename: str, subfolder: s
         return False
 
 
-def process_portal_upload_background(
-    bucket: str,
-    file_key: str,
-    file_bytes: bytes,
-    cust: dict,
-    filename: str,
-    folder_name: str
-):
-    """Handles S3 upload and PDF conversion in a background thread to prevent Cloudflare 524 timeouts."""
-    try:
-        client, err = get_s3_client()
-        if not client:
-            print(f"[BACKGROUND UPLOAD ERR] S3 client failed for {filename}")
-            return
-
-        # Synchronous, blocking S3 upload
-        client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
-
-        # Auto-convert to PDF & move raw original to Raw_Originals/ (Option C)
-        pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
-        final_key = pdf_fk or file_key
-
-        # Send email & log to customer history email log
-        send_portal_file_upload_notification(cust, filename, folder_name, file_key=final_key)
-
-        # Auto-match & classify tax document
-        try:
-            check_and_match_tax_requirement_on_rename(cust["id"], "", final_key, filename)
-            
-            # Note: We can't safely call an async function directly from a sync background task without a running loop, 
-            # so we'll spin up a quick asyncio loop to handle the DB classification.
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-            loop.run_until_complete(classify_and_rename_tax_document_async(
-                customer_id=cust["id"],
-                file_key=final_key,
-                original_filename=filename
-            ))
-        except Exception as _cl_err:
-            print(f"[PORTAL AUTO-CLASSIFY ERR] {filename}: {_cl_err}")
-            
-    except Exception as e:
-        print(f"[BACKGROUND UPLOAD ERR] Error processing {filename}: {e}")
-
 @app.post("/api/portal/upload")
 async def portal_upload_file(
     request: Request,
@@ -4042,22 +3993,25 @@ async def portal_upload_file(
         bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
         file.file.seek(0)
         file_bytes = await file.read()
-        
-        # Offload S3 upload to prevent Cloudflare 524 Timeout
+
+        # Send email & log to customer history email log
+        send_portal_file_upload_notification(cust, filename, folder_name, file_key=file_key)
+
+        # Delegate ALL slow operations (S3 upload, OCR, PDF conversion) to background task
+        # so we instantly return a response to the UI and avoid 524 Timeouts!
         background_tasks.add_task(
-            process_portal_upload_background,
-            bucket=bucket,
-            file_key=file_key,
-            file_bytes=file_bytes,
-            cust=cust,
-            filename=filename,
-            folder_name=folder_name
+            process_portal_upload_background_safely,
+            cust["id"],
+            bucket,
+            file_key,
+            file_bytes,
+            filename
         )
 
         return {
             "status": "ok",
-            "message": f"File '{filename}' received and is processing in the background.",
-            "file_key": file_key,
+            "message": f"File '{filename}' uploaded successfully to {folder_name} folder. Email history logged.",
+            "file_key": final_key,
             "customer_name": cust.get("legal_name")
         }
     except HTTPException:
@@ -7375,107 +7329,105 @@ def check_and_match_tax_requirement_on_rename(customer_id: int, old_key: str, ne
 
         clean_name = new_name.lower().replace("_", "-").replace(" ", "-")
 
-            conn = None
-            try:
-                conn = get_db_connection()
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    # 1. Fetch requirements for customer across active tax years
+        doc_type = None
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch requirements for customer across active tax years
+            cur.execute("""
+                SELECT DISTINCT doc_type FROM tax_return_requirements
+                WHERE customer_id = %s AND is_required = TRUE;
+            """, (customer_id,))
+            req_rows = cur.fetchall()
+            req_types = [r["doc_type"] for r in req_rows]
+
+            # Match clean_name against customer's required doc types
+            for dt in req_types:
+                dt_clean = dt.lower().replace("_", "-").replace(" ", "-")
+                if dt_clean in clean_name or dt_clean.replace("-", "") in clean_name.replace("-", ""):
+                    doc_type = dt
+                    break
+
+            # 2. Check standard doc type patterns if not found in specific requirements
+            if not doc_type:
+                doc_type = _detect_doc_type_from_filename(new_name)
+
+            # 3. If doc_type is detected, match to an unfulfilled requirement
+            if doc_type:
+                cur.execute("""
+                    SELECT r.id, r.tax_year FROM tax_return_requirements r
+                    LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
+                    WHERE r.customer_id = %s AND r.tax_year = %s
+                      AND UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
+                      AND r.is_required = TRUE AND rd.id IS NULL
+                    ORDER BY r.id LIMIT 1;
+                """, (customer_id, tax_year, doc_type))
+                rr = cur.fetchone()
+                if not rr:
                     cur.execute("""
-                        SELECT DISTINCT doc_type FROM tax_return_requirements
-                        WHERE customer_id = %s AND is_required = TRUE;
-                    """, (customer_id,))
-                    req_rows = cur.fetchall()
-                    req_types = [r["doc_type"] for r in req_rows]
+                        SELECT r.id, r.tax_year FROM tax_return_requirements r
+                        LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
+                        WHERE r.customer_id = %s
+                          AND UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
+                          AND r.is_required = TRUE AND rd.id IS NULL
+                        ORDER BY r.id LIMIT 1;
+                    """, (customer_id, doc_type))
+                    rr = cur.fetchone()
+                if not rr:
+                    cur.execute("""
+                        SELECT id, tax_year FROM tax_return_requirements
+                        WHERE customer_id = %s
+                          AND UPPER(REPLACE(REPLACE(doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
+                          AND is_required = TRUE
+                        ORDER BY id LIMIT 1;
+                    """, (customer_id, doc_type))
+                    rr = cur.fetchone()
 
-                    # Match clean_name against customer's required doc types
-                    for dt in req_types:
-                        dt_clean = dt.lower().replace("_", "-").replace(" ", "-")
-                        if dt_clean in clean_name or dt_clean.replace("-", "") in clean_name.replace("-", ""):
-                            doc_type = dt
-                            break
+                req_id = rr["id"] if rr else None
+                if rr and rr.get("tax_year"):
+                    tax_year = rr["tax_year"]
 
-                    # 2. Check standard doc type patterns if not found in specific requirements
-                    if not doc_type:
-                        doc_type = _detect_doc_type_from_filename(new_name)
+                matched_at = datetime.datetime.now()
+                status = "Matched" if req_id else "Needs Review"
+                original_fn = os.path.basename(old_key) if old_key else new_name
+                clean_new = clean_s3_key(new_key)
+                clean_old = clean_s3_key(old_key) if old_key else clean_new
 
-                    # 3. If doc_type is detected, match to an unfulfilled requirement
-                    if doc_type:
-                        cur.execute("""
-                            SELECT r.id, r.tax_year FROM tax_return_requirements r
-                            LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
-                            WHERE r.customer_id = %s AND r.tax_year = %s
-                              AND UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
-                              AND r.is_required = TRUE AND rd.id IS NULL
-                            ORDER BY r.id LIMIT 1;
-                        """, (customer_id, tax_year, doc_type))
-                        rr = cur.fetchone()
-                        if not rr:
-                            cur.execute("""
-                                SELECT r.id, r.tax_year FROM tax_return_requirements r
-                                LEFT JOIN tax_return_received_docs rd ON rd.requirement_id = r.id AND rd.status = 'Matched'
-                                WHERE r.customer_id = %s
-                                  AND UPPER(REPLACE(REPLACE(r.doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
-                                  AND r.is_required = TRUE AND rd.id IS NULL
-                                ORDER BY r.id LIMIT 1;
-                            """, (customer_id, doc_type))
-                            rr = cur.fetchone()
-                        if not rr:
-                            cur.execute("""
-                                SELECT id, tax_year FROM tax_return_requirements
-                                WHERE customer_id = %s
-                                  AND UPPER(REPLACE(REPLACE(doc_type, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''))
-                                  AND is_required = TRUE
-                                ORDER BY id LIMIT 1;
-                            """, (customer_id, doc_type))
-                            rr = cur.fetchone()
+                cur.execute("""
+                    SELECT id FROM tax_return_received_docs
+                    WHERE customer_id = %s AND (
+                        file_key = %s OR file_key = %s OR file_key = %s
+                        OR renamed_filename = %s OR original_filename = %s OR original_filename = %s
+                    );
+                """, (customer_id, new_key, old_key, clean_new, new_name, new_name, original_fn))
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute("""
+                        UPDATE tax_return_received_docs SET
+                            requirement_id = %s,
+                            tax_year = %s,
+                            renamed_filename = %s,
+                            file_key = %s,
+                            doc_type_detected = %s,
+                            status = %s,
+                            matched_at = %s
+                        WHERE id = %s;
+                    """, (req_id, tax_year, new_name, clean_new, doc_type, status, matched_at, existing["id"]))
+                else:
+                    cur.execute("""
+                        INSERT INTO tax_return_received_docs
+                            (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
+                             file_key, doc_type_detected, ocr_confidence, status, matched_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """, (customer_id, req_id, tax_year, original_fn, new_name, clean_new, doc_type, 1.0, status, matched_at))
+                conn.commit()
 
-                        req_id = rr["id"] if rr else None
-                        if rr and rr.get("tax_year"):
-                            tax_year = rr["tax_year"]
+                # Recalculate completion status
+                recalculate_tax_docs_status(customer_id, tax_year)
+                print(f"[RENAME REQ MATCH SUCCESS] Customer {customer_id} file '{new_name}' -> req_id={req_id} ({doc_type}) for tax_year {tax_year}")
 
-                        matched_at = datetime.datetime.now()
-                        status = "Matched" if req_id else "Needs Review"
-                        original_fn = os.path.basename(old_key) if old_key else new_name
-                        clean_new = clean_s3_key(new_key)
-                        clean_old = clean_s3_key(old_key) if old_key else clean_new
-
-                        cur.execute("""
-                            SELECT id FROM tax_return_received_docs
-                            WHERE customer_id = %s AND (
-                                file_key = %s OR file_key = %s OR file_key = %s
-                                OR renamed_filename = %s OR original_filename = %s OR original_filename = %s
-                            );
-                        """, (customer_id, new_key, old_key, clean_new, new_name, new_name, original_fn))
-                        existing = cur.fetchone()
-                        if existing:
-                            cur.execute("""
-                                UPDATE tax_return_received_docs SET
-                                    requirement_id = %s,
-                                    tax_year = %s,
-                                    renamed_filename = %s,
-                                    file_key = %s,
-                                    doc_type_detected = %s,
-                                    status = %s,
-                                    matched_at = %s
-                                WHERE id = %s;
-                            """, (req_id, tax_year, new_name, clean_new, doc_type, status, matched_at, existing["id"]))
-                        else:
-                            cur.execute("""
-                                INSERT INTO tax_return_received_docs
-                                    (customer_id, requirement_id, tax_year, original_filename, renamed_filename,
-                                     file_key, doc_type_detected, ocr_confidence, status, matched_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                            """, (customer_id, req_id, tax_year, original_fn, new_name, clean_new, doc_type, 1.0, status, matched_at))
-                        conn.commit()
-
-                        # Recalculate completion status
-                        recalculate_tax_docs_status(customer_id, tax_year)
-                        print(f"[RENAME REQ MATCH SUCCESS] Customer {customer_id} file '{new_name}' -> req_id={req_id} ({doc_type}) for tax_year {tax_year}")
-            except Exception as e:
-                print(f"[RENAME REQ MATCH ERROR] Customer {customer_id} file '{new_name}': {e}")
-            finally:
-                if conn:
-                    conn.close()
+        conn.close()
+    except Exception as e:
+        print(f"[RENAME REQ MATCH ERROR] Customer {customer_id} file '{new_name}': {e}")
 
 
 @app.post("/api/customers/{customer_id}/storage/rename-file")
@@ -12882,12 +12834,9 @@ def _ocr_pdf_to_text_for_classification(file_key: str) -> str:
         try:
             s3_obj = client_s3.get_object(Bucket=bucket, Key=clean_key)
             file_bytes = s3_obj["Body"].read()
-            
-            # Prevent OOM (Out Of Memory) crashes by skipping OCR for massive files
             if len(file_bytes) > 3 * 1024 * 1024:
-                print(f"[TAX OCR SKIP] File '{clean_key}' is too large ({len(file_bytes)} bytes). Skipping OCR to prevent OOM crash.")
+                print(f"[TAX OCR SKIP] File '{clean_key}' is too large ({len(file_bytes)} bytes).")
                 return ""
-                
             cache_key = (file_key, len(file_bytes))
             if cache_key in _OCR_TEXT_CACHE:
                 return _OCR_TEXT_CACHE[cache_key]
@@ -14256,3 +14205,46 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True, reload_includes=["*.py", "*.html", "*.js"])
 
+
+def process_portal_upload_background_safely(customer_id: int, bucket: str, file_key: str, file_bytes: bytes, filename: str):
+    import asyncio
+    try:
+        from app import get_s3_client, process_inbox_file_pdf_conversion, get_db_connection, check_and_match_tax_requirement_on_rename, classify_and_rename_tax_document_async
+        client, err = get_s3_client()
+        if client:
+            client.put_object(Bucket=bucket, Key=file_key, Body=file_bytes, ACL='private')
+            print(f'[BACKGROUND UPLOAD SUCCESS] {filename} -> {file_key}')
+
+            pdf_fk, raw_fk = process_inbox_file_pdf_conversion(client, bucket, file_key, file_bytes=file_bytes)
+            final_key = pdf_fk or file_key
+
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute('''
+                        INSERT INTO customer_communications
+                        (customer_id, type, subject, details, direction, user_id)
+                        VALUES (%s, 'PORTAL_UPLOAD', %s, %s, 'INBOUND', NULL)
+                    ''', (customer_id, f'Uploaded File: {filename}', f'S3 Key: {final_key}'))
+                    conn.commit()
+            except Exception as e:
+                print(f'[TAX PORTAL DB LOG ERR] {e}')
+            finally:
+                if conn:
+                    conn.close()
+
+            try:
+                check_and_match_tax_requirement_on_rename(customer_id, '', final_key, filename)
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                loop.run_until_complete(classify_and_rename_tax_document_async(
+                    customer_id=customer_id, file_key=final_key, original_filename=filename
+                ))
+            except Exception as _cl_err:
+                print(f'[TAX ON RENAME CLASSIFY ERR] {_cl_err}')
+    except Exception as e:
+        print(f'[BACKGROUND TASK FATAL ERR] {e}')
