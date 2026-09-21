@@ -12808,7 +12808,7 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "1099-R",    "keywords": ["1099-r", "distributions from pensions", "annuities", "gross distribution", "ira/sep/simple"], "min_matches": 1},
     {"doc_type": "1099-G",    "keywords": ["1099-g", "certain government payments", "unemployment compensation", "state income tax refunds"], "min_matches": 1},
     {"doc_type": "SSA-1099",  "keywords": ["ssa-1099", "ssa 1099", "form ssa-1099", "social security benefit", "benefit statement", "net benefits", "social security administration", "ssa-1099-sm", "benefits paid"], "min_matches": 1},
-    {"doc_type": "1098",      "keywords": ["1098", "mortgage interest statement", "mortgage interest received", "outstanding mortgage principal"], "min_matches": 1},
+    {"doc_type": "1098",      "keywords": ["1098", "mortgage interest statement", "mortgage interest received", "outstanding mortgage principal"], "min_matches": 2},
     {"doc_type": "1098-T",    "keywords": ["1098-t", "tuition statement", "student", "qualified tuition", "scholarships"], "min_matches": 2},
     {"doc_type": "1098-E",    "keywords": ["1098-e", "student loan interest statement", "student loan interest"], "min_matches": 1},
     {"doc_type": "1099-B",    "keywords": ["1099-b", "proceeds from broker", "brokerage", "proceeds from sales", "cost basis"], "min_matches": 1},
