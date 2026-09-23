@@ -7743,6 +7743,54 @@ async def delete_customer_storage_folder(customer_id: str, prefix: str, request:
 
 
 # ── PDF Conversion & Inbox Auto-Processing Utilities ──────────────────────
+def convert_office_bytes_to_pdf(filename: str, file_bytes: bytes) -> tuple[str, bytes]:
+    """Converts .pages, .docx, .doc, .odt, .rtf bytes to PDF using LibreOffice headless."""
+    import tempfile, subprocess, os, sys, glob
+
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+    pdf_filename = f"{base_name}.pdf"
+    ext = os.path.splitext(filename)[1].lower()
+
+    soffice_bin = os.environ.get("SOFFICE_PATH")
+    if not soffice_bin:
+        if sys.platform == "win32":
+            win_paths = [
+                r"C:\Program Files\LibreOffice\program\soffice.exe",
+                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+            ]
+            soffice_bin = next((p for p in win_paths if os.path.exists(p)), "soffice")
+        else:
+            soffice_bin = "soffice"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = os.path.join(tmpdir, filename)
+        with open(input_path, "wb") as f:
+            f.write(file_bytes)
+
+        cmd = [
+            soffice_bin,
+            "--headless",
+            "--convert-to", "pdf",
+            "--outdir", tmpdir,
+            input_path
+        ]
+        print(f"--> [app.py] Converting '{filename}' ({ext}) to PDF via LibreOffice...")
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+
+        expected_pdf = os.path.join(tmpdir, pdf_filename)
+        if not os.path.exists(expected_pdf):
+            pdfs = glob.glob(os.path.join(tmpdir, "*.pdf"))
+            if pdfs:
+                expected_pdf = pdfs[0]
+            else:
+                raise RuntimeError(f"LibreOffice failed to convert '{filename}': {res.stderr}")
+
+        with open(expected_pdf, "rb") as f_pdf:
+            pdf_bytes = f_pdf.read()
+
+        return pdf_filename, pdf_bytes
+
+
 def convert_image_or_text_bytes_to_pdf(filename: str, file_bytes: bytes) -> tuple[str, bytes]:
     """
     Converts image (JPG, PNG, WEBP, BMP, TIFF, HEIC) or text file bytes into a clean PDF byte stream.
@@ -7755,6 +7803,9 @@ def convert_image_or_text_bytes_to_pdf(filename: str, file_bytes: bytes) -> tupl
     base_name = os.path.splitext(os.path.basename(filename))[0]
     pdf_filename = f"{base_name}.pdf"
     ext = os.path.splitext(filename)[1].lower()
+
+    if ext in ['.pages', '.docx', '.doc', '.odt', '.rtf', '.pptx', '.ppt', '.xlsx', '.xls']:
+        return convert_office_bytes_to_pdf(filename, file_bytes)
 
     if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.heic']:
         try:
