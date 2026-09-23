@@ -6146,6 +6146,23 @@
             currentStorageCustomerId = customerId;
             currentStoragePrefix = '';
 
+            // Hide/Show Send Email and Workflow Checklist buttons based on CUT-0000
+            let custNum = '';
+            let cust = (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords))
+                ? currentCustomerRecords.find(c => c.id == customerId)
+                : null;
+            if (!cust && typeof rawWorkloadData !== 'undefined' && Array.isArray(rawWorkloadData)) {
+                cust = rawWorkloadData.find(w => w.customer_id == customerId || w.id == customerId);
+            }
+            if (cust) {
+                custNum = cust.custumer_number || cust.customer_number || ('CUST-' + customerId);
+            }
+            const hideButtons = custNum === 'CUT-0000' || custNum === 'CUST-0000' || custNum === 'CUST-000';
+            const emailBtn = document.getElementById('storageSendEmailBtn');
+            const workflowBtn = document.getElementById('storageWorkflowBtn');
+            if (emailBtn) emailBtn.style.display = hideButtons ? 'none' : 'inline-block';
+            if (workflowBtn) workflowBtn.style.display = hideButtons ? 'none' : 'inline-block';
+
             // Get or find the modal — it is appended to body at page load
             let modal = document.getElementById('customerStorageModal');
             if (!modal) {
@@ -8925,7 +8942,8 @@
                 <button id="storageBatchConvertBtn" onclick="batchConvertInboxToPdf()" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Convert all non-PDF files in this directory to PDF">📄 Convert Inbox to PDF</button>
                 <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
-                <button onclick="openSendCustomerEmailModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Send Email Message to Customer">📧 Send Email</button>
+                <button id="storageSendEmailBtn" onclick="openSendCustomerEmailModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Send Email Message to Customer">📧 Send Email</button>
+                <button id="storageWorkflowBtn" onclick="openCustomerChecklistModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Open Workflow Checklist">📋 Workflow Checklist</button>
             </div>
         </div>
         <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
