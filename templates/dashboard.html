@@ -5245,22 +5245,48 @@
             try {
                 const [mapRes, custRes] = await Promise.all([
                     fetch(`/api/clients/parent-mappings?parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`).catch(() => null),
-                    fetch('/api/customers').catch(() => null)
+                    fetch('/api/customers?business_only=true').catch(() => null)
                 ]);
 
                 let clientList = [];
-
-                if (mapRes && mapRes.ok) {
-                    const data = await mapRes.json();
-                    currentParentMappings = data.mappings || [];
-                    clientList.push(...currentParentMappings.map(m => m.clientName.trim()));
-                }
+                let excludedNames = new Set();
+                let businessCustomerNames = [];
 
                 if (custRes && custRes.ok) {
                     const custData = await custRes.json();
                     const customers = custData.customers || [];
-                    clientList.push(...customers.map(c => (c.legal_name || '').trim()).filter(Boolean));
+                    customers.forEach(c => {
+                        const name = (c.legal_name || c.display_name || '').trim();
+                        if (!name) return;
+
+                        const cType = (c.customer_type || c.type || '').trim().toLowerCase();
+                        const fType = (c.form_8879_type || '').trim().toLowerCase();
+
+                        const isIndivOrJoint = 
+                            cType === 'individual' || cType === 'join account' || cType === 'joint account' ||
+                            cType.startsWith('individual') || cType.startsWith('join') ||
+                            fType.includes('individual 1040') || fType.includes('joint account 1040');
+
+                        if (isIndivOrJoint) {
+                            excludedNames.add(name.toLowerCase());
+                        } else {
+                            businessCustomerNames.push(name);
+                        }
+                    });
                 }
+
+                if (mapRes && mapRes.ok) {
+                    const data = await mapRes.json();
+                    currentParentMappings = data.mappings || [];
+                    currentParentMappings.forEach(m => {
+                        const cName = (m.clientName || '').trim();
+                        if (cName && !excludedNames.has(cName.toLowerCase())) {
+                            clientList.push(cName);
+                        }
+                    });
+                }
+
+                clientList.push(...businessCustomerNames);
 
                 clientList = Array.from(new Set(clientList)).filter(Boolean);
                 if (clientList.length === 0) clientList = [CURRENT_PARENT_NAME];
@@ -5269,7 +5295,7 @@
                     const sel = document.getElementById(id);
                     if (sel) {
                         const curVal = sel.value;
-                        sel.innerHTML = clientList.map(n => `<option value="${n}">${n}</option>`).join('');
+                        sel.innerHTML = clientList.map(n => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
                         if (curVal && clientList.includes(curVal)) sel.value = curVal;
                         else sel.value = clientList[0];
                     }
@@ -5477,9 +5503,16 @@
 
             selectEl.innerHTML = '<option value="" disabled selected>Loading customers from CRM...</option>';
             try {
-                const res = await fetch('/api/customers');
+                const res = await fetch('/api/customers?business_only=true');
                 const data = await res.json();
-                const customers = data.customers || [];
+                const rawCustomers = data.customers || [];
+                const customers = rawCustomers.filter(c => {
+                    const cType = (c.customer_type || c.type || '').trim().toLowerCase();
+                    const fType = (c.form_8879_type || '').trim().toLowerCase();
+                    return !(cType === 'individual' || cType === 'join account' || cType === 'joint account' ||
+                             cType.startsWith('individual') || cType.startsWith('join') ||
+                             fType.includes('individual 1040') || fType.includes('joint account 1040'));
+                });
 
                 let optionsHtml = '<option value="" disabled selected>-- Select a Customer --</option>';
                 customers.forEach(c => {

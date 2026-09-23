@@ -6394,7 +6394,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
 
 
 @app.get("/api/customers")
-async def get_customers(request: Request, query: str = "", parentName: str = ""):
+async def get_customers(request: Request, query: str = "", parentName: str = "", business_only: bool = False):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6422,6 +6422,9 @@ async def get_customers(request: Request, query: str = "", parentName: str = "")
                 else:
                     where_clauses.append("(LOWER(COALESCE(parent_name, '')) = LOWER(%s) OR custumer_number = 'CUST-0000')")
                     params.append(target_parent)
+
+            if business_only:
+                where_clauses.append("(LOWER(COALESCE(customer_type, '')) NOT IN ('individual', 'join account', 'joint account') AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'individual%%' AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'join%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%individual 1040%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%joint account 1040%%')")
 
             if query.strip():
                 q = f"%{query.strip()}%"
