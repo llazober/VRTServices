@@ -4,6 +4,8 @@ import re
 import glob
 import statistics
 import json
+import subprocess
+import shutil
 import pandas as pd
 import fitz  # PyMuPDF
 from google.cloud import vision
@@ -179,7 +181,63 @@ def extract_business_name(words):
     # The first candidate is the business name!
     return address_candidates[0]['text']
 
+def convert_document_to_pdf(input_path, output_dir):
+    """
+    Converts non-PDF document formats (.pages, .docx, .doc, .odt, .rtf) to PDF using LibreOffice.
+    Returns the path to the converted PDF file.
+    """
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext == ".pdf":
+        return input_path
+
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Try finding soffice binary across platforms
+    soffice_bin = os.environ.get("SOFFICE_PATH")
+    if not soffice_bin:
+        if sys.platform == "win32":
+            win_paths = [
+                r"C:\Program Files\LibreOffice\program\soffice.exe",
+                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+            ]
+            soffice_bin = next((p for p in win_paths if os.path.exists(p)), "soffice")
+        else:
+            soffice_bin = "soffice"
+
+    cmd = [
+        soffice_bin,
+        "--headless",
+        "--convert-to", "pdf",
+        "--outdir", output_dir,
+        input_path
+    ]
+    
+    print(f"--> Converting {input_path} ({ext}) to PDF via LibreOffice...")
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+        if res.returncode != 0:
+            print(f"Warning: LibreOffice conversion exit code {res.returncode}: {res.stderr}")
+    except Exception as e:
+        print(f"ERROR executing LibreOffice conversion: {e}")
+        raise
+
+    base_name = os.path.splitext(os.path.basename(input_path))[0]
+    expected_pdf = os.path.join(output_dir, f"{base_name}.pdf")
+    if os.path.exists(expected_pdf):
+        return expected_pdf
+
+    # Fallback search for any newly created pdf in output_dir
+    candidates = glob.glob(os.path.join(output_dir, "*.pdf"))
+    if candidates:
+        return candidates[0]
+
+    raise FileNotFoundError(f"LibreOffice failed to generate PDF output for {input_path}")
+
 def convert_pdf_to_png(pdf_path, temp_dir):
+    ext = os.path.splitext(pdf_path)[1].lower()
+    if ext in ['.pages', '.docx', '.doc', '.odt', '.rtf']:
+        pdf_path = convert_document_to_pdf(pdf_path, temp_dir)
+
     print(f"Segmenting PDF: {pdf_path}...")
     os.makedirs(temp_dir, exist_ok=True)
     
