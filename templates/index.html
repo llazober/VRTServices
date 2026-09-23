@@ -2856,7 +2856,7 @@
 
             selectEl.innerHTML = '<option value="" disabled selected>Loading customers from CRM...</option>';
             try {
-                const res = await fetch('/api/customers');
+                const res = await fetch('/api/customers?business_only=true');
                 const data = await res.json();
                 const customers = data.customers || [];
 
@@ -3248,7 +3248,7 @@
 
         async function loadDoPickerCustomers() {
             try {
-                const res = await fetch('/api/customers');
+                const res = await fetch('/api/customers?business_only=true');
                 const data = await res.json();
                 doPickerCustomers = (data.customers || []).filter(c => c.do_folder_path || c.legal_name);
                 renderDoPickerCustomers();
