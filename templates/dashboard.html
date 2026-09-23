@@ -5245,7 +5245,7 @@
             try {
                 const [mapRes, custRes] = await Promise.all([
                     fetch(`/api/clients/parent-mappings?parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`).catch(() => null),
-                    fetch('/api/customers?business_only=true').catch(() => null)
+                    fetch('/api/customers').catch(() => null)
                 ]);
 
                 let clientList = [];
