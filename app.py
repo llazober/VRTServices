@@ -6443,6 +6443,35 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
         if conn:
             conn.close()
 
+@app.get("/api/customers/{customer_id}")
+async def get_single_customer_by_id(customer_id: int, request: Request):
+    """Fetch single customer details by ID."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM customer WHERE id = %s;", (customer_id,))
+            rec = cur.fetchone()
+            if not rec:
+                raise HTTPException(status_code=404, detail="Customer not found")
+            row = dict(rec)
+            if row.get("created_at"):
+                row["created_at"] = str(row["created_at"])
+            if row.get("updated_at"):
+                row["updated_at"] = str(row["updated_at"])
+            return {"customer": row}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching customer #{customer_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.post("/api/customers")
 async def create_customer(request: Request):
     username = get_current_username(request)

@@ -7112,9 +7112,24 @@
             }
         }
 
-        function editCustomerRecord(id) {
-            const rec = currentCustomerRecords.find(item => item.id == id);
-            if (!rec) return;
+        async function editCustomerRecord(id) {
+            if (!id) return;
+            let rec = (currentCustomerRecords || []).find(item => item.id == id || String(item.id) === String(id));
+            if (!rec) {
+                try {
+                    const res = await fetch(`/api/customers/${id}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        rec = data.customer || data;
+                    }
+                } catch (err) {
+                    console.error('Error fetching customer record for edit:', err);
+                }
+            }
+            if (!rec) {
+                alert('❌ Error: Could not locate customer record details.');
+                return;
+            }
 
             const modalForm = document.getElementById('customerForm');
             const pageForm = document.getElementById('customerPageForm');
@@ -7142,12 +7157,37 @@
                 if (schedCont) schedCont.style.display = 'none';
                 setLegalNameReadOnly(prefix, true);
                 const subBtn = document.getElementById(`${prefix}SubmitBtn`);
-                if (subBtn) subBtn.textContent = 'Update Customer';
+                if (subBtn) subBtn.textContent = `Update Customer (${rec.custumer_number || 'CUST'})`;
+                
                 targetForm.style.display = 'grid';
+
+                const modalScrollBox = targetForm.closest('#customerModal > div') || targetForm.parentElement;
+                if (modalScrollBox && typeof modalScrollBox.scrollTop !== 'undefined') {
+                    modalScrollBox.scrollTop = 0;
+                }
+                setTimeout(() => {
+                    targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    targetForm.style.transition = 'box-shadow 0.3s ease, border-color 0.3s ease';
+                    targetForm.style.borderColor = '#e100ff';
+                    targetForm.style.boxShadow = '0 0 25px rgba(225, 0, 255, 0.5)';
+                    setTimeout(() => {
+                        targetForm.style.borderColor = 'rgba(225, 0, 255, 0.25)';
+                        targetForm.style.boxShadow = 'none';
+                    }, 1800);
+                }, 40);
             };
 
-            if (pageForm) populateForm('customerPageForm', pageForm);
-            if (modalForm) populateForm('customerForm', modalForm);
+            const isPageActive = pageForm && pageForm.offsetParent !== null;
+            if (isPageActive) {
+                populateForm('customerPageForm', pageForm);
+            } else if (modalForm) {
+                const modal = document.getElementById('customerModal');
+                if (modal && modal.style.display === 'none') {
+                    if (typeof openCustomerModal === 'function') openCustomerModal();
+                    else modal.style.display = 'flex';
+                }
+                populateForm('customerForm', modalForm);
+            }
         }
 
         async function saveCustomerRecord(e, isPage = false) {
