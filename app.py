@@ -6132,16 +6132,9 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
     
     is_individual = c_type.lower() in ("individual", "joint account")
     if not is_individual:
-        # 1. Monthly Sales Tax Filing (20th of each month)
-        for month in range(1, 13):
-            due_d = datetime.date(current_year, month, 20)
-            generated_events.append((
-                customer_id, 'Sales Tax', f'Sales Tax Return - {due_d.strftime("%B %Y")}',
-                'State Sales & Use Tax Monthly Filing', 'State', due_d.isoformat(),
-                'Monthly', assigned_tax_prep, 7, True
-            ))
+        # Note: 'Sales Tax Return' (category 'Sales Tax') is excluded from presets per configuration requirements.
         
-        # 2. Monthly Bookkeeping Close (15th of each month)
+        # 1. Monthly Bookkeeping Close (15th of each month)
         for month in range(1, 13):
             due_d = datetime.date(current_year, month, 15)
             generated_events.append((
@@ -6150,7 +6143,7 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
                 'Monthly', assigned_tax_prep, 5, True
             ))
 
-        # 3. Quarterly Payroll Form 941
+        # 2. Quarterly Payroll Form 941
         q_dates = [
             (datetime.date(current_year, 4, 30), 'Q1 Payroll Tax Form 941'),
             (datetime.date(current_year, 7, 31), 'Q2 Payroll Tax Form 941'),
@@ -6164,21 +6157,21 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
                 'Quarterly', assigned_tax_prep, 10, True
             ))
 
-        # 4. Corporate Tax Return (March 15)
+        # 3. Corporate Tax Return (March 15)
         generated_events.append((
             customer_id, 'Corporate Tax', f'Corporate Tax Return (Form 1120/1120-S) - Tax Year {current_year - 1}',
             'Annual Federal & State Corporate Income Tax Filing', 'Federal/State', datetime.date(current_year, 3, 15).isoformat(),
             'Annual', assigned_tax_prep, 30, True
         ))
 
-        # 5. Annual 1099-NEC & 1099-MISC Filing (Jan 31)
+        # 4. Annual 1099-NEC & 1099-MISC Filing (Jan 31)
         generated_events.append((
             customer_id, '1099/W2', f'Annual 1099-NEC / 1099-MISC Filings - Tax Year {current_year - 1}',
             'Nonemployee Compensation Information Returns', 'Federal', datetime.date(current_year, 1, 31).isoformat(),
             'Annual', assigned_tax_prep, 15, True
         ))
 
-        # 6. Annual State Corporate Report / Franchise Tax (May 1)
+        # 5. Annual State Corporate Report / Franchise Tax (May 1)
         generated_events.append((
             customer_id, 'Franchise Tax', f'Annual Corporate Report / Franchise Tax - {current_year}',
             'State Annual Corporate Registration & Franchise Fee', 'State', datetime.date(current_year, 5, 1).isoformat(),
@@ -6186,26 +6179,22 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
         ))
 
     else: # Individual
-        # 1. Quarterly Estimated Tax Payments
-        est_dates = [
-            (datetime.date(current_year, 4, 15), 'Q1 Estimated Tax Payment (Form 1040-ES)'),
-            (datetime.date(current_year, 6, 15), 'Q2 Estimated Tax Payment (Form 1040-ES)'),
-            (datetime.date(current_year, 9, 15), 'Q3 Estimated Tax Payment (Form 1040-ES)'),
-            (datetime.date(current_year + 1, 1, 15), 'Q4 Estimated Tax Payment (Form 1040-ES)'),
-        ]
-        for est_due, est_title in est_dates:
-            generated_events.append((
-                customer_id, 'Estimated Tax', est_title,
-                'Federal & State Quarterly Estimated Tax Deposit', 'Federal', est_due.isoformat(),
-                'Quarterly', assigned_tax_prep, 7, True
-            ))
+        # Note: 'Estimated Tax Payment' (category 'Estimated Tax') is excluded from presets per configuration requirements.
 
-        # 2. Annual Individual Tax Return (April 15)
+        # 1. Annual Individual Tax Return (April 15)
         generated_events.append((
             customer_id, 'Corporate Tax', f'Individual Income Tax Return (Form 1040) - Tax Year {current_year - 1}',
             'Annual U.S. Individual Income Tax Return', 'Federal/State', datetime.date(current_year, 4, 15).isoformat(),
             'Annual', assigned_tax_prep, 30, True
         ))
+
+    # Clean up excluded auto-generated categories (Sales Tax & Estimated Tax) as well as stale cross-type events
+    cur.execute("""
+        DELETE FROM compliance_calendar_events
+        WHERE customer_id = %s
+          AND (auto_generated = TRUE OR auto_generated IS NULL)
+          AND category IN ('Sales Tax', 'Estimated Tax');
+    """, (customer_id,))
 
     if is_individual:
         # Clean up stale auto-generated business events if client is individual/joint
