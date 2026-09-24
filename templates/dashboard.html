@@ -7112,6 +7112,58 @@
             }
         }
 
+        function closeEditCustomerStandaloneModal() {
+            const modal = document.getElementById('editCustomerStandaloneModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function saveCustomerRecordFromStandaloneModal(e) {
+            e.preventDefault();
+            const getVal = (idKey) => (document.getElementById(`editCustModal${idKey}`)?.value || '').trim();
+            const id = getVal('Id');
+            if (!id) return;
+
+            const payload = {
+                custumer_number: getVal('Number'),
+                customer_type: getVal('Type'),
+                form_8879_type: getVal('Form8879Type'),
+                second_signer_name: getVal('SecondSignerName'),
+                second_signer_email: getVal('SecondSignerEmail'),
+                second_signer_phone: getVal('SecondSignerPhone'),
+                legal_name: getVal('LegalName'),
+                display_name: getVal('DisplayName'),
+                tax_id: getVal('TaxId'),
+                assigned_user_id: getVal('AssignedUserId'),
+                status: getVal('Status'),
+                phone: getVal('Phone'),
+                email: getVal('Email'),
+                website: getVal('Website'),
+                notes: getVal('Notes')
+            };
+
+            const submitBtn = document.getElementById('editCustModalSubmitBtn');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Updating...'; }
+
+            try {
+                const res = await fetch(`/api/customers/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || 'Failed to update customer');
+
+                closeEditCustomerStandaloneModal();
+                if (typeof showCustomAlert === 'function') showCustomAlert(`✅ Customer '${payload.legal_name}' updated successfully.`, 'success');
+                if (typeof fetchCustomerRecords === 'function') fetchCustomerRecords();
+            } catch (err) {
+                console.error('Error updating customer:', err);
+                alert('❌ Error updating customer: ' + err.message);
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = `UPDATE CUSTOMER (${payload.custumer_number || 'CUST'})`; }
+            }
+        }
+
         async function editCustomerRecord(id) {
             if (!id) return;
             let rec = (currentCustomerRecords || []).find(item => item.id == id || String(item.id) === String(id));
@@ -7131,63 +7183,43 @@
                 return;
             }
 
-            const modalForm = document.getElementById('customerForm');
-            const pageForm = document.getElementById('customerPageForm');
+            // Hide inline forms if open so only 1 standalone form is shown (Screen 2)
+            const inlineForm = document.getElementById('customerForm');
+            if (inlineForm) inlineForm.style.display = 'none';
+            const inlinePageForm = document.getElementById('customerPageForm');
+            if (inlinePageForm) inlinePageForm.style.display = 'none';
 
-            const populateForm = (prefix, targetForm) => {
-                const setVal = (idKey, val) => { const el = document.getElementById(`${prefix}${idKey}`); if (el) el.value = val; };
-                setVal('Id', rec.id);
-                setVal('Number', rec.custumer_number || '');
-                setVal('Type', rec.customer_type || 'Business');
-                setForm8879SelectValue(`${prefix}Form8879Type`, rec.form_8879_type || 'Form 8879 (Individual 1040)');
-                setVal('SecondSignerName', rec.second_signer_name || '');
-                setVal('SecondSignerEmail', rec.second_signer_email || '');
-                setVal('SecondSignerPhone', rec.second_signer_phone || '');
-                setVal('LegalName', rec.legal_name || '');
-                setVal('DisplayName', rec.display_name || '');
-                setVal('TaxId', rec.tax_id || '');
-                setVal('AssignedUserId', rec.assigned_user_id || '');
-                setVal('Status', rec.status || 'Active');
-                setVal('Phone', rec.phone || '');
-                setVal('Email', rec.email || '');
-                setVal('Website', rec.website || '');
-                setVal('Notes', rec.notes || '');
-                onCustomerTypeChange(prefix, false);
-                const schedCont = document.getElementById(`${prefix}PresetScheduleContainer`);
-                if (schedCont) schedCont.style.display = 'none';
-                setLegalNameReadOnly(prefix, true);
-                const subBtn = document.getElementById(`${prefix}SubmitBtn`);
-                if (subBtn) subBtn.textContent = `Update Customer (${rec.custumer_number || 'CUST'})`;
-                
-                targetForm.style.display = 'grid';
-
-                const modalScrollBox = targetForm.closest('#customerModal > div') || targetForm.parentElement;
-                if (modalScrollBox && typeof modalScrollBox.scrollTop !== 'undefined') {
-                    modalScrollBox.scrollTop = 0;
-                }
-                setTimeout(() => {
-                    targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    targetForm.style.transition = 'box-shadow 0.3s ease, border-color 0.3s ease';
-                    targetForm.style.borderColor = '#e100ff';
-                    targetForm.style.boxShadow = '0 0 25px rgba(225, 0, 255, 0.5)';
-                    setTimeout(() => {
-                        targetForm.style.borderColor = 'rgba(225, 0, 255, 0.25)';
-                        targetForm.style.boxShadow = 'none';
-                    }, 1800);
-                }, 40);
-            };
-
-            const isPageActive = pageForm && pageForm.offsetParent !== null;
-            if (isPageActive) {
-                populateForm('customerPageForm', pageForm);
-            } else if (modalForm) {
-                const modal = document.getElementById('customerModal');
-                if (modal && modal.style.display === 'none') {
-                    if (typeof openCustomerModal === 'function') openCustomerModal();
-                    else modal.style.display = 'flex';
-                }
-                populateForm('customerForm', modalForm);
+            // Populate Tax Prep dropdown for standalone modal
+            if (typeof populateCustomerTaxPrepDropdowns === 'function') {
+                populateCustomerTaxPrepDropdowns();
             }
+
+            const setVal = (idKey, val) => { const el = document.getElementById(`editCustModal${idKey}`); if (el) el.value = val; };
+            setVal('Id', rec.id);
+            setVal('Number', rec.custumer_number || '');
+            setVal('Type', rec.customer_type || 'Business');
+            setForm8879SelectValue('editCustModalForm8879Type', rec.form_8879_type || 'Form 8879 (Individual 1040)');
+            setVal('SecondSignerName', rec.second_signer_name || '');
+            setVal('SecondSignerEmail', rec.second_signer_email || '');
+            setVal('SecondSignerPhone', rec.second_signer_phone || '');
+            setVal('LegalName', rec.legal_name || '');
+            setVal('DisplayName', rec.display_name || '');
+            setVal('TaxId', rec.tax_id || '');
+            setVal('AssignedUserId', rec.assigned_user_id || '');
+            setVal('Status', rec.status || 'Active');
+            setVal('Phone', rec.phone || '');
+            setVal('Email', rec.email || '');
+            setVal('Website', rec.website || '');
+            setVal('Notes', rec.notes || '');
+
+            onCustomerTypeChange('editCustModal', false);
+            setLegalNameReadOnly('editCustModal', true);
+
+            const subBtn = document.getElementById('editCustModalSubmitBtn');
+            if (subBtn) subBtn.textContent = `UPDATE CUSTOMER (${rec.custumer_number || 'CUST'})`;
+
+            const editModal = document.getElementById('editCustomerStandaloneModal');
+            if (editModal) editModal.style.display = 'flex';
         }
 
         async function saveCustomerRecord(e, isPage = false) {
@@ -9511,14 +9543,126 @@
     </div>
 </div>`;
 
+            const editCustomerModalHtml = `
+<div id="editCustomerStandaloneModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483648; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0b1324; border: 1px solid rgba(225, 0, 255, 0.35); border-radius: 20px; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); gap: 16px; color: #fff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">✏️</span>
+                <h3 id="editCustomerModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0;">Edit Customer Account</h3>
+            </div>
+            <button type="button" onclick="closeEditCustomerStandaloneModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
+        </div>
+
+        <form id="editCustomerStandaloneForm" onsubmit="saveCustomerRecordFromStandaloneModal(event)" style="display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+            <input type="hidden" id="editCustModalId">
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Customer Number *</label>
+                <input type="text" id="editCustModalNumber" required readonly style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #94a3b8;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Customer Type *</label>
+                <select id="editCustModalType" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;" onchange="onCustomerTypeChange('editCustModal')">
+                    <option value="Business">Business</option>
+                    <option value="Individual">Individual</option>
+                    <option value="Joint Account">Joint Account</option>
+                    <option value="Partner">Partner</option>
+                    <option value="Government">Government</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Default IRS Form 8879 Variant *</label>
+                <select id="editCustModalForm8879Type" style="width: 100%; background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <option value="Form 8879 (Individual 1040)">Form 8879 (Individual 1040)</option>
+                    <option value="Form 8879J (Joint Account 1040)">Form 8879J (Joint Account 1040)</option>
+                    <option value="Form 8879-C (Corporation 1120)">Form 8879-C (Corporation 1120)</option>
+                    <option value="Form 8879-S (S-Corporation 1120-S)">Form 8879-S (S-Corporation 1120-S)</option>
+                    <option value="Form 8879-PE (Partnership 1065)">Form 8879-PE (Partnership 1065)</option>
+                    <option value="Form 8879-F (Fiduciary 1041)">Form 8879-F (Fiduciary 1041)</option>
+                    <option value="Form 8879-EO (Exempt Org 990)">Form 8879-EO (Exempt Org 990)</option>
+                    <option value="Form 8878 (Extension Authorization)">Form 8878 (Extension Authorization)</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Legal Name *</label>
+                <input type="text" id="editCustModalLegalName" required readonly style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Display Name</label>
+                <input type="text" id="editCustModalDisplayName" placeholder="e.g. Acme Corp" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tax ID / EIN / SSN</label>
+                <input type="text" id="editCustModalTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned Tax Prep</label>
+                <select id="editCustModalAssignedUserId" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <option value="">Unassigned</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Status *</label>
+                <select id="editCustModalStatus" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Phone Number</label>
+                <input type="text" id="editCustModalPhone" placeholder="e.g. (555) 123-4567" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Email Address</label>
+                <input type="email" id="editCustModalEmail" placeholder="e.g. contact@acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Website</label>
+                <input type="url" id="editCustModalWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+
+            <div id="editCustModalJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 14px; margin-top: 4px;">
+                <div style="font-size: 0.8rem; font-weight: 800; color: #34d399; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                    👥 JOINT ACCOUNT — SECOND SIGNER / SPOUSE INFORMATION
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Second Signer / Spouse Full Name</label>
+                        <input type="text" id="editCustModalSecondSignerName" placeholder="e.g. Jane Doe" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Second Signer / Spouse Email</label>
+                        <input type="email" id="editCustModalSecondSignerEmail" placeholder="e.g. jane.doe@example.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Second Signer Phone</label>
+                        <input type="text" id="editCustModalSecondSignerPhone" placeholder="e.g. (555) 987-6543" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    </div>
+                </div>
+            </div>
+
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Notes & Comments</label>
+                <textarea id="editCustModalNotes" rows="2" placeholder="Additional customer details or notes..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff; resize: vertical;"></textarea>
+            </div>
+
+            <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
+                <button type="button" onclick="closeEditCustomerStandaloneModal()" style="padding: 10px 24px; background: rgba(255,255,255,0.08); color: #fff; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; cursor: pointer;">Cancel</button>
+                <button type="submit" id="editCustModalSubmitBtn" style="padding: 10px 28px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.4);">Update Customer</button>
+            </div>
+        </form>
+    </div>
+</div>`;
+
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml + addTaxReqModalHtml;
+            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml + addTaxReqModalHtml + editCustomerModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
                 el.addEventListener('click', (e) => {
                     if (e.target === el) {
                         if (el.id === 'addTaxRequirementModal') closeAddTaxRequirementModal();
+                        if (el.id === 'editCustomerStandaloneModal') closeEditCustomerStandaloneModal();
                     }
                 });
             }
@@ -9568,7 +9712,7 @@
         }
 
         function populateCustomerTaxPrepDropdowns() {
-            const ids = ['customerPageFormAssignedUserId', 'customerFormAssignedUserId'];
+            const ids = ['customerPageFormAssignedUserId', 'customerFormAssignedUserId', 'editCustModalAssignedUserId'];
             ids.forEach(id => {
                 const select = document.getElementById(id);
                 if (!select) return;
