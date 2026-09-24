@@ -6076,22 +6076,44 @@
             if (event) event.stopPropagation();
             const btn = event ? event.currentTarget : null;
             const targetMenu = document.getElementById(`custActionMenu-${customerId}`);
-            const isVisible = targetMenu && targetMenu.style.display !== 'none';
+            if (!targetMenu) return;
+
+            const isVisible = targetMenu.style.display !== 'none';
             document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
-            if (targetMenu && !isVisible) {
+
+            if (!isVisible && btn) {
                 targetMenu.style.display = 'block';
                 targetMenu.style.position = 'fixed';
-                targetMenu.style.zIndex = '99999';
-                if (btn) {
-                    const rect = btn.getBoundingClientRect();
+                targetMenu.style.zIndex = '2147483647';
+                targetMenu.style.maxHeight = '';
+                targetMenu.style.overflowY = '';
+
+                const rect = btn.getBoundingClientRect();
+                const menuHeight = targetMenu.offsetHeight || 300;
+                const windowHeight = window.innerHeight;
+                const windowWidth = window.innerWidth;
+
+                let rightOffset = windowWidth - rect.right;
+                if (rightOffset < 10) rightOffset = 10;
+                targetMenu.style.right = rightOffset + 'px';
+                targetMenu.style.left = 'auto';
+
+                const spaceBelow = windowHeight - rect.bottom;
+
+                if (spaceBelow >= menuHeight || spaceBelow >= 220) {
                     targetMenu.style.top = (rect.bottom + 4) + 'px';
-                    targetMenu.style.left = 'auto';
-                    targetMenu.style.right = (window.innerWidth - rect.right) + 'px';
-                    
-                    const menuHeight = targetMenu.offsetHeight || 280;
-                    if (rect.bottom + 4 + menuHeight > window.innerHeight) {
-                        targetMenu.style.top = Math.max(10, rect.top - menuHeight - 4) + 'px';
+                    if (menuHeight > spaceBelow - 10) {
+                        targetMenu.style.maxHeight = Math.max(150, spaceBelow - 14) + 'px';
+                        targetMenu.style.overflowY = 'auto';
                     }
+                } else {
+                    let topPos = rect.top - menuHeight - 4;
+                    if (topPos < 10) {
+                        topPos = 10;
+                        targetMenu.style.maxHeight = Math.max(150, rect.top - 14) + 'px';
+                        targetMenu.style.overflowY = 'auto';
+                    }
+                    targetMenu.style.top = topPos + 'px';
                 }
             }
         }
