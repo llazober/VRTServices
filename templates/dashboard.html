@@ -8766,17 +8766,39 @@
             }
         }
 
-        const TAX_DOC_TYPES = ['W2','1099-NEC','1099-MISC','1099-INT','1099-DIV','1099-R','1099-G','SSA-1099','1098','1098-T','1098-E','1099-B','1095-A','1095-B','1095-C','K-1','PRIOR-RETURN','OTHER'];
+        const TAX_DOC_TYPES = ['W-2','1099-NEC','1099-MISC','1099-INT','1099-DIV','1099-R','1099-G','SSA-1099','1098','1098-T','1098-E','1099-B','1095-A','1095-B','1095-C','K-1','PRIOR-RETURN','OTHER'];
 
         function openAddTaxRequirementModal() {
-            const docType = prompt(
-                `Enter document type for tax year ${_taxDocCurrentYear}:\n\nOptions: ${TAX_DOC_TYPES.join(', ')}\n\nType a value (or any custom type):`,
-                'W2'
-            );
-            if (!docType) return;
-            const label = prompt('Optional: Enter a label/description (e.g. "Employer W2 from Amazon")', '');
-            const source = prompt('Optional: Source description (e.g. "Amazon", "Chase Bank")', '');
-            addTaxRequirement(docType.toUpperCase(), label || '', source || '');
+            const modal = document.getElementById('addTaxRequirementModal');
+            const subTitle = document.getElementById('addTaxReqModalSubtitle');
+            const typeSelect = document.getElementById('addTaxReqTypeSelect');
+            const labelInput = document.getElementById('addTaxReqLabelInput');
+            const sourceInput = document.getElementById('addTaxReqSourceInput');
+            if (!modal) return;
+
+            if (subTitle) subTitle.textContent = `Tax Year: ${_taxDocCurrentYear || 2025}`;
+            if (typeSelect) typeSelect.value = 'W-2';
+            if (labelInput) labelInput.value = '';
+            if (sourceInput) sourceInput.value = '';
+
+            modal.style.display = 'flex';
+        }
+
+        function closeAddTaxRequirementModal() {
+            const modal = document.getElementById('addTaxRequirementModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitAddTaxRequirementModal() {
+            const typeSelect = document.getElementById('addTaxReqTypeSelect');
+            const labelInput = document.getElementById('addTaxReqLabelInput');
+            const sourceInput = document.getElementById('addTaxReqSourceInput');
+            const docType = typeSelect ? typeSelect.value : 'W-2';
+            const label = labelInput ? labelInput.value.trim() : '';
+            const source = sourceInput ? sourceInput.value.trim() : '';
+
+            closeAddTaxRequirementModal();
+            await addTaxRequirement(docType.toUpperCase(), label, source);
         }
 
         async function addTaxRequirement(docType, docLabel, sourceDescription) {
@@ -9392,11 +9414,73 @@
     </div>
 </div>`;
 
+            const addTaxReqModalHtml = `
+<div id="addTaxRequirementModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483649; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0f172a; border: 1px solid rgba(248, 113, 113, 0.4); border-radius: 20px; max-width: 500px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.8); gap: 16px; color: #fff; overflow: hidden;">
+        <div style="padding: 16px 22px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">📄</span>
+                <div>
+                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #fff; margin: 0;">Add Tax Document Requirement</h3>
+                    <p id="addTaxReqModalSubtitle" style="font-size: 0.76rem; color: #94a3b8; margin: 2px 0 0 0; font-family: monospace;">Tax Year: 2025</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeAddTaxRequirementModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+        </div>
+
+        <div style="padding: 0 22px; display: flex; flex-direction: column; gap: 14px;">
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase;">Document Type *</label>
+                <select id="addTaxReqTypeSelect" style="width: 100%; background: #0b1324; border: 1px solid rgba(248, 113, 113, 0.4); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #f87171; font-weight: 800; outline: none; cursor: pointer;">
+                    <option value="W-2" selected>W-2 (Wage & Tax Statement)</option>
+                    <option value="1099-NEC">1099-NEC (Nonemployee Compensation)</option>
+                    <option value="1099-MISC">1099-MISC (Miscellaneous Income)</option>
+                    <option value="1099-INT">1099-INT (Interest Income)</option>
+                    <option value="1099-DIV">1099-DIV (Dividends & Distributions)</option>
+                    <option value="1099-R">1099-R (Pensions, Annuities, IRAs)</option>
+                    <option value="1099-G">1099-G (Certain Government Payments)</option>
+                    <option value="SSA-1099">SSA-1099 (Social Security Benefits)</option>
+                    <option value="1098">1098 (Mortgage Interest)</option>
+                    <option value="1098-T">1098-T (Tuition Statement)</option>
+                    <option value="1098-E">1098-E (Student Loan Interest)</option>
+                    <option value="1099-B">1099-B (Brokerage / Stock Sales)</option>
+                    <option value="1095-A">1095-A (Health Insurance Marketplace)</option>
+                    <option value="1095-B">1095-B (Health Coverage)</option>
+                    <option value="1095-C">1095-C (Employer Health Coverage)</option>
+                    <option value="K-1">K-1 (Partnership / S-Corp K-1)</option>
+                    <option value="PRIOR-RETURN">PRIOR-RETURN (Prior Tax Return Copy)</option>
+                    <option value="OTHER">OTHER (Custom Document Type)</option>
+                </select>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase;">Label / Description (Optional)</label>
+                <input type="text" id="addTaxReqLabelInput" placeholder="e.g. Employer W-2 from Amazon, Health Insurance" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 9px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase;">Source Description (Optional)</label>
+                <input type="text" id="addTaxReqSourceInput" placeholder="e.g. Amazon, Chase Bank, Omaha" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 9px 12px; font-size: 0.85rem; color: #fff; outline: none;">
+            </div>
+        </div>
+
+        <div style="padding: 14px 22px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeAddTaxRequirementModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 10px; font-size: 0.78rem; cursor: pointer;">Cancel</button>
+            <button type="button" onclick="submitAddTaxRequirementModal()" style="padding: 8px 22px; background: linear-gradient(135deg, #ef4444, #f87171); color: #fff; font-weight: 800; border: none; border-radius: 10px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);">➕ Add Document</button>
+        </div>
+    </div>
+</div>`;
+
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml;
+            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml + addTaxReqModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
+                el.addEventListener('click', (e) => {
+                    if (e.target === el) {
+                        if (el.id === 'addTaxRequirementModal') closeAddTaxRequirementModal();
+                    }
+                });
             }
         })();
 

@@ -6138,7 +6138,7 @@ def generate_preset_compliance_events_for_customer(cur, customer_id: int, custom
         for month in range(1, 13):
             due_d = datetime.date(current_year, month, 15)
             generated_events.append((
-                customer_id, 'Bookkeeping Close', f'Monthly Bookkeeping Close - {due_d.strftime("%B %Y")}',
+                customer_id, 'Bookkeeping Close', 'Monthly Bookkeeping Close',
                 'Bank Reconciliations & Monthly Close', 'Internal', due_d.isoformat(),
                 'Monthly', assigned_tax_prep, 5, True
             ))
