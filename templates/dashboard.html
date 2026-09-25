@@ -6197,8 +6197,10 @@
             const hideButtons = custNum === 'CUT-0000' || custNum === 'CUST-0000' || custNum === 'CUST-000';
             const emailBtn = document.getElementById('storageSendEmailBtn');
             const workflowBtn = document.getElementById('storageWorkflowBtn');
+            const commsBtn = document.getElementById('storageCommsHistoryBtn');
             if (emailBtn) emailBtn.style.display = hideButtons ? 'none' : 'inline-block';
             if (workflowBtn) workflowBtn.style.display = hideButtons ? 'none' : 'inline-block';
+            if (commsBtn) commsBtn.style.display = hideButtons ? 'none' : 'inline-block';
 
             // Get or find the modal — it is appended to body at page load
             let modal = document.getElementById('customerStorageModal');
@@ -9075,6 +9077,7 @@
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
                 <button id="storageSendEmailBtn" onclick="openSendCustomerEmailModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Send Email Message to Customer">📧 Send Email</button>
                 <button id="storageWorkflowBtn" onclick="openCustomerChecklistModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Open Workflow Checklist">📋 Workflow Checklist</button>
+                <button id="storageCommsHistoryBtn" onclick="openCustomerCommsHistoryModal(currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Open Customer Communication History">💬 Comms. History</button>
             </div>
         </div>
         <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
