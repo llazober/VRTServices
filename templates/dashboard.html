@@ -6028,6 +6028,7 @@
 
             if (modalTbody) modalTbody.innerHTML = rowsHtml;
             if (pageTbody) pageTbody.innerHTML = rowsHtml;
+            document.querySelectorAll('body > .cust-action-dropdown-menu').forEach(m => m.remove());
             if (typeof checkUnreadCommunicationsAlerts === 'function') {
                 checkUnreadCommunicationsAlerts();
             }
@@ -6075,13 +6076,20 @@
         function toggleCustomerActionMenu(event, customerId) {
             if (event) event.stopPropagation();
             const btn = event ? event.currentTarget : null;
-            const targetMenu = document.getElementById(`custActionMenu-${customerId}`);
+            if (!btn) return;
+
+            const parent = btn.parentElement;
+            const targetMenu = parent ? (parent.querySelector('.cust-action-dropdown-menu') || document.getElementById(`custActionMenu-${customerId}`)) : document.getElementById(`custActionMenu-${customerId}`);
             if (!targetMenu) return;
 
             const isVisible = targetMenu.style.display !== 'none';
             document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
 
-            if (!isVisible && btn) {
+            if (!isVisible) {
+                if (targetMenu.parentElement !== document.body) {
+                    document.body.appendChild(targetMenu);
+                }
+
                 targetMenu.style.display = 'block';
                 targetMenu.style.position = 'fixed';
                 targetMenu.style.zIndex = '2147483647';
@@ -6089,7 +6097,7 @@
                 targetMenu.style.overflowY = '';
 
                 const rect = btn.getBoundingClientRect();
-                const menuHeight = targetMenu.offsetHeight || 300;
+                const menuHeight = targetMenu.offsetHeight || 310;
                 const windowHeight = window.innerHeight;
                 const windowWidth = window.innerWidth;
 
@@ -6099,21 +6107,22 @@
                 targetMenu.style.left = 'auto';
 
                 const spaceBelow = windowHeight - rect.bottom;
+                const spaceAbove = rect.top;
 
-                if (spaceBelow >= menuHeight || spaceBelow >= 220) {
+                if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
                     targetMenu.style.top = (rect.bottom + 4) + 'px';
+                    targetMenu.style.bottom = 'auto';
                     if (menuHeight > spaceBelow - 10) {
                         targetMenu.style.maxHeight = Math.max(150, spaceBelow - 14) + 'px';
                         targetMenu.style.overflowY = 'auto';
                     }
                 } else {
-                    let topPos = rect.top - menuHeight - 4;
-                    if (topPos < 10) {
-                        topPos = 10;
-                        targetMenu.style.maxHeight = Math.max(150, rect.top - 14) + 'px';
+                    targetMenu.style.bottom = (windowHeight - rect.top + 4) + 'px';
+                    targetMenu.style.top = 'auto';
+                    if (menuHeight > spaceAbove - 10) {
+                        targetMenu.style.maxHeight = Math.max(150, spaceAbove - 14) + 'px';
                         targetMenu.style.overflowY = 'auto';
                     }
-                    targetMenu.style.top = topPos + 'px';
                 }
             }
         }
