@@ -2479,17 +2479,55 @@
                                 </div>
                                 <div>
                                     <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">Send Requirement Emails</h3>
-                                    <span style="color: #94a3b8; font-size: 0.82rem;">Bulk Email Dispatch</span>
+                                    <span style="color: #94a3b8; font-size: 0.82rem;">Bulk & Direct Email Dispatch</span>
                                 </div>
                             </div>
-                            <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px;">
-                                Send personalized tax requirement notification emails to all active <strong>Individual & Joint Account</strong> clients for the active tax season. Emails include Customer ID portal login note, dynamic document badges (received vs pending), and auto-skips completed accounts.
+                            <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 16px;">
+                                Send tax document notification emails to active clients. Choose between standard preparation requests or dynamic missing document checklists.
                             </p>
+
+                            <!-- Combo Select Controls -->
+                            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                                <div>
+                                    <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">1) Email Template Type</label>
+                                    <select id="util_email_type" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                        <option value="tax_docs_request">📩 Tax Documents Request (General Preparation Notice)</option>
+                                        <option value="missing_docs">⚠️ Missing Tax Documents (Dynamic Pending Checklist)</option>
+                                    </select>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">2) Target Audience</label>
+                                        <select id="util_email_target" onchange="toggleUtilEmailTargetControls()" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                            <option value="all">🌐 All Active Clients</option>
+                                            <option value="specific">👤 Select Specific Client</option>
+                                        </select>
+                                    </div>
+
+                                    <div id="util_account_type_wrapper">
+                                        <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">3) Client Account Type</label>
+                                        <select id="util_account_type" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                            <option value="individual">👤 Individual Only (Individual & Joint)</option>
+                                            <option value="business">🏢 All Business Types (LLC, Corp, etc.)</option>
+                                            <option value="all_types" selected>🌐 All Types (Individual + Business)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Specific Client Dropdown (Shown when target = specific) -->
+                                <div id="util_specific_client_wrapper" style="display: none;">
+                                    <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Select Specific Client</label>
+                                    <select id="util_specific_client_id" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                        <option value="">Loading active clients...</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
                             <button id="btn_bulk_send_email" onclick="runBulkSendTaxRequirementsEmail()" style="width: 100%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; border: none; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
-                                <span>🚀</span> Send Requirement Emails (All Clients)
+                                <span>🚀</span> Send Requirement Emails
                             </button>
 
                             <div id="bulk_email_status_box" style="display: none; margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;"></div>
@@ -2612,18 +2650,86 @@
                     }
                 }
 
+                function toggleUtilEmailTargetControls() {
+                    const targetSel = document.getElementById('util_email_target');
+                    const accWrapper = document.getElementById('util_account_type_wrapper');
+                    const clientWrapper = document.getElementById('util_specific_client_wrapper');
+                    
+                    if (!targetSel) return;
+                    const isSpecific = targetSel.value === 'specific';
+                    
+                    if (accWrapper) accWrapper.style.display = isSpecific ? 'none' : 'block';
+                    if (clientWrapper) {
+                        clientWrapper.style.display = isSpecific ? 'block' : 'none';
+                        if (isSpecific) loadUtilActiveClientsDropdown();
+                    }
+                }
+
+                async function loadUtilActiveClientsDropdown() {
+                    const clientSel = document.getElementById('util_specific_client_id');
+                    if (!clientSel) return;
+                    clientSel.innerHTML = '<option value="">⏳ Loading active clients...</option>';
+                    try {
+                        const res = await fetch('/api/customers');
+                        const data = await res.json();
+                        const customers = Array.isArray(data) ? data : (data.customers || []);
+                        const activeCusts = customers.filter(c => (c.status || '').toLowerCase() === 'active');
+                        
+                        if (activeCusts.length === 0) {
+                            clientSel.innerHTML = '<option value="">No active clients found</option>';
+                            return;
+                        }
+                        
+                        clientSel.innerHTML = '<option value="">-- Select Active Client --</option>';
+                        activeCusts.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.id;
+                            const ref = c.custumer_number || `CUST-${c.id}`;
+                            const typeStr = c.customer_type ? ` [${c.customer_type}]` : '';
+                            opt.textContent = `${c.legal_name || 'Client'} (${ref})${typeStr}`;
+                            clientSel.appendChild(opt);
+                        });
+                    } catch (e) {
+                        console.error('Error loading clients for dropdown:', e);
+                        clientSel.innerHTML = '<option value="">Error loading clients</option>';
+                    }
+                }
+
                 async function runBulkSendTaxRequirementsEmail() {
                     const taxYear = new Date().getFullYear() - 1;
+                    const emailTypeSel = document.getElementById('util_email_type');
+                    const targetSel = document.getElementById('util_email_target');
+                    const accTypeSel = document.getElementById('util_account_type');
+                    const specificClientSel = document.getElementById('util_specific_client_id');
+
+                    const emailType = emailTypeSel ? emailTypeSel.value : 'missing_docs';
+                    const target = targetSel ? targetSel.value : 'all';
+                    const accountType = accTypeSel ? accTypeSel.value : 'all_types';
+                    const customerId = (target === 'specific' && specificClientSel) ? specificClientSel.value : null;
+
+                    if (target === 'specific' && !customerId) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert('Missing Selection', 'Please select a specific active client from the dropdown list.', 'warning');
+                        } else {
+                            alert('Please select a specific active client.');
+                        }
+                        return;
+                    }
+
+                    const typeName = emailType === 'tax_docs_request' ? 'Tax Documents Request' : 'Missing Tax Documents';
+                    let targetDesc = target === 'specific' 
+                        ? `specific client (ID: ${customerId})`
+                        : `ALL active clients (${accountType === 'individual' ? 'Individual Only' : accountType === 'business' ? 'All Business Types' : 'All Types'})`;
 
                     let confirmSend = true;
                     if (typeof showCustomConfirm === 'function') {
                         confirmSend = await showCustomConfirm(
-                            `Are you sure you want to send Requirement Notification emails for Tax Year ${taxYear} to ALL active Individual & Joint Account clients?\n\n• Accounts with completed requirements will be automatically skipped.\n• Customer ID portal login note and document checklists will be included.`,
-                            'Bulk Send Requirement Emails',
-                            '🚀 Yes, Send Bulk Emails',
+                            `Are you sure you want to send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?`,
+                            'Send Requirement Emails',
+                            '🚀 Yes, Send Emails',
                             'Cancel'
                         );
-                    } else if (!confirm(`Send requirement emails for Tax Year ${taxYear} to all active Individual & Joint accounts?`)) {
+                    } else if (!confirm(`Send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?`)) {
                         return;
                     }
                     if (!confirmSend) return;
@@ -2632,35 +2738,41 @@
                     const statusBox = document.getElementById('bulk_email_status_box');
                     if (btn) {
                         btn.disabled = true;
-                        btn.innerHTML = '⏳ Dispatching Bulk Emails...';
+                        btn.innerHTML = '⏳ Dispatching Emails...';
                     }
                     if (statusBox) {
                         statusBox.style.display = 'block';
                         statusBox.style.background = 'rgba(59, 130, 246, 0.15)';
                         statusBox.style.border = '1px solid rgba(59, 130, 246, 0.3)';
                         statusBox.style.color = '#60a5fa';
-                        statusBox.innerHTML = `📧 Dispatching requirement emails for Tax Year ${taxYear} to active Individual & Joint Account clients...`;
+                        statusBox.innerHTML = `📧 Dispatching '${typeName}' emails for Tax Year ${taxYear}...`;
                     }
 
                     try {
                         const res = await fetch('/api/tax-requirements/send-email', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ year: taxYear })
+                            body: JSON.stringify({
+                                email_type: emailType,
+                                target: target,
+                                account_type: accountType,
+                                customer_id: customerId,
+                                tax_year: taxYear
+                            })
                         });
                         const data = await res.json();
-                        if (!res.ok) throw new Error(data.detail || data.message || 'Bulk email dispatch failed');
+                        if (!res.ok) throw new Error(data.detail || data.message || 'Email dispatch failed');
 
                         if (statusBox) {
                             statusBox.style.background = 'rgba(34, 197, 94, 0.15)';
                             statusBox.style.border = '1px solid rgba(34, 197, 94, 0.3)';
                             statusBox.style.color = '#4ade80';
-                            statusBox.innerHTML = `✅ ${data.message || 'Bulk email dispatch complete!'}`;
+                            statusBox.innerHTML = `✅ ${data.message || 'Email dispatch complete!'}`;
                         }
 
                         if (typeof showCustomAlert === 'function') {
                             showCustomAlert(
-                                'Bulk Email Dispatch Complete',
+                                'Email Dispatch Complete',
                                 `Sent: ${data.sent_count || 0} | Skipped: ${data.skipped_count || 0} | Failed: ${data.failed_count || 0}\n\n${data.message || ''}`,
                                 'success'
                             );
@@ -2673,14 +2785,14 @@
                             statusBox.innerHTML = `❌ Error: ${err.message}`;
                         }
                         if (typeof showCustomAlert === 'function') {
-                            showCustomAlert('Bulk Email Error', err.message, 'error');
+                            showCustomAlert('Email Dispatch Error', err.message, 'error');
                         } else {
-                            alert('Bulk email dispatch failed: ' + err.message);
+                            alert('Email dispatch failed: ' + err.message);
                         }
                     } finally {
                         if (btn) {
                             btn.disabled = false;
-                            btn.innerHTML = '🚀 Send Requirement Emails (All Clients)';
+                            btn.innerHTML = '🚀 Send Requirement Emails';
                         }
                     }
                 }
