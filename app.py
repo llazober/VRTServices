@@ -6067,17 +6067,26 @@ async def delete_compliance_event(event_id: int, request: Request):
 
 def sync_bookkeeping_workflow_from_compliance_event(cur, event_row: dict):
     """
-    When a compliance event with category 'Bookkeeping Close' (or containing 'bookkeeping') is completed or re-opened,
-    automatically update the customer's Bookkeeping Workflow Checklist steps for the PREVIOUS month relative to due_date.
-    E.g. due_date = 2026-09-15 -> target period = 2026-08 (August 2026).
-    If status == 'Completed' -> all 4 bookkeeping steps set to TRUE.
-    If status != 'Completed' (e.g. 'Pending' / re-opened) -> all 4 bookkeeping steps set to FALSE.
+    When a compliance event is completed or re-opened:
+    - If category/title is 'Bookkeeping Close' (or contains 'bookkeeping'):
+      Automatically update the customer's Bookkeeping Workflow Checklist steps (4 steps) for the PREVIOUS month relative to due_date.
+      E.g. due_date = 2026-09-15 -> target period = 2026-08 (August 2026).
+    - If category/title is 'Corporate Tax' / 'Individual Tax' / 'Tax Return' / 'Income Tax' (or contains 'corporate tax' or 'tax return' or '1040' or '1120'):
+      Automatically update the customer's Tax Preparation Workflow Checklist steps (8 steps) for the PREVIOUS tax year relative to due_date.
+      E.g. due_date = 2026-04-15 -> target tax year = 2025.
+    If status == 'Completed' -> steps set to TRUE.
+    If status != 'Completed' (e.g. 'Pending' / re-opened) -> steps set to FALSE.
     """
     if not event_row:
         return
     category = (event_row.get("category") or "").strip().lower()
     title = (event_row.get("title") or "").strip().lower()
-    if not ("bookkeeping" in category or "bookkeeping" in title):
+
+    is_bookkeeping = ("bookkeeping" in category or "bookkeeping" in title)
+    is_tax = ("corporate tax" in category or "tax return" in category or "tax" in category or
+              "corporate tax" in title or "tax return" in title or "1040" in title or "1120" in title) and not is_bookkeeping
+
+    if not (is_bookkeeping or is_tax):
         return
 
     customer_id = event_row.get("customer_id")
@@ -6103,35 +6112,79 @@ def sync_bookkeeping_workflow_from_compliance_event(cur, event_row: dict):
     if not due_dt:
         return
 
-    # Calculate target period: previous month relative to due_date
-    first_of_due_month = datetime.date(due_dt.year, due_dt.month, 1)
-    prev_month_date = first_of_due_month - datetime.timedelta(days=1)
-    target_period_slug = prev_month_date.strftime("%Y-%m")
-
     is_completed = (status == "Completed")
 
-    try:
-        cur.execute("""
-            INSERT INTO customer_task_checklist (
-                customer_id, period,
-                bank_statement_received, check_images_received,
-                extraction_ai_categorization_done, accountant_reviewed,
-                updated_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (customer_id, period) DO UPDATE SET
-                bank_statement_received = EXCLUDED.bank_statement_received,
-                check_images_received = EXCLUDED.check_images_received,
-                extraction_ai_categorization_done = EXCLUDED.extraction_ai_categorization_done,
-                accountant_reviewed = EXCLUDED.accountant_reviewed,
-                updated_at = CURRENT_TIMESTAMP;
-        """, (
-            customer_id, target_period_slug,
-            is_completed, is_completed, is_completed, is_completed
-        ))
-        print(f"Synced bookkeeping workflow for customer #{customer_id}, period '{target_period_slug}' -> 4 steps set to {is_completed} (event status: {status})")
-    except Exception as err:
-        print(f"Error syncing bookkeeping workflow from compliance event #{event_row.get('id')}: {err}")
+    if is_bookkeeping:
+        # Calculate target period: previous month relative to due_date
+        first_of_due_month = datetime.date(due_dt.year, due_dt.month, 1)
+        prev_month_date = first_of_due_month - datetime.timedelta(days=1)
+        target_period_slug = prev_month_date.strftime("%Y-%m")
+
+        try:
+            cur.execute("""
+                INSERT INTO customer_task_checklist (
+                    customer_id, period,
+                    bank_statement_received, check_images_received,
+                    extraction_ai_categorization_done, accountant_reviewed,
+                    updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (customer_id, period) DO UPDATE SET
+                    bank_statement_received = EXCLUDED.bank_statement_received,
+                    check_images_received = EXCLUDED.check_images_received,
+                    extraction_ai_categorization_done = EXCLUDED.extraction_ai_categorization_done,
+                    accountant_reviewed = EXCLUDED.accountant_reviewed,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (
+                customer_id, target_period_slug,
+                is_completed, is_completed, is_completed, is_completed
+            ))
+            print(f"Synced bookkeeping workflow for customer #{customer_id}, period '{target_period_slug}' -> 4 steps set to {is_completed} (event status: {status})")
+        except Exception as err:
+            print(f"Error syncing bookkeeping workflow from compliance event #{event_row.get('id')}: {err}")
+
+    elif is_tax:
+        # Calculate target tax year: previous year relative to due_date
+        # E.g., due_date = 2026-04-15 -> Tax Year 2025
+        due_year = due_dt.year
+        tax_year = due_year - 1
+        
+        # Period slugs associated with Tax Year (e.g. "2026-08", "2026-04", "2025")
+        target_slugs = [
+            f"{due_year}-08",
+            f"{due_year}-{due_dt.month:02d}",
+            str(tax_year)
+        ]
+
+        for p_slug in target_slugs:
+            try:
+                cur.execute("""
+                    INSERT INTO customer_task_checklist (
+                        customer_id, period,
+                        tax_docs_requested, tax_docs_received, tax_organizer, tax_preparation,
+                        tax_review, tax_client_signature, tax_efile, tax_accepted,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (customer_id, period) DO UPDATE SET
+                        tax_docs_requested = EXCLUDED.tax_docs_requested,
+                        tax_docs_received = EXCLUDED.tax_docs_received,
+                        tax_organizer = EXCLUDED.tax_organizer,
+                        tax_preparation = EXCLUDED.tax_preparation,
+                        tax_review = EXCLUDED.tax_review,
+                        tax_client_signature = EXCLUDED.tax_client_signature,
+                        tax_efile = EXCLUDED.tax_efile,
+                        tax_accepted = EXCLUDED.tax_accepted,
+                        updated_at = CURRENT_TIMESTAMP;
+                """, (
+                    customer_id, p_slug,
+                    is_completed, is_completed, is_completed, is_completed,
+                    is_completed, is_completed, is_completed, is_completed
+                ))
+            except Exception as err:
+                print(f"Error syncing tax workflow for customer #{customer_id}, period '{p_slug}': {err}")
+        
+        print(f"Synced tax preparation workflow for customer #{customer_id}, Tax Year {tax_year} (due_date {due_dt}) -> 8 steps set to {is_completed} (event status: {status})")
 
 @app.post("/api/compliance/events/{event_id}/status")
 async def update_compliance_event_status(event_id: int, request: Request):
