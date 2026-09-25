@@ -6026,6 +6026,11 @@ async def update_compliance_event(event_id: int, request: Request):
                 cur.execute("UPDATE customer SET assigned_user_id = %s WHERE id = %s;", (new_tp, cid))
                 cur.execute("UPDATE compliance_calendar_events SET assigned_tax_prep = %s WHERE customer_id = %s;", (new_tp, cid))
 
+            try:
+                sync_bookkeeping_workflow_from_compliance_event(cur, dict(updated))
+            except Exception as sync_err:
+                print(f"Warning: Failed to sync bookkeeping workflow on event update: {sync_err}")
+
             conn.commit()
             res = dict(updated)
             if res.get("due_date"):
@@ -6059,6 +6064,74 @@ async def delete_compliance_event(event_id: int, request: Request):
     finally:
         if conn:
             conn.close()
+
+def sync_bookkeeping_workflow_from_compliance_event(cur, event_row: dict):
+    """
+    When a compliance event with category 'Bookkeeping Close' (or containing 'bookkeeping') is completed or re-opened,
+    automatically update the customer's Bookkeeping Workflow Checklist steps for the PREVIOUS month relative to due_date.
+    E.g. due_date = 2026-09-15 -> target period = 2026-08 (August 2026).
+    If status == 'Completed' -> all 4 bookkeeping steps set to TRUE.
+    If status != 'Completed' (e.g. 'Pending' / re-opened) -> all 4 bookkeeping steps set to FALSE.
+    """
+    if not event_row:
+        return
+    category = (event_row.get("category") or "").strip().lower()
+    title = (event_row.get("title") or "").strip().lower()
+    if not ("bookkeeping" in category or "bookkeeping" in title):
+        return
+
+    customer_id = event_row.get("customer_id")
+    due_date = event_row.get("due_date")
+    status = (event_row.get("status") or "").strip()
+
+    if not customer_id or not due_date:
+        return
+
+    import datetime
+    due_dt = None
+    if isinstance(due_date, (datetime.date, datetime.datetime)):
+        due_dt = due_date.date() if isinstance(due_date, datetime.datetime) else due_date
+    elif isinstance(due_date, str):
+        val = due_date.strip()
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
+            try:
+                due_dt = datetime.datetime.strptime(val[:10], fmt).date()
+                break
+            except ValueError:
+                pass
+
+    if not due_dt:
+        return
+
+    # Calculate target period: previous month relative to due_date
+    first_of_due_month = datetime.date(due_dt.year, due_dt.month, 1)
+    prev_month_date = first_of_due_month - datetime.timedelta(days=1)
+    target_period_slug = prev_month_date.strftime("%Y-%m")
+
+    is_completed = (status == "Completed")
+
+    try:
+        cur.execute("""
+            INSERT INTO customer_task_checklist (
+                customer_id, period,
+                bank_statement_received, check_images_received,
+                extraction_ai_categorization_done, accountant_reviewed,
+                updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (customer_id, period) DO UPDATE SET
+                bank_statement_received = EXCLUDED.bank_statement_received,
+                check_images_received = EXCLUDED.check_images_received,
+                extraction_ai_categorization_done = EXCLUDED.extraction_ai_categorization_done,
+                accountant_reviewed = EXCLUDED.accountant_reviewed,
+                updated_at = CURRENT_TIMESTAMP;
+        """, (
+            customer_id, target_period_slug,
+            is_completed, is_completed, is_completed, is_completed
+        ))
+        print(f"Synced bookkeeping workflow for customer #{customer_id}, period '{target_period_slug}' -> 4 steps set to {is_completed} (event status: {status})")
+    except Exception as err:
+        print(f"Error syncing bookkeeping workflow from compliance event #{event_row.get('id')}: {err}")
 
 @app.post("/api/compliance/events/{event_id}/status")
 async def update_compliance_event_status(event_id: int, request: Request):
@@ -6096,7 +6169,10 @@ async def update_compliance_event_status(event_id: int, request: Request):
             if not row:
                 raise HTTPException(status_code=404, detail="Compliance event not found.")
 
-
+            try:
+                sync_bookkeeping_workflow_from_compliance_event(cur, dict(row))
+            except Exception as sync_err:
+                print(f"Warning: Failed to sync bookkeeping workflow on status change: {sync_err}")
             
             conn.commit()
             res = dict(row)
