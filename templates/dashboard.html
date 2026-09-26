@@ -1047,7 +1047,7 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 6px 12px;">
                                 <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 Tax Prep:</span>
-                                <select id="customerPageAssignedUserSelect" onchange="renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
+                                <select id="customerPageAssignedUserSelect" onchange="customerCurrentPage=1; renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
                                     <option value="all" style="background: #0f172a; color: #fff;">All Tax Preps</option>
                                     <option value="unassigned" style="background: #0f172a; color: #fff;">Unassigned</option>
                                 </select>
@@ -1178,7 +1178,7 @@
                 </form>
 
                 <!-- Page Table -->
-                <div class="customer-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                <div class="customer-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); border-bottom: none; border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
                     <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-muted); font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">
@@ -1195,6 +1195,19 @@
                             <tr><td colSpan="7" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading customers...</td></tr>
                         </tbody>
                     </table>
+                </div><!-- end customer-table-container -->
+
+                <!-- Dedicated Customer Page Pagination Bar -->
+                <div id="customerPagePaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px;">
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">
+                        Showing <strong id="customerPageRangeStart" style="color: #fff;">0</strong>–<strong id="customerPageRangeEnd" style="color: #fff;">0</strong> of <strong id="customerPageTotalCount" style="color: #fff;">0</strong> customers
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" id="customerPagePrevBtn" onclick="changeCustomerPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                        <span id="customerPageCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #e100ff; padding: 4px 12px; background: rgba(225, 0, 255, 0.1); border: 1px solid rgba(225, 0, 255, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                        <button type="button" id="customerPageNextBtn" onclick="changeCustomerPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                    </div>
+                </div>
             {% elif active_tab == 'billing' %}
             <!-- ── DEDICATED BILLING & RECURRING INVOICING VIEW ─────────────────── -->
             <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
@@ -3316,8 +3329,15 @@
             </div>
 
             <!-- Footer -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
-                <span style="font-size: 0.78rem; color: #94a3b8;">Total Customers: <strong id="customerTotalCount" style="color: #fff;">0</strong></span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; flex-wrap: wrap; gap: 12px;">
+                <div style="font-size: 0.78rem; color: #94a3b8;">
+                    Showing <strong id="customerModalRangeStart" style="color: #fff;">0</strong>–<strong id="customerModalRangeEnd" style="color: #fff;">0</strong> of <strong id="customerTotalCount" style="color: #fff;">0</strong> customers
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="customerModalPrevBtn" onclick="changeCustomerPage(-1)" style="padding: 5px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 0.76rem; font-weight: 700; border-radius: 8px; cursor: pointer;">◀ Prev</button>
+                    <span id="customerModalCurrentNumber" style="font-size: 0.78rem; font-weight: 800; color: #e100ff; padding: 3px 8px; background: rgba(225,0,255,0.1); border: 1px solid rgba(225,0,255,0.3); border-radius: 6px;">Page 1 of 1</span>
+                    <button type="button" id="customerModalNextBtn" onclick="changeCustomerPage(1)" style="padding: 5px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 0.76rem; font-weight: 700; border-radius: 8px; cursor: pointer;">Next ▶</button>
+                </div>
                 <button onclick="closeCustomerModal()" style="padding: 8px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; border-radius: 10px; cursor: pointer;">Close Manager</button>
             </div>
         </div>
@@ -6057,7 +6077,16 @@
             }
         }
 
+        let customerCurrentPage = 1;
+        const CUSTOMERS_PER_PAGE = 10;
+
+        function changeCustomerPage(delta) {
+            customerCurrentPage += delta;
+            renderCustomerTable();
+        }
+
         function onCustomerStatusFilterChange(sourceVal) {
+            customerCurrentPage = 1;
             const pageSel = document.getElementById('customerPageStatusSelect');
             const modalSel = document.getElementById('customerModalStatusSelect');
             if (pageSel && pageSel.value !== sourceVal) pageSel.value = sourceVal;
@@ -6066,6 +6095,7 @@
         }
 
         function onCustomerUnreadFilterChange(sourceVal) {
+            customerCurrentPage = 1;
             const pageSel = document.getElementById('customerPageUnreadSelect');
             const modalSel = document.getElementById('customerModalUnreadSelect');
             if (pageSel && pageSel.value !== sourceVal) pageSel.value = sourceVal;
@@ -6074,6 +6104,7 @@
         }
 
         function jumpToUnreadCustomers() {
+            customerCurrentPage = 1;
             if (window.location.pathname.includes('/customers')) {
                 onCustomerUnreadFilterChange('unread_only');
             } else {
@@ -6121,18 +6152,57 @@
                 });
             }
 
-            if (modalCount) modalCount.textContent = recordsToDisplay.length;
-            if (pageCount) pageCount.textContent = recordsToDisplay.length;
+            const totalFiltered = recordsToDisplay.length;
+            const totalPages = Math.ceil(totalFiltered / CUSTOMERS_PER_PAGE) || 1;
+
+            if (customerCurrentPage > totalPages) customerCurrentPage = totalPages;
+            if (customerCurrentPage < 1) customerCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (customerCurrentPage - 1) * CUSTOMERS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + CUSTOMERS_PER_PAGE, totalFiltered);
+
+            const pageRecords = recordsToDisplay.slice(startIndex, endIndex);
+
+            if (modalCount) modalCount.textContent = totalFiltered;
+            if (pageCount) pageCount.textContent = totalFiltered;
+
+            const modalStart = document.getElementById('customerModalRangeStart');
+            const modalEnd = document.getElementById('customerModalRangeEnd');
+            const pageStart = document.getElementById('customerPageRangeStart');
+            const pageEnd = document.getElementById('customerPageRangeEnd');
+
+            if (modalStart) modalStart.textContent = totalFiltered > 0 ? (startIndex + 1) : 0;
+            if (modalEnd) modalEnd.textContent = endIndex;
+            if (pageStart) pageStart.textContent = totalFiltered > 0 ? (startIndex + 1) : 0;
+            if (pageEnd) pageEnd.textContent = endIndex;
+
+            const modalNum = document.getElementById('customerModalCurrentNumber');
+            const pageNum = document.getElementById('customerPageCurrentNumber');
+            if (modalNum) modalNum.textContent = `Page ${customerCurrentPage} of ${totalPages}`;
+            if (pageNum) pageNum.textContent = `Page ${customerCurrentPage} of ${totalPages}`;
+
+            const prevModalBtn = document.getElementById('customerModalPrevBtn');
+            const nextModalBtn = document.getElementById('customerModalNextBtn');
+            const prevPageBtn = document.getElementById('customerPagePrevBtn');
+            const nextPageBtn = document.getElementById('customerPageNextBtn');
+
+            const isPrevDisabled = customerCurrentPage <= 1;
+            const isNextDisabled = customerCurrentPage >= totalPages;
+
+            if (prevModalBtn) { prevModalBtn.disabled = isPrevDisabled; prevModalBtn.style.opacity = isPrevDisabled ? '0.4' : '1'; }
+            if (nextModalBtn) { nextModalBtn.disabled = isNextDisabled; nextModalBtn.style.opacity = isNextDisabled ? '0.4' : '1'; }
+            if (prevPageBtn) { prevPageBtn.disabled = isPrevDisabled; prevPageBtn.style.opacity = isPrevDisabled ? '0.4' : '1'; }
+            if (nextPageBtn) { nextPageBtn.disabled = isNextDisabled; nextPageBtn.style.opacity = isNextDisabled ? '0.4' : '1'; }
 
             const emptyRows = '<tr><td colSpan="7" style="padding: 24px; text-align: center; color: #64748b;">No customer records found. Click ➕ Add New Customer.</td></tr>';
 
-            if (recordsToDisplay.length === 0) {
+            if (totalFiltered === 0) {
                 if (modalTbody) modalTbody.innerHTML = emptyRows;
                 if (pageTbody) pageTbody.innerHTML = emptyRows;
                 return;
             }
 
-            const rowsHtml = recordsToDisplay.map(c => `
+            const rowsHtml = pageRecords.map(c => `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 12px 16px; font-family: monospace; font-weight: 700; color: #e100ff;">
                         ${c.custumer_number}
