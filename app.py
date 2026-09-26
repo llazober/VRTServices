@@ -12999,7 +12999,7 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "W2",        "keywords": ["w-2", "wage and tax statement", "wages, tips", "employer's ein", "allocated tips"], "min_matches": 1},
     {"doc_type": "1099-NEC",  "keywords": ["1099-nec", "nonemployee compensation", "nonemployee comp"], "min_matches": 1},
     {"doc_type": "1099-MISC", "keywords": ["1099-misc", "miscellaneous income", "rents", "royalties", "prizes", "fishing boat"], "min_matches": 2},
-    {"doc_type": "1099-INT",  "keywords": ["1099-int", "1099int", "1099 int", "form 1099-int", "form 1099int", "interest income", "interest earned", "early withdrawal penalty", "tax-exempt interest"], "min_matches": 1},
+    {"doc_type": "1099-INT",  "keywords": ["1099-int", "1099int", "1099 int", "form 1099-int", "form 1099int", "interest income", "interest earned", "early withdrawal penalty", "tax-exempt interest"], "min_matches": 2},
     {"doc_type": "1099-DIV",  "keywords": ["1099-div", "dividends and distributions", "total ordinary dividends"], "min_matches": 1},
     {"doc_type": "1099-R",    "keywords": ["1099-r", "distributions from pensions", "annuities", "gross distribution", "ira/sep/simple"], "min_matches": 1},
     {"doc_type": "1099-G",    "keywords": ["1099-g", "certain government payments", "unemployment compensation", "state income tax refunds"], "min_matches": 1},
@@ -13017,6 +13017,8 @@ TAX_DOC_PATTERNS: list[dict] = [
     {"doc_type": "Schedule D-1040", "keywords": ["schedule d", "sch d", "1040sd", "1040-sd", "sch1040sd", "capital gains and losses"], "min_matches": 1},
     {"doc_type": "Schedule E-1040", "keywords": ["schedule e", "sch e", "1040se", "1040-se", "sch1040se", "supplemental income and loss", "rental real estate"], "min_matches": 1},
     {"doc_type": "Schedule SE-1040", "keywords": ["schedule se", "sch se", "1040sse", "1040-sse", "sch1040sse", "self-employment tax"], "min_matches": 1},
+    {"doc_type": "Schedule K-1-1120S", "keywords": ["schedule k-1", "1120-s", "1120s", "f1120ssk", "1120ssk", "shareholder's share", "s corporation"], "min_matches": 2},
+    {"doc_type": "Schedule K-1-1065",  "keywords": ["schedule k-1", "1065", "f1065k1", "partner's share of income", "partnership"], "min_matches": 2},
     {"doc_type": "Schedule K-1-1040", "keywords": ["schedule k-1", "sch k-1", "sch k1", "k-1", "partner's share", "shareholder's share", "form 1065", "form 1120-s", "form 1041"], "min_matches": 1},
     {"doc_type": "Schedule 1-1040", "keywords": ["schedule 1", "sch 1", "1040-s1", "1040s1", "additional income and adjustments"], "min_matches": 1},
     {"doc_type": "Schedule 2-1040", "keywords": ["schedule 2", "sch 2", "1040-s2", "1040s2", "additional taxes"], "min_matches": 1},
@@ -13312,6 +13314,8 @@ def _detect_doc_type_from_filename(filename: str) -> str | None:
     fn_compact = fn_clean.replace("-", "")
 
     patterns = [
+        ("Schedule K-1-1120S", ["f1120ssk", "1120ssk", "1120s-k1", "f1120s-k1", "1120sk1", "1120s-k-1", "1120sk-1"]),
+        ("Schedule K-1-1065", ["f1065k1", "1065k1", "1065-k1", "f1065-k1", "1065k-1", "1065-k-1"]),
         ("Schedule A-1040", ["sch1040sa", "1040sa", "1040-sa", "schedule-a", "sch-a", "sch1040a"]),
         ("Schedule B-1040", ["sch1040sb", "1040sb", "1040-sb", "schedule-b", "sch-b", "sch1040b"]),
         ("Schedule C-1040", ["sch1040sc", "1040sc", "1040-sc", "schedule-c", "sch-c", "sch1040c"]),
@@ -13381,15 +13385,22 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
 
         print(f"[TAX CLASSIFY] Starting classification for customer {customer_id}: '{original_filename}'")
 
-        ocr_text = _ocr_pdf_to_text_for_classification(file_key)
-        doc_type, confidence = _detect_tax_doc_type(ocr_text)
+        # 1. Try filename detection first if original_filename matches a known form pattern with high confidence (e.g. f1120ssk.pdf, Sch1040sa.pdf)
+        doc_type = _detect_doc_type_from_filename(original_filename)
+        confidence = 0.0
+        if doc_type and doc_type != "FORM":
+            confidence = 0.98
+            print(f"[TAX CLASSIFY] High-confidence detection from filename: '{original_filename}' -> '{doc_type}'")
+        else:
+            ocr_text = _ocr_pdf_to_text_for_classification(file_key)
+            doc_type, confidence = _detect_tax_doc_type(ocr_text)
 
-        # Fallback: Detect doc_type from original_filename if OCR text didn't match
-        if not doc_type:
-            doc_type = _detect_doc_type_from_filename(original_filename)
-            if doc_type:
-                confidence = 0.95
-                print(f"[TAX CLASSIFY] Detected doc_type '{doc_type}' from filename: '{original_filename}'")
+            # Fallback: Detect doc_type from original_filename if OCR text didn't match
+            if not doc_type:
+                doc_type = _detect_doc_type_from_filename(original_filename)
+                if doc_type:
+                    confidence = 0.95
+                    print(f"[TAX CLASSIFY] Detected doc_type '{doc_type}' from filename: '{original_filename}'")
 
         # Determine status and rename file in-place inside Inbox/ if detected; leave original name if unclassified
         clean_key = clean_s3_key(file_key)
