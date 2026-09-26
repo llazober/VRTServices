@@ -6293,8 +6293,13 @@
             }
         });
         window.addEventListener('scroll', function() {
-            document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
-        }, true);
+            const openMenus = document.querySelectorAll('.cust-action-dropdown-menu');
+            if (openMenus.length > 0) {
+                openMenus.forEach(m => {
+                    if (m.style.display !== 'none') m.style.display = 'none';
+                });
+            }
+        }, { capture: true, passive: true });
 
         async function initCustomerStorage(event, customerId) {
             if (event) event.stopPropagation();
@@ -7936,8 +7941,12 @@
             if (event && (event.target.closest('button') || event.target.closest('a'))) {
                 return;
             }
+
             if (commId && event && !event.target.closest('button')) {
-                markSingleCommRead(null, commId);
+                const cardEl = document.getElementById(`commCard-${commId}`);
+                if (cardEl && cardEl.dataset.isRead !== 'true') {
+                    markSingleCommRead(null, commId);
+                }
             }
 
             document.querySelectorAll('[id^="commCard-"]').forEach(card => {
@@ -9730,7 +9739,7 @@
             </div>
         </div>
 
-        <div id="commsHistoryListBody" style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; min-height: 250px;">
+        <div id="commsHistoryListBody" style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; min-height: 250px; contain: content; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;">
             <p style="text-align: center; color: #94a3b8;">Loading history...</p>
         </div>
 
