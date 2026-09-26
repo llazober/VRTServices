@@ -8128,7 +8128,7 @@
                         const escSubj = String(item.subject || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                         const itemCid = item.customer_id || cid || 0;
 
-                        const replyBtnHtml = senderAddr ? `
+                        const replyBtnHtml = (senderAddr && !isOut) ? `
                             <button type="button" onclick="replyToCommsItem(event, ${item.id}, '${escSender}', '${escSubj}', ${itemCid})" style="padding: 4px 12px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; border-radius: 6px; font-weight: 800; font-size: 0.72rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 0 10px rgba(0, 230, 118, 0.3);" title="Reply directly to ${escSender}">
                                 ↩️ Reply
                             </button>
