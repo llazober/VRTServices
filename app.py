@@ -11269,10 +11269,11 @@ async def send_customer_email(customer_id: str, request: Request):
             raise HTTPException(status_code=400, detail=f"Customer '{cust.get('legal_name') or cust.get('display_name')}' does not have a valid email address configured.")
 
         if recipient_email and parse_clean_email(cust.get("email") or "") != recipient_email:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE customer SET email = %s WHERE id = %s;", (recipient_email, real_cust_id))
-                conn.commit()
-            cust["email"] = recipient_email
+            if real_cust_id != 0 and str(cust.get("custumer_number") or "").strip().upper() != "CUST-0000":
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE customer SET email = %s WHERE id = %s;", (recipient_email, real_cust_id))
+                    conn.commit()
+                cust["email"] = recipient_email
 
         reply_to_list = parse_reply_to_list(custom_reply_to or default_reply_to)
         clean_reply_to = ", ".join(reply_to_list)

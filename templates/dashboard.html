@@ -7704,7 +7704,7 @@
         // --- Customer Email Communication Functions ---
         let currentEmailCustomerId = null;
 
-        async function openSendCustomerEmailModal(event, customerId) {
+        async function openSendCustomerEmailModal(event, customerId, targetEmail = null, targetSubject = null) {
             if (event) event.stopPropagation();
             const cid = customerId || currentChecklistCustomerId;
             if (!cid) return;
@@ -7737,13 +7737,14 @@
             const toEl = document.getElementById('emailFormTo');
             const replyToEl = document.getElementById('emailFormReplyTo');
             const tplEl = document.getElementById('emailFormTemplateSelect');
+            const subjectEl = document.getElementById('emailFormSubject');
 
             const custName = cust ? (cust.legal_name || cust.display_name || cust.customer_name) : `Customer #${cid}`;
             const custNum = cust ? (cust.custumer_number || cust.customer_id || cust.id) : cid;
-            const custEmail = cust ? (cust.email || '') : '';
+            const custEmail = targetEmail || (cust ? (cust.email || '') : '');
 
-            if (titleEl) titleEl.textContent = `📧 Send Email — ${custName}`;
-            if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Email: ${custEmail || 'Not configured'}`;
+            if (titleEl) titleEl.textContent = targetEmail ? `↩️ Reply Email — ${targetEmail}` : `📧 Send Email — ${custName}`;
+            if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Recipient: ${custEmail || 'Not configured'}`;
             if (toEl) toEl.value = custEmail;
             let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'notification@vrtservices12.com';
             if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
@@ -7752,7 +7753,11 @@
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
 
-            applyEmailTemplate('custom', cust || { legal_name: custName, custumer_number: custNum, email: custEmail });
+            if (targetSubject) {
+                if (subjectEl) subjectEl.value = targetSubject.toLowerCase().startsWith('re:') ? targetSubject : `Re: ${targetSubject}`;
+            } else {
+                applyEmailTemplate('custom', cust || { legal_name: custName, custumer_number: custNum, email: custEmail });
+            }
             modal.style.zIndex = '2147483648';
             modal.style.display = 'flex';
         }
@@ -7812,6 +7817,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        to: toVal,
+                        recipient_email: toVal,
                         subject: subjectVal,
                         message: msgVal,
                         reply_to: replyToVal
@@ -7923,6 +7930,52 @@
 
         let activeHistoryCustomerId = null;
 
+        let selectedCommsItem = null;
+
+        function selectCommsItem(commId, senderEmail, subject, customerId, event) {
+            if (event && (event.target.closest('button') || event.target.closest('a'))) {
+                return;
+            }
+            if (commId && event && !event.target.closest('button')) {
+                markSingleCommRead(null, commId);
+            }
+
+            selectedCommsItem = { commId, senderEmail, subject, customerId };
+
+            document.querySelectorAll('[id^="commCard-"]').forEach(card => {
+                card.style.outline = 'none';
+                card.style.boxShadow = 'none';
+            });
+
+            if (commId) {
+                const cardEl = document.getElementById(`commCard-${commId}`);
+                if (cardEl) {
+                    cardEl.style.outline = '2px solid #38bdf8';
+                    cardEl.style.boxShadow = '0 0 15px rgba(56, 189, 248, 0.3)';
+                }
+            }
+
+            const labelEl = document.getElementById('selectedReplyEmailText');
+            if (labelEl) {
+                labelEl.textContent = senderEmail ? `${senderEmail} ${subject ? ' (Re: ' + subject + ')' : ''}` : 'Select an email card above to target recipient';
+            }
+        }
+
+        function replyToCommsItem(event, commId, senderEmail, subject, customerId) {
+            if (event) event.stopPropagation();
+            selectCommsItem(commId, senderEmail, subject, customerId);
+            replyToSelectedCommsMessage();
+        }
+
+        function replyToSelectedCommsMessage() {
+            if (!selectedCommsItem || !selectedCommsItem.senderEmail) {
+                alert('⚠️ Please select an inbound email from the history list above before clicking Reply.');
+                return;
+            }
+            const targetCid = selectedCommsItem.customerId || activeHistoryCustomerId || currentEmailCustomerId || 0;
+            openSendCustomerEmailModal(null, targetCid, selectedCommsItem.senderEmail, selectedCommsItem.subject);
+        }
+
         async function openCatchallInboxModal() {
             await openCustomerCommsHistoryModal(null, true);
         }
@@ -7931,6 +7984,7 @@
             const cid = customerId || currentEmailCustomerId;
             if (!cid && !showAllInbound) return;
             activeHistoryCustomerId = cid;
+            selectedCommsItem = null;
 
             let modal = document.getElementById('customerCommsHistoryModal');
             if (!modal) return;
@@ -7992,6 +8046,7 @@
                             </div>
                         `;
                     }
+                    selectCommsItem(null, '', '', cid);
                     return;
                 }
 
@@ -8059,26 +8114,49 @@
 
                         const cardBorder = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)';
                         const cardBg = (!isOut && !isRead) ? 'rgba(239, 68, 68, 0.04)' : 'rgba(255,255,255,0.03)';
-                        const cardClickAttr = (!isOut && !isRead) ? `onclick="markSingleCommRead(event, ${item.id})"` : '';
+                        
+                        const senderAddr = item.sender_email || item.reply_to_email || '';
+                        const escSender = String(senderAddr).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const escSubj = String(item.subject || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const itemCid = item.customer_id || cid || 0;
+
+                        const replyBtnHtml = senderAddr ? `
+                            <button type="button" onclick="replyToCommsItem(event, ${item.id}, '${escSender}', '${escSubj}', ${itemCid})" style="padding: 4px 12px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; border-radius: 6px; font-weight: 800; font-size: 0.72rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 0 10px rgba(0, 230, 118, 0.3);" title="Reply directly to ${escSender}">
+                                ↩️ Reply
+                            </button>
+                        ` : '';
 
                         return `
-                            <div id="commCard-${item.id}" ${cardClickAttr} style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; ${ (!isOut && !isRead) ? 'cursor: pointer;' : '' } transition: all 0.2s;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                            <div id="commCard-${item.id}" data-is-read="${isRead}" onclick="selectCommsItem(${item.id}, '${escSender}', '${escSubj}', ${itemCid}, event)" style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         ${dirBadge}
                                         ${custTag}
                                         <strong style="font-size: 0.88rem; color: #fff;">${item.subject || '(No Subject)'}</strong>
                                     </div>
-                                    <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        ${replyBtnHtml}
+                                        <span style="font-size: 0.75rem; color: #64748b;">${dateStr}</span>
+                                    </div>
                                 </div>
                                 <div style="font-size: 0.78rem; color: #94a3b8;">
-                                    From: <span style="color: #cbd5e1;">${item.sender_email}</span> | To: <span style="color: #cbd5e1;">${item.recipient_email}</span> ${item.reply_to_email ? `| Reply-To: <span style="color: #facc15;">${item.reply_to_email}</span>` : ''}
+                                    From: <span style="color: #cbd5e1; font-weight: 700;">${item.sender_email}</span> | To: <span style="color: #cbd5e1;">${item.recipient_email}</span> ${item.reply_to_email ? `| Reply-To: <span style="color: #facc15;">${item.reply_to_email}</span>` : ''}
                                 </div>
                                 <div style="white-space: pre-wrap; font-size: 0.85rem; color: #e2e8f0; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-top: 4px;">${displayBody}</div>
                                 ${attHtml}
                             </div>
                         `;
                     }).join('');
+
+                    const firstInbound = logs.find(l => l.sender_email && l.direction === 'INBOUND') || logs.find(l => l.sender_email) || logs[0];
+                    if (firstInbound && firstInbound.sender_email) {
+                        const escFirstSender = String(firstInbound.sender_email).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const escFirstSubj = String(firstInbound.subject || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const firstCid = firstInbound.customer_id || cid || 0;
+                        selectCommsItem(firstInbound.id, escFirstSender, escFirstSubj, firstCid);
+                    } else {
+                        selectCommsItem(null, '', '', cid);
+                    }
                 }
             } catch (err) {
                 if (listBody) listBody.innerHTML = `<p style="text-align: center; color: #f87171; padding: 20px;">Error loading communications: ${err.message}</p>`;
@@ -9631,8 +9709,16 @@
             <p style="text-align: center; color: #94a3b8;">Loading history...</p>
         </div>
 
-        <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end;">
-            <button type="button" onclick="closeCustomerCommsHistoryModal()" style="padding: 6px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+        <div style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div id="commsHistorySelectedInfo" style="font-size: 0.78rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;">
+                Targeting Reply To: <strong id="selectedReplyEmailText" style="color: #38bdf8;">Select an email card above to target recipient</strong>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="commsHistoryBottomReplyBtn" type="button" onclick="replyToSelectedCommsMessage()" style="padding: 8px 18px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; font-weight: 800; border-radius: 10px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 15px rgba(0, 230, 118, 0.35); transition: all 0.2s ease;" title="Reply to the selected inbound sender email">
+                    ↩️ Reply to Selected Email
+                </button>
+                <button type="button" onclick="closeCustomerCommsHistoryModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Close</button>
+            </div>
         </div>
     </div>
 </div>`;
