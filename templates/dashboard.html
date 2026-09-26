@@ -1063,7 +1063,7 @@
                     </div>
 
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageTotalCount" style="color: #fff;">0</strong></span>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Total Customers: <strong id="customerPageHeaderTotalCount" style="color: #fff;">0</strong></span>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
                             <button onclick="toggleCustomerPageForm()" style="padding: 12px 24px; background: linear-gradient(135deg, #7f00ff, #e100ff); color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 0 20px rgba(225, 0, 255, 0.35); transition: all 0.2s ease;">
                                 ➕ Add New Customer
@@ -1298,45 +1298,71 @@
                 </div>
 
                 <!-- Invoices Table View -->
-                <div id="billingInvoicesSection" style="display: block; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
-                        <thead>
-                            <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
-                                <th style="padding: 14px 18px;">Invoice #</th>
-                                <th style="padding: 14px 18px;">Client / Organization</th>
-                                <th style="padding: 14px 18px;">Issue Date</th>
-                                <th style="padding: 14px 18px;">Due Date</th>
-                                <th style="padding: 14px 18px;">Description</th>
-                                <th style="padding: 14px 18px;">Amount</th>
-                                <th style="padding: 14px 18px;">Status</th>
-                                <th style="padding: 14px 18px; text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="billingInvoicesTableBody">
-                            <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading invoices...</td></tr>
-                        </tbody>
-                    </table>
+                <div id="billingInvoicesSection" style="display: block;">
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                            <thead>
+                                <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <th style="padding: 14px 18px;">Invoice #</th>
+                                    <th style="padding: 14px 18px;">Client / Organization</th>
+                                    <th style="padding: 14px 18px;">Issue Date</th>
+                                    <th style="padding: 14px 18px;">Due Date</th>
+                                    <th style="padding: 14px 18px;">Description</th>
+                                    <th style="padding: 14px 18px;">Amount</th>
+                                    <th style="padding: 14px 18px;">Status</th>
+                                    <th style="padding: 14px 18px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="billingInvoicesTableBody">
+                                <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading invoices...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Invoices Pagination Bar -->
+                    <div id="billingInvoicesPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            Showing <strong id="billingInvoicesRangeStart" style="color: #fff;">0</strong>–<strong id="billingInvoicesRangeEnd" style="color: #fff;">0</strong> of <strong id="billingInvoicesTotalCount" style="color: #fff;">0</strong> invoices
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="billingInvoicesPrevBtn" onclick="changeBillingInvoicesPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                            <span id="billingInvoicesCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #38bdf8; padding: 4px 12px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                            <button type="button" id="billingInvoicesNextBtn" onclick="changeBillingInvoicesPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Recurring Schedules Table View -->
-                <div id="billingSchedulesSection" style="display: none; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
-                        <thead>
-                            <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
-                                <th style="padding: 14px 18px;">Client / Organization</th>
-                                <th style="padding: 14px 18px;">Monthly Amount</th>
-                                <th style="padding: 14px 18px;">Billing Day</th>
-                                <th style="padding: 14px 18px;">Terms</th>
-                                <th style="padding: 14px 18px;">Auto-Send Email</th>
-                                <th style="padding: 14px 18px;">Last Billed</th>
-                                <th style="padding: 14px 18px;">Status</th>
-                                <th style="padding: 14px 18px; text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="billingSchedulesTableBody">
-                            <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading schedules...</td></tr>
-                        </tbody>
-                    </table>
+                <div id="billingSchedulesSection" style="display: none;">
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                            <thead>
+                                <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <th style="padding: 14px 18px;">Client / Organization</th>
+                                    <th style="padding: 14px 18px;">Monthly Amount</th>
+                                    <th style="padding: 14px 18px;">Billing Day</th>
+                                    <th style="padding: 14px 18px;">Terms</th>
+                                    <th style="padding: 14px 18px;">Auto-Send Email</th>
+                                    <th style="padding: 14px 18px;">Last Billed</th>
+                                    <th style="padding: 14px 18px;">Status</th>
+                                    <th style="padding: 14px 18px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="billingSchedulesTableBody">
+                                <tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading schedules...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Schedules Pagination Bar -->
+                    <div id="billingSchedulesPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            Showing <strong id="billingSchedulesRangeStart" style="color: #fff;">0</strong>–<strong id="billingSchedulesRangeEnd" style="color: #fff;">0</strong> of <strong id="billingSchedulesTotalCount" style="color: #fff;">0</strong> schedules
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="billingSchedulesPrevBtn" onclick="changeBillingSchedulesPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                            <span id="billingSchedulesCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #c084fc; padding: 4px 12px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                            <button type="button" id="billingSchedulesNextBtn" onclick="changeBillingSchedulesPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             {% elif active_tab == 'compliance' %}
@@ -2894,6 +2920,7 @@
                         </p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="workloadSearchInput" oninput="onWorkloadSearchInput()" placeholder="Search customer..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 14px; font-size: 0.82rem; color: #fff; outline: none; width: 180px;">
                         <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 10px; padding: 4px 10px;">
                             <span style="font-size: 0.78rem; font-weight: 700; color: #c084fc;">👤 Filter Tax Prep:</span>
                             <select id="workloadAssignedUserSelect" onchange="filterWorkloadAssignedUserChanged()" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; font-weight: 700; outline: none; cursor: pointer; padding: 2px 4px;">
@@ -2907,7 +2934,7 @@
                     </div>
                 </div>
 
-                <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                <div style="overflow-x: auto; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
                     <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-muted); font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">
@@ -2919,9 +2946,21 @@
                             </tr>
                         </thead>
                         <tbody id="workloadPendingTableBody">
-                            <tr><td colSpan="6" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading pending workload tasks...</td></tr>
+                            <tr><td colSpan="5" style="padding: 30px; text-align: center; color: var(--text-muted);">Loading pending workload tasks...</td></tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Dedicated Customer Workload Pagination Bar -->
+                <div id="workloadPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">
+                        Showing <strong id="workloadRangeStart" style="color: #fff;">0</strong>–<strong id="workloadRangeEnd" style="color: #fff;">0</strong> of <strong id="workloadTotalCount" style="color: #fff;">0</strong> customers
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" id="workloadPrevBtn" onclick="changeWorkloadPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                        <span id="workloadCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #facc15; padding: 4px 12px; background: rgba(250, 204, 21, 0.1); border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                        <button type="button" id="workloadNextBtn" onclick="changeWorkloadPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -4822,27 +4861,45 @@
             }
         }
 
+        let billingInvoicesCurrentPage = 1;
+        let billingSchedulesCurrentPage = 1;
+        const BILLING_ITEMS_PER_PAGE = 10;
+
+        function changeBillingInvoicesPage(delta) {
+            billingInvoicesCurrentPage += delta;
+            filterBillingTable(false);
+        }
+
+        function changeBillingSchedulesPage(delta) {
+            billingSchedulesCurrentPage += delta;
+            filterBillingTable(false);
+        }
+
         function switchBillingSubTab(tabName) {
             billingActiveSubTab = tabName;
             const invBtn = document.getElementById('billingTabBtnInvoices');
             const schedBtn = document.getElementById('billingTabBtnSchedules');
             const invSec = document.getElementById('billingInvoicesSection');
             const schedSec = document.getElementById('billingSchedulesSection');
-            const filters = document.getElementById('billingInvoiceFilters');
+            const statusSelect = document.getElementById('billingStatusFilterSelect');
+            const searchInput = document.getElementById('billingSearchInput');
 
             if (tabName === 'invoices') {
                 if (invBtn) { invBtn.style.background = 'var(--primary-grad)'; invBtn.style.color = '#fff'; }
                 if (schedBtn) { schedBtn.style.background = 'transparent'; schedBtn.style.color = '#94a3b8'; }
                 if (invSec) invSec.style.display = 'block';
                 if (schedSec) schedSec.style.display = 'none';
-                if (filters) filters.style.display = 'flex';
+                if (statusSelect) statusSelect.style.display = 'inline-block';
+                if (searchInput) searchInput.placeholder = "Search invoice # or client...";
             } else {
                 if (schedBtn) { schedBtn.style.background = 'linear-gradient(135deg, #c084fc, #9333ea)'; schedBtn.style.color = '#fff'; }
                 if (invBtn) { invBtn.style.background = 'transparent'; invBtn.style.color = '#94a3b8'; }
                 if (schedSec) schedSec.style.display = 'block';
                 if (invSec) invSec.style.display = 'none';
-                if (filters) filters.style.display = 'none';
+                if (statusSelect) statusSelect.style.display = 'none';
+                if (searchInput) searchInput.placeholder = "Search schedule or client...";
             }
+            filterBillingTable(true);
         }
 
         async function loadBillingInvoices() {
@@ -4855,7 +4912,7 @@
                     billingAllInvoices = Array.isArray(data) ? data : (data.invoices || data.data || []);
                     const cntElem = document.getElementById('billingInvoicesCount');
                     if (cntElem) cntElem.innerText = billingAllInvoices.length;
-                    renderBillingInvoicesTable(billingAllInvoices);
+                    filterBillingTable(false);
                 }
             } catch (err) {
                 console.error("[LOAD INVOICES ERROR]:", err);
@@ -4866,12 +4923,40 @@
             const tbody = document.getElementById('billingInvoicesTableBody');
             if (!tbody) return;
 
+            const totalFiltered = invoices ? invoices.length : 0;
+            const totalPages = Math.ceil(totalFiltered / BILLING_ITEMS_PER_PAGE) || 1;
+
+            if (billingInvoicesCurrentPage > totalPages) billingInvoicesCurrentPage = totalPages;
+            if (billingInvoicesCurrentPage < 1) billingInvoicesCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (billingInvoicesCurrentPage - 1) * BILLING_ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + BILLING_ITEMS_PER_PAGE, totalFiltered);
+
+            const pageInvoices = (invoices || []).slice(startIndex, endIndex);
+
+            const startElem = document.getElementById('billingInvoicesRangeStart');
+            const endElem = document.getElementById('billingInvoicesRangeEnd');
+            const totalElem = document.getElementById('billingInvoicesTotalCount');
+            const numElem = document.getElementById('billingInvoicesCurrentNumber');
+            const prevBtn = document.getElementById('billingInvoicesPrevBtn');
+            const nextBtn = document.getElementById('billingInvoicesNextBtn');
+
+            if (startElem) startElem.textContent = totalFiltered > 0 ? (startIndex + 1) : 0;
+            if (endElem) endElem.textContent = endIndex;
+            if (totalElem) totalElem.textContent = totalFiltered;
+            if (numElem) numElem.textContent = `Page ${billingInvoicesCurrentPage} of ${totalPages}`;
+
+            const isPrevDisabled = billingInvoicesCurrentPage <= 1;
+            const isNextDisabled = billingInvoicesCurrentPage >= totalPages;
+            if (prevBtn) { prevBtn.disabled = isPrevDisabled; prevBtn.style.opacity = isPrevDisabled ? '0.4' : '1'; }
+            if (nextBtn) { nextBtn.disabled = isNextDisabled; nextBtn.style.opacity = isNextDisabled ? '0.4' : '1'; }
+
             if (!invoices || invoices.length === 0) {
                 tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No invoices found. Click <strong>+ Create Invoice</strong> to generate one.</td></tr>`;
                 return;
             }
 
-            tbody.innerHTML = invoices.map(inv => {
+            tbody.innerHTML = pageInvoices.map(inv => {
                 let badgeStyle = "background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);";
                 if (inv.status === 'PAID') badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
                 else if (inv.status === 'SENT') badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
@@ -4914,7 +4999,7 @@
                     billingAllSchedules = Array.isArray(data) ? data : (data.schedules || data.data || []);
                     const cntElem = document.getElementById('billingSchedulesCount');
                     if (cntElem) cntElem.innerText = billingAllSchedules.length;
-                    renderBillingSchedulesTable(billingAllSchedules);
+                    filterBillingTable(false);
                 }
             } catch (err) {
                 console.error("[LOAD SCHEDULES ERROR]:", err);
@@ -4925,12 +5010,40 @@
             const tbody = document.getElementById('billingSchedulesTableBody');
             if (!tbody) return;
 
+            const totalFiltered = schedules ? schedules.length : 0;
+            const totalPages = Math.ceil(totalFiltered / BILLING_ITEMS_PER_PAGE) || 1;
+
+            if (billingSchedulesCurrentPage > totalPages) billingSchedulesCurrentPage = totalPages;
+            if (billingSchedulesCurrentPage < 1) billingSchedulesCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (billingSchedulesCurrentPage - 1) * BILLING_ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + BILLING_ITEMS_PER_PAGE, totalFiltered);
+
+            const pageSchedules = (schedules || []).slice(startIndex, endIndex);
+
+            const startElem = document.getElementById('billingSchedulesRangeStart');
+            const endElem = document.getElementById('billingSchedulesRangeEnd');
+            const totalElem = document.getElementById('billingSchedulesTotalCount');
+            const numElem = document.getElementById('billingSchedulesCurrentNumber');
+            const prevBtn = document.getElementById('billingSchedulesPrevBtn');
+            const nextBtn = document.getElementById('billingSchedulesNextBtn');
+
+            if (startElem) startElem.textContent = totalFiltered > 0 ? (startIndex + 1) : 0;
+            if (endElem) endElem.textContent = endIndex;
+            if (totalElem) totalElem.textContent = totalFiltered;
+            if (numElem) numElem.textContent = `Page ${billingSchedulesCurrentPage} of ${totalPages}`;
+
+            const isPrevDisabled = billingSchedulesCurrentPage <= 1;
+            const isNextDisabled = billingSchedulesCurrentPage >= totalPages;
+            if (prevBtn) { prevBtn.disabled = isPrevDisabled; prevBtn.style.opacity = isPrevDisabled ? '0.4' : '1'; }
+            if (nextBtn) { nextBtn.disabled = isNextDisabled; nextBtn.style.opacity = isNextDisabled ? '0.4' : '1'; }
+
             if (!schedules || schedules.length === 0) {
                 tbody.innerHTML = `<tr><td colSpan="8" style="padding: 30px; text-align: center; color: var(--text-muted);">No recurring billing schedules configured. Click <strong onclick="openCreateScheduleModal()" style="cursor: pointer; color: #c084fc; text-decoration: underline;">+ New Schedule</strong> to create one.</td></tr>`;
                 return;
             }
 
-            tbody.innerHTML = schedules.map(s => `
+            tbody.innerHTML = pageSchedules.map(s => `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 14px 18px;">
                         <strong style="color: #fff; display: block;">${s.legal_name || 'Client #' + s.customer_id}</strong>
@@ -4954,7 +5067,11 @@
             `).join('');
         }
 
-        function filterBillingTable() {
+        function filterBillingTable(resetPages = true) {
+            if (resetPages) {
+                billingInvoicesCurrentPage = 1;
+                billingSchedulesCurrentPage = 1;
+            }
             const input = document.getElementById('billingSearchInput');
             const query = (input ? input.value : '').toLowerCase().trim();
             if (billingActiveSubTab === 'invoices') {
@@ -6128,6 +6245,7 @@
             const modalTbody = document.getElementById('customerTableBody');
             const pageTbody = document.getElementById('customerPageTableBody');
             const modalCount = document.getElementById('customerTotalCount');
+            const pageHeaderCount = document.getElementById('customerPageHeaderTotalCount');
             const pageCount = document.getElementById('customerPageTotalCount');
 
             let recordsToDisplay = currentCustomerRecords || [];
@@ -6176,6 +6294,7 @@
             const pageRecords = recordsToDisplay.slice(startIndex, endIndex);
 
             if (modalCount) modalCount.textContent = totalFiltered;
+            if (pageHeaderCount) pageHeaderCount.textContent = totalFiltered;
             if (pageCount) pageCount.textContent = totalFiltered;
 
             const modalStart = document.getElementById('customerModalRangeStart');
@@ -8390,6 +8509,21 @@
         let rawWorkloadData = [];
         let currentWorkloadFilter = 'all';
         let currentWorkloadUserFilter = 'all';
+        let workloadCurrentPage = 1;
+        const WORKLOAD_PER_PAGE = 10;
+        let currentWorkloadSearch = '';
+
+        function changeWorkloadPage(delta) {
+            workloadCurrentPage += delta;
+            renderWorkloadTable();
+        }
+
+        function onWorkloadSearchInput() {
+            const input = document.getElementById('workloadSearchInput');
+            currentWorkloadSearch = input ? input.value.trim().toLowerCase() : '';
+            workloadCurrentPage = 1;
+            renderWorkloadTable();
+        }
 
         async function loadWorkloadSummary() {
             const tbody = document.getElementById('workloadPendingTableBody');
@@ -8451,11 +8585,13 @@
             if (select) {
                 currentWorkloadUserFilter = select.value;
             }
+            workloadCurrentPage = 1;
             renderWorkloadTable();
         }
 
         function filterWorkloadTable(mode) {
             currentWorkloadFilter = mode;
+            workloadCurrentPage = 1;
             ['btnFilterWorkloadAll', 'btnFilterWorkloadBk', 'btnFilterWorkloadTax'].forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -8497,12 +8633,53 @@
                 items = items.filter(i => String(i.assigned_user_id || '').trim().toLowerCase() === currentWorkloadUserFilter.trim().toLowerCase());
             }
 
-            if (items.length === 0) {
+            if (currentWorkloadSearch) {
+                items = items.filter(i => {
+                    const cNum = (i.custumer_number || '').toLowerCase();
+                    const dName = (i.display_name || '').toLowerCase();
+                    const lName = (i.legal_name || '').toLowerCase();
+                    const uId = (i.assigned_user_id || '').toLowerCase();
+                    return cNum.includes(currentWorkloadSearch) ||
+                           dName.includes(currentWorkloadSearch) ||
+                           lName.includes(currentWorkloadSearch) ||
+                           uId.includes(currentWorkloadSearch);
+                });
+            }
+
+            const totalFiltered = items.length;
+            const totalPages = Math.ceil(totalFiltered / WORKLOAD_PER_PAGE) || 1;
+
+            if (workloadCurrentPage > totalPages) workloadCurrentPage = totalPages;
+            if (workloadCurrentPage < 1) workloadCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (workloadCurrentPage - 1) * WORKLOAD_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + WORKLOAD_PER_PAGE, totalFiltered);
+
+            const pageItems = items.slice(startIndex, endIndex);
+
+            const startElem = document.getElementById('workloadRangeStart');
+            const endElem = document.getElementById('workloadRangeEnd');
+            const totalElem = document.getElementById('workloadTotalCount');
+            const numElem = document.getElementById('workloadCurrentNumber');
+            const prevBtn = document.getElementById('workloadPrevBtn');
+            const nextBtn = document.getElementById('workloadNextBtn');
+
+            if (startElem) startElem.textContent = totalFiltered > 0 ? (startIndex + 1) : 0;
+            if (endElem) endElem.textContent = endIndex;
+            if (totalElem) totalElem.textContent = totalFiltered;
+            if (numElem) numElem.textContent = `Page ${workloadCurrentPage} of ${totalPages}`;
+
+            const isPrevDisabled = workloadCurrentPage <= 1;
+            const isNextDisabled = workloadCurrentPage >= totalPages;
+            if (prevBtn) { prevBtn.disabled = isPrevDisabled; prevBtn.style.opacity = isPrevDisabled ? '0.4' : '1'; }
+            if (nextBtn) { nextBtn.disabled = isNextDisabled; nextBtn.style.opacity = isNextDisabled ? '0.4' : '1'; }
+
+            if (totalFiltered === 0) {
                 tbody.innerHTML = '<tr><td colSpan="5" style="padding: 32px; text-align: center; color: #38ef7d; font-weight: 700;">🎉 All caught up! No pending tasks found for this filter.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = items.map(item => {
+            tbody.innerHTML = pageItems.map(item => {
                 const isInd = item.is_individual;
                 const typeBadge = isInd 
                     ? '<span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.72rem;">Individual</span>'
