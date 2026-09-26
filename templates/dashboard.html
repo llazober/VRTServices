@@ -5712,30 +5712,6 @@
 
             if (pageTbody) pageTbody.innerHTML = rowsHtml;
             if (modalTbody) modalTbody.innerHTML = rowsHtml;
-        }LowerCase().includes(query) ||
-                (a.type || '').toLowerCase().includes(query)
-            );
-            if (totalCount) totalCount.textContent = filtered.length;
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #64748b;">No accounts found. Click ➕ Add Account or Upload CSV.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = filtered.map(acct => `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                    <td style="padding: 10px 16px; font-weight: 700; color: #67e8f9;">${acct.parentName || CURRENT_PARENT_NAME}</td>
-                    <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #22d3ee;">${acct.accountNumber}</td>
-                    <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${acct.accountName}</td>
-                    <td style="padding: 10px 16px;">
-                        <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; text-transform: uppercase; font-weight: 700; color: #cbd5e1;">${acct.type || 'Expense'}</span>
-                    </td>
-                    <td style="padding: 10px 16px; text-align: right;">
-                        <button onclick="editCoaRecord('${acct.id || ''}', '${acct.accountNumber.replace(/'/g, "\\'")}', '${acct.accountName.replace(/'/g, "\\'")}', '${(acct.type || 'Expense').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
-                        <button onclick="deleteCoaRecord('${acct.id || ''}')" style="padding: 4px 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
         }
 
         function toggleCoaForm() {
