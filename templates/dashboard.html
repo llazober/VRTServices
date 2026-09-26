@@ -7960,6 +7960,10 @@
                 card.style.boxShadow = 'none';
             });
 
+            document.querySelectorAll('.card-reply-btn').forEach(btn => {
+                btn.style.display = 'none';
+            });
+
             const bottomBtn = document.getElementById('commsHistoryBottomReplyBtn');
             const labelEl = document.getElementById('selectedReplyEmailText');
 
@@ -7983,6 +7987,10 @@
                 if (cardEl) {
                     cardEl.style.outline = '2px solid #38bdf8';
                     cardEl.style.boxShadow = '0 0 15px rgba(56, 189, 248, 0.3)';
+                }
+                const activeCardBtn = document.getElementById(`cardReplyBtn-${commId}`);
+                if (activeCardBtn) {
+                    activeCardBtn.style.display = 'inline-flex';
                 }
             }
 
@@ -8160,7 +8168,7 @@
                         const itemCid = item.customer_id || cid || 0;
 
                         const replyBtnHtml = (senderAddr && !isOut) ? `
-                            <button type="button" onclick="replyToCommsItem(event, ${item.id}, '${escSender}', '${escSubj}', ${itemCid})" style="padding: 4px 12px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; border-radius: 6px; font-weight: 800; font-size: 0.72rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 0 10px rgba(0, 230, 118, 0.3);" title="Reply directly to ${escSender}">
+                            <button id="cardReplyBtn-${item.id}" type="button" class="card-reply-btn" onclick="replyToCommsItem(event, ${item.id}, '${escSender}', '${escSubj}', ${itemCid})" style="display: none; padding: 4px 12px; background: linear-gradient(135deg, #00e676, #00b0ff); border: none; color: #000; border-radius: 6px; font-weight: 800; font-size: 0.72rem; cursor: pointer; align-items: center; gap: 4px; box-shadow: 0 0 10px rgba(0, 230, 118, 0.3);" title="Reply directly to ${escSender}">
                                 ↩️ Reply
                             </button>
                         ` : '';
