@@ -6019,7 +6019,10 @@
             setTimeout(() => { modal.style.display = 'none'; }, 300);
         }
 
+        let hasHandledInitialUnreadUrlFilter = false;
+
         async function fetchCustomerRecords(isPage = false) {
+            customerCurrentPage = 1;
             const searchInput = isPage ? document.getElementById('customerPageSearchInput') : document.getElementById('customerSearchInput');
             const query = searchInput?.value || '';
             
@@ -6036,12 +6039,21 @@
                 currentCustomerRecords = data.customers || [];
                 currentCustomerList = currentCustomerRecords;
                 updateCustomerPageUserDropdown();
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('filter') === 'unread') {
-                    const pageSel = document.getElementById('customerPageUnreadSelect');
-                    const modalSel = document.getElementById('customerModalUnreadSelect');
-                    if (pageSel) pageSel.value = 'unread_only';
-                    if (modalSel) modalSel.value = 'unread_only';
+                if (!hasHandledInitialUnreadUrlFilter) {
+                    hasHandledInitialUnreadUrlFilter = true;
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('filter') === 'unread') {
+                        const pageSel = document.getElementById('customerPageUnreadSelect');
+                        const modalSel = document.getElementById('customerModalUnreadSelect');
+                        if (pageSel) pageSel.value = 'unread_only';
+                        if (modalSel) modalSel.value = 'unread_only';
+
+                        if (window.history && window.history.replaceState) {
+                            const cleanUrl = new URL(window.location);
+                            cleanUrl.searchParams.delete('filter');
+                            window.history.replaceState({}, '', cleanUrl);
+                        }
+                    }
                 }
                 renderCustomerTable();
             } catch (err) {
