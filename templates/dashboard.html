@@ -7932,7 +7932,7 @@
 
         let selectedCommsItem = null;
 
-        function selectCommsItem(commId, senderEmail, subject, customerId, event) {
+        function selectCommsItem(commId, senderEmail, subject, customerId, isOutbound = false, event = null) {
             if (event && (event.target.closest('button') || event.target.closest('a'))) {
                 return;
             }
@@ -7940,12 +7940,28 @@
                 markSingleCommRead(null, commId);
             }
 
-            selectedCommsItem = { commId, senderEmail, subject, customerId };
-
             document.querySelectorAll('[id^="commCard-"]').forEach(card => {
                 card.style.outline = 'none';
                 card.style.boxShadow = 'none';
             });
+
+            const bottomBtn = document.getElementById('commsHistoryBottomReplyBtn');
+            const labelEl = document.getElementById('selectedReplyEmailText');
+
+            if (isOutbound || !senderEmail) {
+                selectedCommsItem = null;
+                if (commId) {
+                    const cardEl = document.getElementById(`commCard-${commId}`);
+                    if (cardEl) {
+                        cardEl.style.outline = '1px solid rgba(6, 182, 212, 0.4)';
+                    }
+                }
+                if (labelEl) labelEl.textContent = 'Select an inbound email card above to target recipient';
+                if (bottomBtn) bottomBtn.style.display = 'none';
+                return;
+            }
+
+            selectedCommsItem = { commId, senderEmail, subject, customerId };
 
             if (commId) {
                 const cardEl = document.getElementById(`commCard-${commId}`);
@@ -7955,15 +7971,15 @@
                 }
             }
 
-            const labelEl = document.getElementById('selectedReplyEmailText');
             if (labelEl) {
-                labelEl.textContent = senderEmail ? `${senderEmail} ${subject ? ' (Re: ' + subject + ')' : ''}` : 'Select an email card above to target recipient';
+                labelEl.textContent = `${senderEmail} ${subject ? ' (Re: ' + subject + ')' : ''}`;
             }
+            if (bottomBtn) bottomBtn.style.display = 'inline-flex';
         }
 
         function replyToCommsItem(event, commId, senderEmail, subject, customerId) {
             if (event) event.stopPropagation();
-            selectCommsItem(commId, senderEmail, subject, customerId);
+            selectCommsItem(commId, senderEmail, subject, customerId, false, event);
             replyToSelectedCommsMessage();
         }
 
@@ -8135,7 +8151,7 @@
                         ` : '';
 
                         return `
-                            <div id="commCard-${item.id}" data-is-read="${isRead}" onclick="selectCommsItem(${item.id}, '${escSender}', '${escSubj}', ${itemCid}, event)" style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                            <div id="commCard-${item.id}" data-is-read="${isRead}" onclick="selectCommsItem(${item.id}, '${escSender}', '${escSubj}', ${itemCid}, ${isOut}, event)" style="background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.2s;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         ${dirBadge}
@@ -8156,14 +8172,15 @@
                         `;
                     }).join('');
 
-                    const firstInbound = logs.find(l => l.sender_email && l.direction === 'INBOUND') || logs.find(l => l.sender_email) || logs[0];
-                    if (firstInbound && firstInbound.sender_email) {
-                        const escFirstSender = String(firstInbound.sender_email).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const firstInbound = logs.find(l => l.direction === 'INBOUND' && (l.sender_email || l.reply_to_email));
+                    if (firstInbound && (firstInbound.sender_email || firstInbound.reply_to_email)) {
+                        const firstSender = firstInbound.sender_email || firstInbound.reply_to_email;
+                        const escFirstSender = String(firstSender).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                         const escFirstSubj = String(firstInbound.subject || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                         const firstCid = firstInbound.customer_id || cid || 0;
-                        selectCommsItem(firstInbound.id, escFirstSender, escFirstSubj, firstCid);
+                        selectCommsItem(firstInbound.id, escFirstSender, escFirstSubj, firstCid, false);
                     } else {
-                        selectCommsItem(null, '', '', cid);
+                        selectCommsItem(null, '', '', cid, true);
                     }
                 }
             } catch (err) {
