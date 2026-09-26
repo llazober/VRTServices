@@ -5571,7 +5571,62 @@
                         } else {
                             businessCustomerNames.push(name);
                         }
-                let coaCurrentPage = 1;
+                    });
+                }
+
+                if (mapRes && mapRes.ok) {
+                    const data = await mapRes.json();
+                    currentParentMappings = data.mappings || [];
+                    currentParentMappings.forEach(m => {
+                        const cName = (m.clientName || '').trim();
+                        if (cName && !excludedNames.has(cName.toLowerCase())) {
+                            clientList.push(cName);
+                        }
+                    });
+                }
+
+                clientList.push(...businessCustomerNames);
+
+                clientList = Array.from(new Set(clientList)).filter(Boolean);
+                if (clientList.length === 0) clientList = [CURRENT_PARENT_NAME];
+
+                ['coaClientSelect', 'historyClientSelect'].forEach(id => {
+                    const sel = document.getElementById(id);
+                    if (sel) {
+                        const curVal = sel.value;
+                        sel.innerHTML = clientList.map(n => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
+                        if (curVal && clientList.includes(curVal)) sel.value = curVal;
+                        else sel.value = clientList[0];
+                    }
+                });
+            } catch (err) {
+                console.error('Error syncing client dropdowns:', err);
+            }
+        }
+
+        // --- COA Modal Functions ---
+        async function openCoaModal() {
+            closeAllAppModals();
+            const modal = document.getElementById('coaModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
+            await syncClientSelectDropdowns();
+            await fetchCoaRecords();
+        }
+
+        function closeCoaModal() {
+            const modal = document.getElementById('coaModal');
+            if (!modal) return;
+            modal.style.opacity = '0';
+            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        }
+
+        let coaCurrentPage = 1;
         const COA_PER_PAGE = 10;
 
         function changeCoaPage(delta) {
@@ -5928,7 +5983,6 @@
 
             if (pageTbody) pageTbody.innerHTML = rowsHtml;
             if (modalTbody) modalTbody.innerHTML = rowsHtml;
-        }
         }
 
         async function saveParentMappingRecord(e) {
