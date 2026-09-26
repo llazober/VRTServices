@@ -7743,6 +7743,7 @@
             const replyToEl = document.getElementById('emailFormReplyTo');
             const tplEl = document.getElementById('emailFormTemplateSelect');
             const subjectEl = document.getElementById('emailFormSubject');
+            const msgEl = document.getElementById('emailFormMessage');
 
             const custName = cust ? (cust.legal_name || cust.display_name || cust.customer_name) : `Customer #${cid}`;
             const custNum = cust ? (cust.custumer_number || cust.customer_id || cust.id) : cid;
@@ -7757,6 +7758,7 @@
             }
             if (replyToEl) replyToEl.value = defaultReplyTo;
             if (tplEl) tplEl.value = 'custom';
+            if (msgEl) msgEl.value = '';
 
             if (targetSubject) {
                 if (subjectEl) subjectEl.value = targetSubject.toLowerCase().startsWith('re:') ? targetSubject : `Re: ${targetSubject}`;
@@ -7770,6 +7772,8 @@
         function closeSendCustomerEmailModal() {
             const modal = document.getElementById('sendCustomerEmailModal');
             if (modal) modal.style.display = 'none';
+            const msgEl = document.getElementById('emailFormMessage');
+            if (msgEl) msgEl.value = '';
         }
 
         function applyEmailTemplate(type, custData) {
@@ -7790,8 +7794,10 @@
                 subjectEl.value = `Action Required: Form 8879 E-Signature - ${name}`;
                 msgEl.value = `Dear ${name},\n\nYour Tax Return preparation and review has been completed!\n\nAttached / linked is Form 8879 for your authorization. Please sign and reply to this email with the signed authorization so we can e-file your return with the IRS & State taxing authorities.\n\nThank you,\nTax Preparation Team`;
             } else {
-                subjectEl.value = `Information Update - ${name}`;
-                msgEl.value = `Dear ${name},\n\n`;
+                if (!subjectEl.value || !subjectEl.value.toLowerCase().startsWith('re:')) {
+                    subjectEl.value = `Information Update - ${name}`;
+                }
+                msgEl.value = '';
             }
         }
 
