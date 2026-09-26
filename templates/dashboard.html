@@ -1611,7 +1611,7 @@
                             <button type="submit" id="coaFormSubmitBtn" style="width: 100%; padding: 10px; background: #0891b2; color: #fff; font-weight: 800; font-size: 0.78rem; text-transform: uppercase; border: none; border-radius: 8px; cursor: pointer;">Save Account</button>
                         </div>
                     </form>
-                    <div style="overflow-y: auto; max-height: 550px; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                    <div style="overflow-y: auto; max-height: 550px; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
                         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
                             <thead style="position: sticky; top: 0; background: #141722; z-index: 10;">
                                 <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">
@@ -1627,14 +1627,22 @@
                             </tbody>
                         </table>
                     </div>
-                    <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);">
-                        Total Accounts: <strong id="coaTotalCount" style="color: #67e8f9;">0</strong>
+                    <!-- Dedicated Chart of Accounts Pagination Bar -->
+                    <div id="coaPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            Showing <strong class="coaRangeStart" style="color: #fff;">0</strong>–<strong class="coaRangeEnd" style="color: #fff;">0</strong> of <strong class="coaTotalCount" style="color: #67e8f9;">0</strong> accounts
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="coaPrevBtn" onclick="changeCoaPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                            <span class="coaCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #67e8f9; padding: 4px 12px; background: rgba(103, 232, 249, 0.1); border: 1px solid rgba(103, 232, 249, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                            <button type="button" class="coaNextBtn" onclick="changeCoaPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- ── TAB 2: PARENT-CLIENT MAPPINGS (VIEW ONLY) ── -->
                 <div id="mgmtPanel-mappings" class="mgmt-panel" style="display: none;">
-                    <div style="overflow-y: auto; max-height: 550px; border: 1px solid var(--border-color); border-radius: 16px; background: rgba(0,0,0,0.2);">
+                    <div style="overflow-y: auto; max-height: 550px; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
                         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
                             <thead style="position: sticky; top: 0; background: #141722; z-index: 10;">
                                 <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">
@@ -1647,8 +1655,16 @@
                             </tbody>
                         </table>
                     </div>
-                    <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);">
-                        Total Mappings: <strong id="mappingsTotalCount" style="color: #c084fc;">0</strong>
+                    <!-- Dedicated Parent Mappings Pagination Bar -->
+                    <div id="mappingsPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            Showing <strong class="mappingsRangeStart" style="color: #fff;">0</strong>–<strong class="mappingsRangeEnd" style="color: #fff;">0</strong> of <strong class="mappingsTotalCount" style="color: #c084fc;">0</strong> mappings
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="mappingsPrevBtn" onclick="changeMappingsPage(-1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">◀ Prev</button>
+                            <span class="mappingsCurrentNumber" style="font-size: 0.82rem; font-weight: 800; color: #c084fc; padding: 4px 12px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 8px;">Page 1 of 1</span>
+                            <button type="button" class="mappingsNextBtn" onclick="changeMappingsPage(1)" style="padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s;">Next ▶</button>
+                        </div>
                     </div>
                 </div>
 
@@ -3053,7 +3069,7 @@
                     <button type="submit" id="coaFormSubmitBtn" style="width: 100%; padding: 8px; background: #0891b2; color: #fff; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; border: none; border-radius: 8px; cursor: pointer;">Save Account</button>
                 </div>
             </form>
-            <div style="overflow-y: auto; flex: 1; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(0,0,0,0.2);">
+            <div style="overflow-y: auto; flex: 1; border: 1px solid rgba(255,255,255,0.1); border-top-left-radius: 12px; border-top-right-radius: 12px; background: rgba(0,0,0,0.2);">
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem;">
                     <thead style="position: sticky; top: 0; background: #141722; z-index: 10;">
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">
@@ -3064,12 +3080,19 @@
                             <th style="padding: 10px 16px; text-align: right;">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="coaTableBody"></tbody>
+                    <tbody id="coaModalTableBody"></tbody>
                 </table>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
-                <span style="font-size: 0.75rem; color: #94a3b8;">Total Accounts: <strong id="coaTotalCount" style="color: #fff;">0</strong></span>
-                <button onclick="closeCoaModal()" style="padding: 8px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; border-radius: 10px; cursor: pointer;">Close Manager</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                <div style="font-size: 0.78rem; color: #94a3b8;">
+                    Showing <strong class="coaRangeStart" style="color: #fff;">0</strong>–<strong class="coaRangeEnd" style="color: #fff;">0</strong> of <strong class="coaTotalCount" style="color: #22d3ee;">0</strong> accounts
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="coaPrevBtn" onclick="changeCoaPage(-1)" style="padding: 4px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 700; border-radius: 6px; cursor: pointer;">◀ Prev</button>
+                    <span class="coaCurrentNumber" style="font-size: 0.78rem; font-weight: 800; color: #22d3ee; padding: 2px 8px; background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 6px;">Page 1 of 1</span>
+                    <button type="button" class="coaNextBtn" onclick="changeCoaPage(1)" style="padding: 4px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 700; border-radius: 6px; cursor: pointer;">Next ▶</button>
+                    <button onclick="closeCoaModal()" style="padding: 6px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; border-radius: 8px; cursor: pointer; margin-left: 8px;">Close</button>
+                </div>
             </div>
         </div>
     </div>
@@ -3100,7 +3123,7 @@
                 </div>
                 <button type="submit" style="padding: 8px 16px; background: #9333ea; color: #fff; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">➕ Add Client</button>
             </form>
-            <div style="overflow-y: auto; flex: 1; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(0,0,0,0.2);">
+            <div style="overflow-y: auto; flex: 1; border: 1px solid rgba(255,255,255,0.1); border-top-left-radius: 12px; border-top-right-radius: 12px; background: rgba(0,0,0,0.2);">
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem;">
                     <thead style="position: sticky; top: 0; background: #141722; z-index: 10;">
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">
@@ -3108,12 +3131,19 @@
                             <th style="padding: 10px 16px;">Associated Client</th>
                         </tr>
                     </thead>
-                    <tbody id="mappingsTableBody"></tbody>
+                    <tbody id="mappingsModalTableBody"></tbody>
                 </table>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
-                <span style="font-size: 0.75rem; color: #94a3b8;">Total Mappings: <strong id="mappingsTotalCount" style="color: #fff;">0</strong></span>
-                <button onclick="closeMappingsModal()" style="padding: 8px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; border-radius: 10px; cursor: pointer;">Close Manager</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; flex-wrap: wrap; gap: 12px; margin-top: -1px;">
+                <div style="font-size: 0.78rem; color: #94a3b8;">
+                    Showing <strong class="mappingsRangeStart" style="color: #fff;">0</strong>–<strong class="mappingsRangeEnd" style="color: #fff;">0</strong> of <strong class="mappingsTotalCount" style="color: #c084fc;">0</strong> mappings
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="mappingsPrevBtn" onclick="changeMappingsPage(-1)" style="padding: 4px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 700; border-radius: 6px; cursor: pointer;">◀ Prev</button>
+                    <span class="mappingsCurrentNumber" style="font-size: 0.78rem; font-weight: 800; color: #c084fc; padding: 2px 8px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 6px;">Page 1 of 1</span>
+                    <button type="button" class="mappingsNextBtn" onclick="changeMappingsPage(1)" style="padding: 4px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 700; border-radius: 6px; cursor: pointer;">Next ▶</button>
+                    <button onclick="closeMappingsModal()" style="padding: 6px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; border-radius: 8px; cursor: pointer; margin-left: 8px;">Close</button>
+                </div>
             </div>
         </div>
     </div>
@@ -5541,66 +5571,22 @@
                         } else {
                             businessCustomerNames.push(name);
                         }
-                    });
-                }
+                let coaCurrentPage = 1;
+        const COA_PER_PAGE = 10;
 
-                if (mapRes && mapRes.ok) {
-                    const data = await mapRes.json();
-                    currentParentMappings = data.mappings || [];
-                    currentParentMappings.forEach(m => {
-                        const cName = (m.clientName || '').trim();
-                        if (cName && !excludedNames.has(cName.toLowerCase())) {
-                            clientList.push(cName);
-                        }
-                    });
-                }
-
-                clientList.push(...businessCustomerNames);
-
-                clientList = Array.from(new Set(clientList)).filter(Boolean);
-                if (clientList.length === 0) clientList = [CURRENT_PARENT_NAME];
-
-                ['coaClientSelect', 'historyClientSelect'].forEach(id => {
-                    const sel = document.getElementById(id);
-                    if (sel) {
-                        const curVal = sel.value;
-                        sel.innerHTML = clientList.map(n => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
-                        if (curVal && clientList.includes(curVal)) sel.value = curVal;
-                        else sel.value = clientList[0];
-                    }
-                });
-            } catch (err) {
-                console.error('Error syncing client dropdowns:', err);
-            }
-        }
-
-        // --- COA Modal Functions ---
-        async function openCoaModal() {
-            closeAllAppModals();
-            const modal = document.getElementById('coaModal');
-            if (!modal) return;
-            if (modal.parentElement !== document.body) document.body.appendChild(modal);
-            modal.style.display = 'flex';
-            modal.offsetHeight;
-            modal.style.opacity = '1';
-            if (modal.children[0]) modal.children[0].style.transform = 'scale(1)';
-            await syncClientSelectDropdowns();
-            await fetchCoaRecords();
-        }
-
-        function closeCoaModal() {
-            const modal = document.getElementById('coaModal');
-            if (!modal) return;
-            modal.style.opacity = '0';
-            if (modal.children[0]) modal.children[0].style.transform = 'scale(0.95)';
-            setTimeout(() => { modal.style.display = 'none'; }, 300);
+        function changeCoaPage(delta) {
+            coaCurrentPage += delta;
+            renderCoaTable();
         }
 
         async function fetchCoaRecords() {
+            coaCurrentPage = 1;
             const clientSelect = document.getElementById('coaClientSelect');
             const clientName = clientSelect ? clientSelect.value.trim() : CURRENT_PARENT_NAME;
             const tbody = document.getElementById('coaTableBody');
+            const modalTbody = document.getElementById('coaModalTableBody');
             if (tbody) tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #94a3b8;">Loading accounts...</td></tr>';
+            if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #94a3b8;">Loading accounts...</td></tr>';
             try {
                 const res = await fetch(`/api/clients/coa?clientName=${encodeURIComponent(clientName)}&parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
                 const data = await res.json();
@@ -5609,18 +5595,69 @@
             } catch (err) {
                 console.error('Error fetching COA:', err);
                 if (tbody) tbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load accounts.</td></tr>';
+                if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load accounts.</td></tr>';
             }
         }
 
         function renderCoaTable() {
             const query = (document.getElementById('coaSearchInput')?.value || '').toLowerCase();
-            const tbody = document.getElementById('coaTableBody');
-            const totalCount = document.getElementById('coaTotalCount');
-            if (!tbody) return;
+            const pageTbody = document.getElementById('coaTableBody');
+            const modalTbody = document.getElementById('coaModalTableBody');
+            if (!pageTbody && !modalTbody) return;
 
-            const filtered = currentCoaRecords.filter(a =>
+            const filtered = (currentCoaRecords || []).filter(a =>
                 (a.accountNumber || '').toLowerCase().includes(query) ||
                 (a.accountName || '').toLowerCase().includes(query) ||
+                (a.type || '').toLowerCase().includes(query)
+            );
+
+            const totalFiltered = filtered.length;
+            const totalPages = Math.ceil(totalFiltered / COA_PER_PAGE) || 1;
+
+            if (coaCurrentPage > totalPages) coaCurrentPage = totalPages;
+            if (coaCurrentPage < 1) coaCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (coaCurrentPage - 1) * COA_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + COA_PER_PAGE, totalFiltered);
+
+            const pageRecords = filtered.slice(startIndex, endIndex);
+
+            document.querySelectorAll('.coaRangeStart').forEach(el => el.textContent = totalFiltered > 0 ? (startIndex + 1) : 0);
+            document.querySelectorAll('.coaRangeEnd').forEach(el => el.textContent = endIndex);
+            document.querySelectorAll('.coaTotalCount').forEach(el => el.textContent = totalFiltered);
+            document.querySelectorAll('#coaTotalCount').forEach(el => el.textContent = totalFiltered);
+            document.querySelectorAll('.coaCurrentNumber').forEach(el => el.textContent = `Page ${coaCurrentPage} of ${totalPages}`);
+
+            const isPrevDisabled = coaCurrentPage <= 1;
+            const isNextDisabled = coaCurrentPage >= totalPages;
+            document.querySelectorAll('.coaPrevBtn').forEach(btn => { btn.disabled = isPrevDisabled; btn.style.opacity = isPrevDisabled ? '0.4' : '1'; });
+            document.querySelectorAll('.coaNextBtn').forEach(btn => { btn.disabled = isNextDisabled; btn.style.opacity = isNextDisabled ? '0.4' : '1'; });
+
+            if (totalFiltered === 0) {
+                const emptyHtml = '<tr><td colSpan="5" style="padding: 24px; text-align: center; color: #64748b;">No accounts found. Click ➕ Add Account or Upload CSV.</td></tr>';
+                if (pageTbody) pageTbody.innerHTML = emptyHtml;
+                if (modalTbody) modalTbody.innerHTML = emptyHtml;
+                return;
+            }
+
+            const rowsHtml = pageRecords.map(acct => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 16px; font-weight: 700; color: #67e8f9;">${acct.parentName || CURRENT_PARENT_NAME}</td>
+                    <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #22d3ee;">${acct.accountNumber}</td>
+                    <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${acct.accountName}</td>
+                    <td style="padding: 10px 16px;">
+                        <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; text-transform: uppercase; font-weight: 700; color: #cbd5e1;">${acct.type || 'Expense'}</span>
+                    </td>
+                    <td style="padding: 10px 16px; text-align: right;">
+                        <button onclick="editCoaRecord('${acct.id || ''}', '${(acct.accountNumber || '').replace(/'/g, "\\'")}', '${(acct.accountName || '').replace(/'/g, "\\'")}', '${(acct.type || 'Expense').replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-right: 6px;">Edit</button>
+                        <button onclick="deleteCoaRecord('${acct.id || ''}')" style="padding: 4px 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (pageTbody) pageTbody.innerHTML = rowsHtml;
+            if (modalTbody) modalTbody.innerHTML = rowsHtml;
+        }LowerCase().includes(query) ||
                 (a.type || '').toLowerCase().includes(query)
             );
             if (totalCount) totalCount.textContent = filtered.length;
@@ -5820,9 +5857,20 @@
             }
         }
 
+        let mappingsCurrentPage = 1;
+        const MAPPINGS_PER_PAGE = 10;
+
+        function changeMappingsPage(delta) {
+            mappingsCurrentPage += delta;
+            renderMappingsTable();
+        }
+
         async function fetchParentMappings() {
+            mappingsCurrentPage = 1;
             const tbody = document.getElementById('mappingsTableBody');
+            const modalTbody = document.getElementById('mappingsModalTableBody');
             if (tbody) tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #94a3b8;">Loading mappings...</td></tr>';
+            if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #94a3b8;">Loading mappings...</td></tr>';
             try {
                 const res = await fetch(`/api/clients/parent-mappings?parentName=${encodeURIComponent(CURRENT_PARENT_NAME)}`);
                 const data = await res.json();
@@ -5833,26 +5881,54 @@
             } catch (err) {
                 console.error('Error fetching mappings:', err);
                 if (tbody) tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load mappings.</td></tr>';
+                if (modalTbody) modalTbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #ff5252;">Failed to load mappings.</td></tr>';
             }
         }
 
         function renderMappingsTable() {
-            const tbody = document.getElementById('mappingsTableBody');
-            const totalCount = document.getElementById('mappingsTotalCount');
-            if (!tbody) return;
-            if (totalCount) totalCount.textContent = currentParentMappings.length;
+            const pageTbody = document.getElementById('mappingsTableBody');
+            const modalTbody = document.getElementById('mappingsModalTableBody');
+            if (!pageTbody && !modalTbody) return;
 
-            if (currentParentMappings.length === 0) {
-                tbody.innerHTML = '<tr><td colSpan="2" style="padding: 24px; text-align: center; color: #64748b;">No client mappings found.</td></tr>';
+            const totalFiltered = (currentParentMappings || []).length;
+            const totalPages = Math.ceil(totalFiltered / MAPPINGS_PER_PAGE) || 1;
+
+            if (mappingsCurrentPage > totalPages) mappingsCurrentPage = totalPages;
+            if (mappingsCurrentPage < 1) mappingsCurrentPage = 1;
+
+            const startIndex = totalFiltered > 0 ? (mappingsCurrentPage - 1) * MAPPINGS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + MAPPINGS_PER_PAGE, totalFiltered);
+
+            const pageRecords = (currentParentMappings || []).slice(startIndex, endIndex);
+
+            document.querySelectorAll('.mappingsRangeStart').forEach(el => el.textContent = totalFiltered > 0 ? (startIndex + 1) : 0);
+            document.querySelectorAll('.mappingsRangeEnd').forEach(el => el.textContent = endIndex);
+            document.querySelectorAll('.mappingsTotalCount').forEach(el => el.textContent = totalFiltered);
+            document.querySelectorAll('#mappingsTotalCount').forEach(el => el.textContent = totalFiltered);
+            document.querySelectorAll('.mappingsCurrentNumber').forEach(el => el.textContent = `Page ${mappingsCurrentPage} of ${totalPages}`);
+
+            const isPrevDisabled = mappingsCurrentPage <= 1;
+            const isNextDisabled = mappingsCurrentPage >= totalPages;
+            document.querySelectorAll('.mappingsPrevBtn').forEach(btn => { btn.disabled = isPrevDisabled; btn.style.opacity = isPrevDisabled ? '0.4' : '1'; });
+            document.querySelectorAll('.mappingsNextBtn').forEach(btn => { btn.disabled = isNextDisabled; btn.style.opacity = isNextDisabled ? '0.4' : '1'; });
+
+            if (totalFiltered === 0) {
+                const emptyHtml = '<tr><td colSpan="2" style="padding: 24px; text-align: center; color: #64748b;">No client mappings found.</td></tr>';
+                if (pageTbody) pageTbody.innerHTML = emptyHtml;
+                if (modalTbody) modalTbody.innerHTML = emptyHtml;
                 return;
             }
 
-            tbody.innerHTML = currentParentMappings.map(m => `
+            const rowsHtml = pageRecords.map(m => `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 10px 16px; font-weight: 700; color: #c084fc;">${m.parentName}</td>
                     <td style="padding: 10px 16px; font-weight: 700; color: #fff;">${m.clientName}</td>
                 </tr>
             `).join('');
+
+            if (pageTbody) pageTbody.innerHTML = rowsHtml;
+            if (modalTbody) modalTbody.innerHTML = rowsHtml;
+        }
         }
 
         async function saveParentMappingRecord(e) {
