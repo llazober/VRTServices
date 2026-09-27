@@ -2673,7 +2673,7 @@
 
                     timeElem.textContent = 'Loading...';
                     try {
-                        let url = `/api/tax-requirements/last-sent?account_type=${encodeURIComponent(accountType)}&target=${encodeURIComponent(target)}`;
+                        let url = `/api/tax-requirements/last-sent?account_type=${encodeURIComponent(accountType)}&target=${encodeURIComponent(target)}&_t=${new Date().getTime()}`;
                         if (target === 'specific' && customerId) {
                             url += `&customer_id=${encodeURIComponent(customerId)}`;
                         }
