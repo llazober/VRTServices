@@ -14396,8 +14396,10 @@ async def get_last_tax_requirements_email_sent(
                 "account_type": account_type
             }
     except Exception as e:
-        print(f"Error getting last sent tax email timestamp: {e}")
-        return {"last_sent": "Never sent", "raw_timestamp": None}
+        import traceback
+        err_detail = traceback.format_exc()
+        print(f"[LAST-SENT ERROR] {e}\n{err_detail}")
+        return {"last_sent": "Never sent", "raw_timestamp": None, "debug_error": str(e)}
     finally:
         if conn:
             conn.close()
