@@ -14274,6 +14274,12 @@ async def get_last_tax_requirements_email_sent(
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
+    # Extract query params directly for guaranteed parsing
+    q_params = request.query_params
+    target = (q_params.get("target") or target or "all").strip()
+    account_type = (q_params.get("account_type") or account_type or "all_types").strip()
+    customer_id = (q_params.get("customer_id") or customer_id or "").strip()
+
     conn = None
     try:
         conn = get_db_connection()
@@ -14281,9 +14287,13 @@ async def get_last_tax_requirements_email_sent(
             where_clauses = ["chk.tax_req_email_sent_at IS NOT NULL"]
             params = []
 
-            if target == "specific" and customer_id and str(customer_id).strip().isdigit():
-                where_clauses.append("chk.customer_id = %s")
-                params.append(int(customer_id))
+            if target == "specific" and customer_id:
+                if customer_id.isdigit():
+                    where_clauses.append("(chk.customer_id = %s OR c.id = %s)")
+                    params.extend([int(customer_id), int(customer_id)])
+                else:
+                    where_clauses.append("(c.custumer_number = %s OR c.id::text = %s)")
+                    params.extend([customer_id, customer_id])
             elif account_type == "individual":
                 where_clauses.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
             elif account_type == "business":
@@ -14301,11 +14311,15 @@ async def get_last_tax_requirements_email_sent(
             ts_chk = row_chk[0] if row_chk and row_chk[0] else None
             
             # 2. Fetch MAX timestamp from customer_communications
-            comm_where = ["comm.direction = 'OUTBOUND'", "(comm.subject ILIKE '%%Tax Year%%' OR comm.subject ILIKE '%%Tax Documents%%' OR comm.subject ILIKE '%%Tax Return%%')"]
+            comm_where = ["comm.direction = 'OUTBOUND'"]
             comm_params = []
-            if target == "specific" and customer_id and str(customer_id).strip().isdigit():
-                comm_where.append("comm.customer_id = %s")
-                comm_params.append(int(customer_id))
+            if target == "specific" and customer_id:
+                if customer_id.isdigit():
+                    comm_where.append("(comm.customer_id = %s OR c.id = %s)")
+                    comm_params.extend([int(customer_id), int(customer_id)])
+                else:
+                    comm_where.append("(c.custumer_number = %s OR c.id::text = %s)")
+                    comm_params.extend([customer_id, customer_id])
             elif account_type == "individual":
                 comm_where.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
             elif account_type == "business":
