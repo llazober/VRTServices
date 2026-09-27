@@ -14304,12 +14304,7 @@ def init_requirement_email_tracker_table():
 
 
 @app.get("/api/tax-requirements/last-sent")
-async def get_last_tax_requirements_email_sent(
-    request: Request, 
-    account_type: str = "all_types", 
-    target: str = "all", 
-    customer_id: str | None = None
-):
+async def get_last_tax_requirements_email_sent(request: Request):
     """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified target/customer strictly from requirement_email_dispatch_logs."""
     username = get_current_username(request)
     if not username:
@@ -14317,11 +14312,11 @@ async def get_last_tax_requirements_email_sent(
     
     init_requirement_email_tracker_table()
 
-    # Extract query params directly for guaranteed parsing
+    # Extract query params directly — no FastAPI validation, no 422 risk
     q_params = request.query_params
-    target = (q_params.get("target") or target or "all").strip()
-    account_type = (q_params.get("account_type") or account_type or "all_types").strip()
-    customer_id_str = (q_params.get("customer_id") or customer_id or "").strip()
+    target = (q_params.get("target") or "all").strip()
+    account_type = (q_params.get("account_type") or "all_types").strip()
+    customer_id_str = (q_params.get("customer_id") or "").strip()
 
     conn = None
     try:
