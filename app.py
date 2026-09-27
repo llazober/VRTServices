@@ -14329,26 +14329,36 @@ async def get_last_tax_requirements_email_sent(
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             last_ts = None
             if target == "specific" and customer_id_str:
-                client_key = f"client_{customer_id_str}"
-                # 1. Direct check for specific client
+                # Resolve customer identifiers (id, custumer_number, integer ref)
                 cur.execute("""
-                    SELECT last_time_sent FROM requirement_email_dispatch_logs
-                    WHERE target_audience_key = %s;
-                """, (client_key,))
-                row = cur.fetchone()
-                if row and row.get("last_time_sent"):
-                    last_ts = row["last_time_sent"]
-                else:
-                    # 2. Fallback check for bulk dispatches sent to this client's group or all_types
-                    cust_type_group = "individual"
-                    if customer_id_str.isdigit():
-                        cur.execute("SELECT customer_type FROM customer WHERE id = %s;", (int(customer_id_str),))
-                        c_row = cur.fetchone()
-                        if c_row and c_row.get("customer_type"):
-                            ctype = str(c_row["customer_type"]).strip().lower()
-                            if ctype not in ("individual", "joint account", "joint"):
-                                cust_type_group = "business"
+                    SELECT id, custumer_number, customer_type FROM customer 
+                    WHERE id::text = %s OR custumer_number = %s OR custumer_number = %s OR id::text = %s;
+                """, (customer_id_str, customer_id_str, f"CUST-{customer_id_str}", customer_id_str.replace("CUST-", "")))
+                c_info = cur.fetchone()
+                
+                possible_keys = [f"client_{customer_id_str}"]
+                cid_int = None
+                cust_type_group = "individual"
+                if c_info:
+                    cid_int = c_info["id"]
+                    cnum = (c_info["custumer_number"] or "").strip()
+                    c_num_clean = cnum.replace("CUST-", "").strip()
+                    possible_keys.extend([f"client_{cid_int}", f"client_{cnum}", f"client_{c_num_clean}"])
+                    ctype = str(c_info.get("customer_type") or "").strip().lower()
+                    if ctype not in ("individual", "joint account", "joint"):
+                        cust_type_group = "business"
 
+                # 1. Check direct dispatches for this client (via any identifier key or customer_id)
+                cur.execute("""
+                    SELECT MAX(last_time_sent) AS max_ts 
+                    FROM requirement_email_dispatch_logs
+                    WHERE target_audience_key = ANY(%s) OR (customer_id IS NOT NULL AND customer_id = %s);
+                """, (list(set(possible_keys)), cid_int or -1))
+                row = cur.fetchone()
+                if row and row.get("max_ts"):
+                    last_ts = row["max_ts"]
+                else:
+                    # 2. Fallback to check bulk dispatches sent to this client's group or all_types
                     cur.execute("""
                         SELECT MAX(last_time_sent) AS max_ts
                         FROM requirement_email_dispatch_logs
@@ -14761,20 +14771,29 @@ async def send_tax_requirements_email(request: Request):
                 _log_conn = get_db_connection()
                 with _log_conn.cursor() as _log_cur:
                     if target == "specific" and customer_id_filter:
-                        client_key = f"client_{customer_id_filter}"
-                        client_label = f"Specific Client (ID: {customer_id_filter})"
+                        _log_cur.execute("""
+                            SELECT id, custumer_number FROM customer 
+                            WHERE id::text = %s OR custumer_number = %s OR custumer_number = %s OR id::text = %s;
+                        """, (str(customer_id_filter), str(customer_id_filter), f"CUST-{customer_id_filter}", str(customer_id_filter).replace("CUST-", "")))
+                        _c_ref = _log_cur.fetchone()
+                        _cid = _c_ref[0] if _c_ref else (int(customer_id_filter) if str(customer_id_filter).isdigit() else None)
+                        _cnum = _c_ref[1] if _c_ref else customer_id_filter
+
+                        client_key = f"client_{_cid}"
+                        client_label = f"Specific Client (ID: {_cid} / {_cnum})"
                         _log_cur.execute("""
                             INSERT INTO requirement_email_dispatch_logs
                                 (target_audience_key, target_audience_label, customer_id, last_time_sent, last_email_type, last_tax_year, last_sent_by, last_sent_count, updated_at)
                             VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                             ON CONFLICT (target_audience_key) DO UPDATE SET
+                                customer_id = EXCLUDED.customer_id,
                                 last_time_sent = CURRENT_TIMESTAMP,
                                 last_email_type = EXCLUDED.last_email_type,
                                 last_tax_year = EXCLUDED.last_tax_year,
                                 last_sent_by = EXCLUDED.last_sent_by,
                                 last_sent_count = EXCLUDED.last_sent_count,
                                 updated_at = CURRENT_TIMESTAMP;
-                        """, (client_key, client_label, int(customer_id_filter) if str(customer_id_filter).isdigit() else None, email_type, tax_year, username, sent_count))
+                        """, (client_key, client_label, _cid, email_type, tax_year, username, sent_count))
                     else:
                         target_keys = ["all_types", "individual", "business"] if account_type == "all_types" else [account_type]
                         _log_cur.execute("""
