@@ -2812,6 +2812,7 @@
                             opt.textContent = `${c.legal_name || 'Client'} (${ref})${typeStr}`;
                             clientSel.appendChild(opt);
                         });
+                        loadLastEmailSentTimestamp();
                     } catch (e) {
                         console.error('Error loading clients for dropdown:', e);
                         clientSel.innerHTML = '<option value="">Error loading clients</option>';

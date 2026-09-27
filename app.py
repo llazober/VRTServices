@@ -14289,36 +14289,41 @@ async def get_last_tax_requirements_email_sent(
             elif account_type == "business":
                 where_clauses.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
 
-            sql = f"""
+            # 1. Fetch MAX timestamp from customer_task_checklist
+            sql_chk = f"""
                 SELECT MAX(chk.tax_req_email_sent_at) 
                 FROM customer_task_checklist chk
                 JOIN customer c ON chk.customer_id = c.id
                 WHERE {' AND '.join(where_clauses)};
             """
-            cur.execute(sql, tuple(params))
-            row = cur.fetchone()
-            last_ts = row[0] if row and row[0] else None
+            cur.execute(sql_chk, tuple(params))
+            row_chk = cur.fetchone()
+            ts_chk = row_chk[0] if row_chk and row_chk[0] else None
             
-            if not last_ts:
-                comm_where = ["comm.direction = 'OUTBOUND'", "(comm.subject ILIKE '%%Tax Year%%' OR comm.subject ILIKE '%%Tax Documents%%')"]
-                comm_params = []
-                if target == "specific" and customer_id and str(customer_id).strip().isdigit():
-                    comm_where.append("comm.customer_id = %s")
-                    comm_params.append(int(customer_id))
-                elif account_type == "individual":
-                    comm_where.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
-                elif account_type == "business":
-                    comm_where.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
+            # 2. Fetch MAX timestamp from customer_communications
+            comm_where = ["comm.direction = 'OUTBOUND'", "(comm.subject ILIKE '%%Tax Year%%' OR comm.subject ILIKE '%%Tax Documents%%' OR comm.subject ILIKE '%%Tax Return%%')"]
+            comm_params = []
+            if target == "specific" and customer_id and str(customer_id).strip().isdigit():
+                comm_where.append("comm.customer_id = %s")
+                comm_params.append(int(customer_id))
+            elif account_type == "individual":
+                comm_where.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
+            elif account_type == "business":
+                comm_where.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
 
-                sql_comm = f"""
-                    SELECT MAX(comm.created_at)
-                    FROM customer_communications comm
-                    JOIN customer c ON comm.customer_id = c.id
-                    WHERE {' AND '.join(comm_where)};
-                """
-                cur.execute(sql_comm, tuple(comm_params))
-                row2 = cur.fetchone()
-                last_ts = row2[0] if row2 and row2[0] else None
+            sql_comm = f"""
+                SELECT MAX(comm.created_at)
+                FROM customer_communications comm
+                JOIN customer c ON comm.customer_id = c.id
+                WHERE {' AND '.join(comm_where)};
+            """
+            cur.execute(sql_comm, tuple(comm_params))
+            row_comm = cur.fetchone()
+            ts_comm = row_comm[0] if row_comm and row_comm[0] else None
+
+            # Pick the overall latest timestamp
+            candidates = [t for t in (ts_chk, ts_comm) if t is not None]
+            last_ts = max(candidates) if candidates else None
 
             # Format timestamp in US Eastern Time (America/New_York)
             import zoneinfo, datetime
