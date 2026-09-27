@@ -1148,12 +1148,27 @@ def init_billing_tables():
                     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS to_invoice (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    compliance_event_id BIGINT REFERENCES compliance_calendar_events(id) ON DELETE SET NULL,
+                    customer_id         BIGINT REFERENCES customer(id) ON DELETE CASCADE,
+                    legal_name          VARCHAR(200) NOT NULL,
+                    category            VARCHAR(100) NOT NULL,
+                    due_date            DATE NOT NULL,
+                    date_completed      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    status              VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+                    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON customer_invoices (customer_id);
                 CREATE INDEX IF NOT EXISTS idx_invoices_status ON customer_invoices (status);
                 CREATE INDEX IF NOT EXISTS idx_schedules_billing_day ON customer_billing_schedules (billing_day);
+                CREATE INDEX IF NOT EXISTS idx_to_invoice_customer_id ON to_invoice (customer_id);
+                CREATE INDEX IF NOT EXISTS idx_to_invoice_status ON to_invoice (status);
             """)
             conn.commit()
-            print("Billing tables (customer_billing_schedules, customer_invoices) initialized successfully in VRT database.")
+            print("Billing tables (customer_billing_schedules, customer_invoices, to_invoice) initialized successfully in VRT database.")
     except Exception as e:
         print(f"Error initializing billing tables: {e}")
     finally:
@@ -6222,6 +6237,32 @@ async def update_compliance_event_status(event_id: int, request: Request):
             if not row:
                 raise HTTPException(status_code=404, detail="Compliance event not found.")
 
+            if new_status == "Completed":
+                c_category_raw = (row.get("category") or "").strip()
+                if "corporate tax" in c_category_raw.lower():
+                    try:
+                        c_id = row.get("customer_id")
+                        c_category = c_category_raw or "Corporate Tax"
+                        c_due = row.get("due_date")
+                        l_name = "Unknown Client"
+                        if c_id:
+                            cur.execute("SELECT legal_name, display_name FROM customer WHERE id = %s;", (c_id,))
+                            c_rec = cur.fetchone()
+                            if c_rec:
+                                l_name = c_rec.get("legal_name") or c_rec.get("display_name") or l_name
+
+                        cur.execute("""
+                            INSERT INTO to_invoice (
+                                compliance_event_id, customer_id, legal_name, category, due_date, date_completed, status
+                            )
+                            SELECT %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 'PENDING'
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM to_invoice WHERE compliance_event_id = %s AND status = 'PENDING'
+                            );
+                        """, (event_id, c_id, l_name, c_category, c_due, event_id))
+                    except Exception as to_inv_err:
+                        print(f"Warning: Failed to insert to_invoice record for compliance event #{event_id}: {to_inv_err}")
+
             try:
                 sync_bookkeeping_workflow_from_compliance_event(cur, dict(row))
             except Exception as sync_err:
@@ -6512,7 +6553,7 @@ async def check_compliance_preset_status(request: Request, target_year: int = No
 
 
 @app.get("/api/customers")
-async def get_customers(request: Request, query: str = "", parentName: str = "", business_only: bool = False):
+async def get_customers(request: Request, query: str = "", parentName: str = "", business_only: bool = False, exclude_system: bool = False):
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -6543,6 +6584,9 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
 
             if business_only:
                 where_clauses.append("(LOWER(COALESCE(customer_type, '')) NOT IN ('individual', 'join account', 'joint account') AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'individual%%' AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'join%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%individual 1040%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%joint account 1040%%')")
+
+            if exclude_system:
+                where_clauses.append("(custumer_number != 'CUST-0000' AND LOWER(COALESCE(customer_type, '')) != 'system')")
 
             if query.strip():
                 q = f"%{query.strip()}%"
@@ -10666,6 +10710,57 @@ async def list_invoices(request: Request, status: str = "ALL", customer_id: str 
     finally:
         if conn: conn.close()
 
+@app.get("/api/billing/to-invoice")
+async def get_to_invoice_records(request: Request):
+    """Fetch all pending items awaiting invoicing from the to_invoice table."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, compliance_event_id, customer_id, legal_name, category, due_date, date_completed, status, created_at
+                FROM to_invoice
+                WHERE status = 'PENDING'
+                ORDER BY due_date ASC, id DESC;
+            """)
+            records = cur.fetchall()
+            res = []
+            for r in records:
+                row = dict(r)
+                if row.get("due_date"):
+                    row["due_date"] = str(row["due_date"])
+                if row.get("date_completed"):
+                    row["date_completed"] = str(row["date_completed"])
+                if row.get("created_at"):
+                    row["created_at"] = str(row["created_at"])
+                res.append(row)
+            return {"records": res, "total": len(res)}
+    except Exception as e:
+        print(f"Error fetching to_invoice records: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.delete("/api/billing/to-invoice/{record_id}")
+async def delete_to_invoice_record(record_id: int, request: Request):
+    """Delete a record from to_invoice table."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM to_invoice WHERE id = %s;", (record_id,))
+            conn.commit()
+            return {"status": "success", "message": "Record deleted successfully"}
+    except Exception as e:
+        print(f"Error deleting to_invoice record #{record_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.post("/api/billing/invoices")
 async def create_manual_invoice(request: Request):
     """Create a manual one-off invoice and optionally send immediately."""
@@ -10675,6 +10770,8 @@ async def create_manual_invoice(request: Request):
     amount = float(payload.get("amount") or 0.0)
     description = payload.get("description") or "Professional Services Rendered"
     due_days = int(payload.get("due_days") or 15)
+    custom_due_date = payload.get("due_date")
+    to_invoice_id = payload.get("to_invoice_id")
     send_now = bool(payload.get("send_now", True))
 
     if not customer_id or amount <= 0:
@@ -10693,6 +10790,11 @@ async def create_manual_invoice(request: Request):
             import datetime
             today = datetime.date.today()
             due_date = today + datetime.timedelta(days=due_days)
+            if custom_due_date:
+                try:
+                    due_date = datetime.datetime.strptime(custom_due_date, "%Y-%m-%d").date()
+                except Exception:
+                    pass
 
             cur.execute("""
                 INSERT INTO customer_invoices (
@@ -10703,6 +10805,13 @@ async def create_manual_invoice(request: Request):
             """, (inv_number, customer_id, amount, amount, today, due_date, description))
             inv_row = cur.fetchone()
             inv_id = inv_row["id"]
+
+            if to_invoice_id:
+                try:
+                    cur.execute("UPDATE to_invoice SET status = 'INVOICED', updated_at = CURRENT_TIMESTAMP WHERE id = %s;", (to_invoice_id,))
+                except Exception as e_to_inv:
+                    print(f"Warning: Error updating to_invoice record #{to_invoice_id}: {e_to_inv}")
+
             conn.commit()
 
             if send_now:
