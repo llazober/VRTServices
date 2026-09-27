@@ -14262,6 +14262,46 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
     return {"success": True, "message": f"Queued {queued_count} document(s) for classification", "queued_count": queued_count}
 
 
+@app.get("/api/tax-requirements/last-sent")
+async def get_last_tax_requirements_email_sent(request: Request):
+    """Returns the timestamp of the last dispatched tax requirement email."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT MAX(tax_req_email_sent_at) 
+                FROM customer_task_checklist 
+                WHERE tax_req_email_sent_at IS NOT NULL;
+            """)
+            row = cur.fetchone()
+            last_ts = row[0] if row and row[0] else None
+            
+            if not last_ts:
+                cur.execute("""
+                    SELECT MAX(created_at)
+                    FROM customer_communications
+                    WHERE direction = 'OUTBOUND' AND (subject ILIKE '%%Tax Year%%' OR subject ILIKE '%%Tax Documents%%');
+                """)
+                row2 = cur.fetchone()
+                last_ts = row2[0] if row2 and row2[0] else None
+
+            formatted_str = last_ts.strftime("%m/%d/%Y %I:%M:%S %p") if last_ts else "Never sent"
+            return {
+                "last_sent": formatted_str,
+                "raw_timestamp": str(last_ts) if last_ts else None
+            }
+    except Exception as e:
+        print(f"Error getting last sent tax email timestamp: {e}")
+        return {"last_sent": "Never sent", "raw_timestamp": None}
+    finally:
+        if conn:
+            conn.close()
+
 @app.post("/api/tax-requirements/send-email")
 async def send_tax_requirements_email(request: Request):
     """
@@ -14626,12 +14666,15 @@ async def send_tax_requirements_email(request: Request):
                 except Exception as ce:
                     print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
 
+        last_sent_str = datetime.datetime.now().strftime("%m/%d/%Y %I:%M:%S %p") if sent_count > 0 else None
+
         return {
             "success": True,
             "message": f"Sent: {sent_count} | Skipped: {skipped_count} | Failed: {failed_count}",
             "sent_count": sent_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,
+            "last_sent": last_sent_str,
             "details": errors
         }
     except Exception as e:
@@ -14639,6 +14682,7 @@ async def send_tax_requirements_email(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
+            conn.close()
             conn.close()
 
 
