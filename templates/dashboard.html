@@ -4894,7 +4894,7 @@
             }
         }
 
-        async function populateBillingCustomerDropdowns() {
+        async function populateBillingCustomerDropdowns(selectedCustomerId = null) {
             try {
                 const res = await fetch('/api/customers?exclude_system=true');
                 if (res.ok) {
@@ -4911,7 +4911,12 @@
                     const schedSelect = document.getElementById('scheduleCustomerSelect');
                     const invSelect = document.getElementById('invoiceCustomerSelect');
                     if (schedSelect) schedSelect.innerHTML = optionsHtml;
-                    if (invSelect) invSelect.innerHTML = optionsHtml;
+                    if (invSelect) {
+                        invSelect.innerHTML = optionsHtml;
+                        if (selectedCustomerId) {
+                            invSelect.value = String(selectedCustomerId);
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("[BILLING CUSTOMER DROPDOWN ERROR]:", err);
@@ -5022,20 +5027,18 @@
             }).join('');
         }
 
-        function openInvoiceModalForToBeInvoiced(toInvoiceId, customerId, category, dueDate) {
+        async function openInvoiceModalForToBeInvoiced(toInvoiceId, customerId, category, dueDate) {
             activeToBeInvoicedId = toInvoiceId;
-            openCreateInvoiceModal();
-            const custSelect = document.getElementById('invoiceCustomerSelect');
-            if (custSelect && customerId) {
-                custSelect.value = customerId;
-            }
+            await openCreateInvoiceModal(customerId);
+            
             const descInput = document.getElementById('invoiceDescInput');
             if (descInput) {
-                descInput.value = category ? `${category} Return Preparation & Statutory Filing` : 'Professional Tax Services';
+                descInput.value = 'Tax Return Preparation';
             }
             const dateInput = document.getElementById('invoiceDueDateInput');
-            if (dateInput && dueDate && dueDate !== 'N/A') {
-                dateInput.value = dueDate;
+            if (dateInput) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                dateInput.value = todayStr;
             }
         }
 
@@ -5351,15 +5354,16 @@
             }
         }
 
-        function openCreateInvoiceModal() {
+        async function openCreateInvoiceModal(selectedCustomerId = null) {
             closeAllAppModals();
-            populateBillingCustomerDropdowns();
+            await populateBillingCustomerDropdowns(selectedCustomerId);
             const modal = document.getElementById('billingInvoiceModal');
             if (modal) {
-                const defaultDue = new Date();
-                defaultDue.setDate(defaultDue.getDate() + 15);
+                const todayStr = new Date().toISOString().split('T')[0];
                 const dueElem = document.getElementById('invoiceDueDateInput');
-                if (dueElem) dueElem.value = defaultDue.toISOString().split('T')[0];
+                if (dueElem) dueElem.value = todayStr;
+                const descElem = document.getElementById('invoiceDescInput');
+                if (descElem && !descElem.value) descElem.value = 'Tax Return Preparation';
                 modal.style.display = 'flex';
                 modal.style.opacity = '1';
             }
