@@ -14263,8 +14263,13 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
 
 
 @app.get("/api/tax-requirements/last-sent")
-async def get_last_tax_requirements_email_sent(request: Request):
-    """Returns the timestamp of the last dispatched tax requirement email."""
+async def get_last_tax_requirements_email_sent(
+    request: Request, 
+    account_type: str = "all_types", 
+    target: str = "all", 
+    customer_id: str = None
+):
+    """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified account type / target."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -14273,27 +14278,63 @@ async def get_last_tax_requirements_email_sent(request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT MAX(tax_req_email_sent_at) 
-                FROM customer_task_checklist 
-                WHERE tax_req_email_sent_at IS NOT NULL;
-            """)
+            where_clauses = ["chk.tax_req_email_sent_at IS NOT NULL"]
+            params = []
+
+            if target == "specific" and customer_id and str(customer_id).strip().isdigit():
+                where_clauses.append("chk.customer_id = %s")
+                params.append(int(customer_id))
+            elif account_type == "individual":
+                where_clauses.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
+            elif account_type == "business":
+                where_clauses.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
+
+            sql = f"""
+                SELECT MAX(chk.tax_req_email_sent_at) 
+                FROM customer_task_checklist chk
+                JOIN customer c ON chk.customer_id = c.id
+                WHERE {' AND '.join(where_clauses)};
+            """
+            cur.execute(sql, tuple(params))
             row = cur.fetchone()
             last_ts = row[0] if row and row[0] else None
             
             if not last_ts:
-                cur.execute("""
-                    SELECT MAX(created_at)
-                    FROM customer_communications
-                    WHERE direction = 'OUTBOUND' AND (subject ILIKE '%%Tax Year%%' OR subject ILIKE '%%Tax Documents%%');
-                """)
+                comm_where = ["comm.direction = 'OUTBOUND'", "(comm.subject ILIKE '%%Tax Year%%' OR comm.subject ILIKE '%%Tax Documents%%')"]
+                comm_params = []
+                if target == "specific" and customer_id and str(customer_id).strip().isdigit():
+                    comm_where.append("comm.customer_id = %s")
+                    comm_params.append(int(customer_id))
+                elif account_type == "individual":
+                    comm_where.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
+                elif account_type == "business":
+                    comm_where.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
+
+                sql_comm = f"""
+                    SELECT MAX(comm.created_at)
+                    FROM customer_communications comm
+                    JOIN customer c ON comm.customer_id = c.id
+                    WHERE {' AND '.join(comm_where)};
+                """
+                cur.execute(sql_comm, tuple(comm_params))
                 row2 = cur.fetchone()
                 last_ts = row2[0] if row2 and row2[0] else None
 
-            formatted_str = last_ts.strftime("%m/%d/%Y %I:%M:%S %p") if last_ts else "Never sent"
+            # Format timestamp in US Eastern Time (America/New_York)
+            import zoneinfo, datetime
+            ny_tz = zoneinfo.ZoneInfo("America/New_York")
+            if last_ts:
+                if last_ts.tzinfo is None:
+                    last_ts = last_ts.replace(tzinfo=datetime.timezone.utc)
+                last_ts_ny = last_ts.astimezone(ny_tz)
+                formatted_str = last_ts_ny.strftime("%m/%d/%Y %I:%M:%S %p %Z")
+            else:
+                formatted_str = "Never sent"
+
             return {
                 "last_sent": formatted_str,
-                "raw_timestamp": str(last_ts) if last_ts else None
+                "raw_timestamp": str(last_ts) if last_ts else None,
+                "account_type": account_type
             }
     except Exception as e:
         print(f"Error getting last sent tax email timestamp: {e}")
@@ -14666,7 +14707,10 @@ async def send_tax_requirements_email(request: Request):
                 except Exception as ce:
                     print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
 
-        last_sent_str = datetime.datetime.now().strftime("%m/%d/%Y %I:%M:%S %p") if sent_count > 0 else None
+        import datetime, zoneinfo
+        ny_tz = zoneinfo.ZoneInfo("America/New_York")
+        now_ny = datetime.datetime.now(datetime.timezone.utc).astimezone(ny_tz)
+        last_sent_str = now_ny.strftime("%m/%d/%Y %I:%M:%S %p %Z") if sent_count > 0 else None
 
         return {
             "success": True,

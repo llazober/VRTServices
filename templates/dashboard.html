@@ -2592,7 +2592,7 @@
 
                                     <div id="util_account_type_wrapper">
                                         <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">3) Client Account Type</label>
-                                        <select id="util_account_type" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                        <select id="util_account_type" onchange="loadLastEmailSentTimestamp()" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
                                             <option value="individual">👤 Individual Only (Individual & Joint)</option>
                                             <option value="business">🏢 All Business Types (LLC, Corp, etc.)</option>
                                             <option value="all_types" selected>🌐 All Types (Individual + Business)</option>
@@ -2603,7 +2603,7 @@
                                 <!-- Specific Client Dropdown (Shown when target = specific) -->
                                 <div id="util_specific_client_wrapper" style="display: none;">
                                     <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Select Specific Client</label>
-                                    <select id="util_specific_client_id" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                    <select id="util_specific_client_id" onchange="loadLastEmailSentTimestamp()" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
                                         <option value="">Loading active clients...</option>
                                     </select>
                                 </div>
@@ -2661,8 +2661,18 @@
                 async function loadLastEmailSentTimestamp() {
                     const timeElem = document.getElementById('util_last_email_sent_time');
                     if (!timeElem) return;
+
+                    const accountType = document.getElementById('util_account_type')?.value || 'all_types';
+                    const target = document.getElementById('util_email_target')?.value || 'all';
+                    const customerId = document.getElementById('util_specific_client_id')?.value || '';
+
+                    timeElem.textContent = 'Loading...';
                     try {
-                        const res = await fetch('/api/tax-requirements/last-sent');
+                        let url = `/api/tax-requirements/last-sent?account_type=${encodeURIComponent(accountType)}&target=${encodeURIComponent(target)}`;
+                        if (target === 'specific' && customerId) {
+                            url += `&customer_id=${encodeURIComponent(customerId)}`;
+                        }
+                        const res = await fetch(url);
                         if (res.ok) {
                             const data = await res.json();
                             timeElem.textContent = data.last_sent || 'Never sent';
@@ -2775,6 +2785,7 @@
                         clientWrapper.style.display = isSpecific ? 'block' : 'none';
                         if (isSpecific) loadUtilActiveClientsDropdown();
                     }
+                    loadLastEmailSentTimestamp();
                 }
 
                 async function loadUtilActiveClientsDropdown() {
