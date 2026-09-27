@@ -14379,11 +14379,11 @@ async def get_last_tax_requirements_email_sent(
                     last_ts = row["last_time_sent"]
 
             # Format timestamp in US Eastern Time (America/New_York)
-            import zoneinfo, datetime
-            ny_tz = zoneinfo.ZoneInfo("America/New_York")
+            import pytz, datetime
+            ny_tz = pytz.timezone("America/New_York")
             if last_ts:
                 if last_ts.tzinfo is None:
-                    last_ts = last_ts.replace(tzinfo=datetime.timezone.utc)
+                    last_ts = last_ts.replace(tzinfo=pytz.utc)
                 last_ts_ny = last_ts.astimezone(ny_tz)
                 formatted_str = last_ts_ny.strftime("%m/%d/%Y %I:%M:%S %p %Z")
             else:
@@ -14811,9 +14811,9 @@ async def send_tax_requirements_email(request: Request):
             except Exception as tracker_err:
                 print(f"[REQUIREMENT DISPATCH TRACKER UPDATE ERR] {tracker_err}")
 
-        import datetime, zoneinfo
-        ny_tz = zoneinfo.ZoneInfo("America/New_York")
-        now_ny = datetime.datetime.now(datetime.timezone.utc).astimezone(ny_tz)
+        import datetime, pytz
+        ny_tz = pytz.timezone("America/New_York")
+        now_ny = datetime.datetime.now(pytz.utc).astimezone(ny_tz)
         last_sent_str = now_ny.strftime("%m/%d/%Y %I:%M:%S %p %Z") if sent_count > 0 else None
 
         return {
