@@ -14308,7 +14308,7 @@ async def get_last_tax_requirements_email_sent(
     request: Request, 
     account_type: str = "all_types", 
     target: str = "all", 
-    customer_id: str = None
+    customer_id: str | None = None
 ):
     """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified target/customer strictly from requirement_email_dispatch_logs."""
     username = get_current_username(request)
