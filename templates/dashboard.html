@@ -2655,7 +2655,7 @@
                         tgtSel.appendChild(optTgt);
                     }
 
-                    loadLastEmailSentTimestamp();
+                    toggleUtilEmailTargetControls();
                 }
 
                 async function loadLastEmailSentTimestamp() {
@@ -2665,6 +2665,11 @@
                     const accountType = document.getElementById('util_account_type')?.value || 'all_types';
                     const target = document.getElementById('util_email_target')?.value || 'all';
                     const customerId = document.getElementById('util_specific_client_id')?.value || '';
+
+                    if (target === 'specific' && !customerId) {
+                        timeElem.textContent = 'Select a client';
+                        return;
+                    }
 
                     timeElem.textContent = 'Loading...';
                     try {
@@ -2791,6 +2796,7 @@
                 async function loadUtilActiveClientsDropdown() {
                     const clientSel = document.getElementById('util_specific_client_id');
                     if (!clientSel) return;
+                    const savedVal = clientSel.value;
                     clientSel.innerHTML = '<option value="">⏳ Loading active clients...</option>';
                     try {
                         const res = await fetch('/api/customers');
@@ -2800,6 +2806,7 @@
                         
                         if (activeCusts.length === 0) {
                             clientSel.innerHTML = '<option value="">No active clients found</option>';
+                            loadLastEmailSentTimestamp();
                             return;
                         }
                         
@@ -2812,10 +2819,17 @@
                             opt.textContent = `${c.legal_name || 'Client'} (${ref})${typeStr}`;
                             clientSel.appendChild(opt);
                         });
+
+                        if (savedVal && activeCusts.some(c => String(c.id) === String(savedVal))) {
+                            clientSel.value = savedVal;
+                        } else if (activeCusts.length > 0) {
+                            clientSel.value = activeCusts[0].id;
+                        }
                         loadLastEmailSentTimestamp();
                     } catch (e) {
                         console.error('Error loading clients for dropdown:', e);
                         clientSel.innerHTML = '<option value="">Error loading clients</option>';
+                        loadLastEmailSentTimestamp();
                     }
                 }
 
