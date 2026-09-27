@@ -13715,7 +13715,8 @@ async def get_last_tax_requirements_email_sent(request: Request):
                     if ctype not in ("individual", "joint account", "joint"):
                         cust_type_group = "business"
 
-                # 1. Check direct dispatches for this client (via any identifier key or customer_id)
+                # Only show a timestamp if this specific client was directly targeted.
+                # Do NOT fall back to bulk group timestamps — those belong to bulk sends, not this client.
                 cur.execute("""
                     SELECT MAX(last_time_sent) AS max_ts 
                     FROM requirement_email_dispatch_logs
@@ -13724,16 +13725,7 @@ async def get_last_tax_requirements_email_sent(request: Request):
                 row = cur.fetchone()
                 if row and row.get("max_ts"):
                     last_ts = row["max_ts"]
-                else:
-                    # 2. Fallback to check bulk dispatches sent to this client's group or all_types
-                    cur.execute("""
-                        SELECT MAX(last_time_sent) AS max_ts
-                        FROM requirement_email_dispatch_logs
-                        WHERE target_audience_key IN ('all_types', %s);
-                    """, (cust_type_group,))
-                    b_row = cur.fetchone()
-                    if b_row and b_row.get("max_ts"):
-                        last_ts = b_row["max_ts"]
+                # If no direct record found, last_ts remains None → "Never sent"
             else:
                 # Bulk target check (all_types, individual, or business)
                 target_key = account_type if account_type in ("individual", "business") else "all_types"
