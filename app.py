@@ -14262,6 +14262,47 @@ async def scan_existing_tax_docs(request: Request, background_tasks: BackgroundT
     return {"success": True, "message": f"Queued {queued_count} document(s) for classification", "queued_count": queued_count}
 
 
+def init_requirement_email_tracker_table():
+    """Ensure requirement_email_dispatch_logs table exists and seed initial bulk target records."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS requirement_email_dispatch_logs (
+                    id                      BIGSERIAL PRIMARY KEY,
+                    target_audience_key     VARCHAR(100) UNIQUE NOT NULL,
+                    target_audience_label   VARCHAR(255) NOT NULL,
+                    customer_id             BIGINT,
+                    last_time_sent          TIMESTAMP WITH TIME ZONE,
+                    last_email_type         VARCHAR(100),
+                    last_tax_year           INT,
+                    last_sent_by            VARCHAR(150),
+                    last_sent_count         INT DEFAULT 0,
+                    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                ALTER TABLE requirement_email_dispatch_logs DROP CONSTRAINT IF EXISTS requirement_email_dispatch_logs_customer_id_fkey;
+
+                CREATE INDEX IF NOT EXISTS idx_dispatch_target_key ON requirement_email_dispatch_logs(target_audience_key);
+                CREATE INDEX IF NOT EXISTS idx_dispatch_customer_id ON requirement_email_dispatch_logs(customer_id);
+
+                INSERT INTO requirement_email_dispatch_logs (target_audience_key, target_audience_label, customer_id, last_time_sent)
+                VALUES 
+                    ('all_types', 'All Types (Individual + Business)', NULL, NULL),
+                    ('individual', 'Individual Only (Individual & Joint)', NULL, NULL),
+                    ('business', 'All Business Types (LLC, Corp, etc.)', NULL, NULL)
+                ON CONFLICT (target_audience_key) DO NOTHING;
+            """)
+            conn.commit()
+    except Exception as e:
+        print(f"[INIT DISPATCH TRACKER TABLE ERR] {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/tax-requirements/last-sent")
 async def get_last_tax_requirements_email_sent(
     request: Request, 
@@ -14269,75 +14310,63 @@ async def get_last_tax_requirements_email_sent(
     target: str = "all", 
     customer_id: str = None
 ):
-    """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified account type / target."""
+    """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified target/customer strictly from requirement_email_dispatch_logs."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
+    init_requirement_email_tracker_table()
+
     # Extract query params directly for guaranteed parsing
     q_params = request.query_params
     target = (q_params.get("target") or target or "all").strip()
     account_type = (q_params.get("account_type") or account_type or "all_types").strip()
-    customer_id = (q_params.get("customer_id") or customer_id or "").strip()
+    customer_id_str = (q_params.get("customer_id") or customer_id or "").strip()
 
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
-            where_clauses = ["chk.tax_req_email_sent_at IS NOT NULL"]
-            params = []
-
-            if target == "specific" and customer_id:
-                if customer_id.isdigit():
-                    where_clauses.append("(chk.customer_id = %s OR c.id = %s)")
-                    params.extend([int(customer_id), int(customer_id)])
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            last_ts = None
+            if target == "specific" and customer_id_str:
+                client_key = f"client_{customer_id_str}"
+                # 1. Direct check for specific client
+                cur.execute("""
+                    SELECT last_time_sent FROM requirement_email_dispatch_logs
+                    WHERE target_audience_key = %s;
+                """, (client_key,))
+                row = cur.fetchone()
+                if row and row.get("last_time_sent"):
+                    last_ts = row["last_time_sent"]
                 else:
-                    where_clauses.append("(c.custumer_number = %s OR c.id::text = %s)")
-                    params.extend([customer_id, customer_id])
-            elif account_type == "individual":
-                where_clauses.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
-            elif account_type == "business":
-                where_clauses.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
+                    # 2. Fallback check for bulk dispatches sent to this client's group or all_types
+                    cust_type_group = "individual"
+                    if customer_id_str.isdigit():
+                        cur.execute("SELECT customer_type FROM customer WHERE id = %s;", (int(customer_id_str),))
+                        c_row = cur.fetchone()
+                        if c_row and c_row.get("customer_type"):
+                            ctype = str(c_row["customer_type"]).strip().lower()
+                            if ctype not in ("individual", "joint account", "joint"):
+                                cust_type_group = "business"
 
-            # 1. Fetch MAX timestamp from customer_task_checklist
-            sql_chk = f"""
-                SELECT MAX(chk.tax_req_email_sent_at) 
-                FROM customer_task_checklist chk
-                JOIN customer c ON chk.customer_id = c.id
-                WHERE {' AND '.join(where_clauses)};
-            """
-            cur.execute(sql_chk, tuple(params))
-            row_chk = cur.fetchone()
-            ts_chk = row_chk[0] if row_chk and row_chk[0] else None
-            
-            # 2. Fetch MAX timestamp from customer_communications
-            comm_where = ["comm.direction = 'OUTBOUND'"]
-            comm_params = []
-            if target == "specific" and customer_id:
-                if customer_id.isdigit():
-                    comm_where.append("(comm.customer_id = %s OR c.id = %s)")
-                    comm_params.extend([int(customer_id), int(customer_id)])
-                else:
-                    comm_where.append("(c.custumer_number = %s OR c.id::text = %s)")
-                    comm_params.extend([customer_id, customer_id])
-            elif account_type == "individual":
-                comm_where.append("LOWER(COALESCE(c.customer_type, '')) IN ('individual', 'joint account')")
-            elif account_type == "business":
-                comm_where.append("LOWER(COALESCE(c.customer_type, '')) NOT IN ('individual', 'joint account') AND LOWER(COALESCE(c.customer_type, '')) != 'system'")
-
-            sql_comm = f"""
-                SELECT MAX(comm.created_at)
-                FROM customer_communications comm
-                JOIN customer c ON comm.customer_id = c.id
-                WHERE {' AND '.join(comm_where)};
-            """
-            cur.execute(sql_comm, tuple(comm_params))
-            row_comm = cur.fetchone()
-            ts_comm = row_comm[0] if row_comm and row_comm[0] else None
-
-            # Pick the overall latest timestamp
-            candidates = [t for t in (ts_chk, ts_comm) if t is not None]
-            last_ts = max(candidates) if candidates else None
+                    cur.execute("""
+                        SELECT MAX(last_time_sent) AS max_ts
+                        FROM requirement_email_dispatch_logs
+                        WHERE target_audience_key IN ('all_types', %s);
+                    """, (cust_type_group,))
+                    b_row = cur.fetchone()
+                    if b_row and b_row.get("max_ts"):
+                        last_ts = b_row["max_ts"]
+            else:
+                # Bulk target check (all_types, individual, or business)
+                target_key = account_type if account_type in ("individual", "business") else "all_types"
+                cur.execute("""
+                    SELECT last_time_sent FROM requirement_email_dispatch_logs
+                    WHERE target_audience_key = %s;
+                """, (target_key,))
+                row = cur.fetchone()
+                if row and row.get("last_time_sent"):
+                    last_ts = row["last_time_sent"]
 
             # Format timestamp in US Eastern Time (America/New_York)
             import zoneinfo, datetime
@@ -14726,6 +14755,43 @@ async def send_tax_requirements_email(request: Request):
                 except Exception as ce:
                     print(f"[TAX EMAIL COMM LOG ERROR] {ce}")
 
+        if sent_count > 0:
+            try:
+                init_requirement_email_tracker_table()
+                _log_conn = get_db_connection()
+                with _log_conn.cursor() as _log_cur:
+                    if target == "specific" and customer_id_filter:
+                        client_key = f"client_{customer_id_filter}"
+                        client_label = f"Specific Client (ID: {customer_id_filter})"
+                        _log_cur.execute("""
+                            INSERT INTO requirement_email_dispatch_logs
+                                (target_audience_key, target_audience_label, customer_id, last_time_sent, last_email_type, last_tax_year, last_sent_by, last_sent_count, updated_at)
+                            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                            ON CONFLICT (target_audience_key) DO UPDATE SET
+                                last_time_sent = CURRENT_TIMESTAMP,
+                                last_email_type = EXCLUDED.last_email_type,
+                                last_tax_year = EXCLUDED.last_tax_year,
+                                last_sent_by = EXCLUDED.last_sent_by,
+                                last_sent_count = EXCLUDED.last_sent_count,
+                                updated_at = CURRENT_TIMESTAMP;
+                        """, (client_key, client_label, int(customer_id_filter) if str(customer_id_filter).isdigit() else None, email_type, tax_year, username, sent_count))
+                    else:
+                        target_keys = ["all_types", "individual", "business"] if account_type == "all_types" else [account_type]
+                        _log_cur.execute("""
+                            UPDATE requirement_email_dispatch_logs
+                            SET last_time_sent = CURRENT_TIMESTAMP,
+                                last_email_type = %s,
+                                last_tax_year = %s,
+                                last_sent_by = %s,
+                                last_sent_count = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE target_audience_key = ANY(%s);
+                        """, (email_type, tax_year, username, sent_count, target_keys))
+                    _log_conn.commit()
+                _log_conn.close()
+            except Exception as tracker_err:
+                print(f"[REQUIREMENT DISPATCH TRACKER UPDATE ERR] {tracker_err}")
+
         import datetime, zoneinfo
         ny_tz = zoneinfo.ZoneInfo("America/New_York")
         now_ny = datetime.datetime.now(datetime.timezone.utc).astimezone(ny_tz)
@@ -14745,7 +14811,6 @@ async def send_tax_requirements_email(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
-            conn.close()
             conn.close()
 
 

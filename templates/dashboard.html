@@ -2690,6 +2690,12 @@
                     }
                 }
 
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', loadLastEmailSentTimestamp);
+                } else {
+                    loadLastEmailSentTimestamp();
+                }
+
                 async function runBulkCopyTaxRequirements() {
                     const srcSel = document.getElementById('util_copy_source_year');
                     const tgtSel = document.getElementById('util_copy_target_year');
