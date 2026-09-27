@@ -13673,6 +13673,103 @@ def classify_and_rename_tax_document(customer_id: int, file_key: str, original_f
 
 # ── TAX REQUIREMENTS REST API ─────────────────────────────────────────────────
 
+# NOTE: This route MUST be declared BEFORE the /{customer_id} wildcard below,
+# otherwise FastAPI will try to cast "last-sent" to int and return 422.
+@app.get("/api/tax-requirements/last-sent")
+async def get_last_tax_requirements_email_sent(request: Request):
+    """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified target/customer strictly from requirement_email_dispatch_logs."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    init_requirement_email_tracker_table()
+
+    # Extract query params directly — no FastAPI validation, no 422 risk
+    q_params = request.query_params
+    target = (q_params.get("target") or "all").strip()
+    account_type = (q_params.get("account_type") or "all_types").strip()
+    customer_id_str = (q_params.get("customer_id") or "").strip()
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            last_ts = None
+            if target == "specific" and customer_id_str:
+                # Resolve customer identifiers (id, custumer_number, integer ref)
+                cur.execute("""
+                    SELECT id, custumer_number, customer_type FROM customer 
+                    WHERE id::text = %s OR custumer_number = %s OR custumer_number = %s OR id::text = %s;
+                """, (customer_id_str, customer_id_str, f"CUST-{customer_id_str}", customer_id_str.replace("CUST-", "")))
+                c_info = cur.fetchone()
+                
+                possible_keys = [f"client_{customer_id_str}"]
+                cid_int = None
+                cust_type_group = "individual"
+                if c_info:
+                    cid_int = c_info["id"]
+                    cnum = (c_info["custumer_number"] or "").strip()
+                    c_num_clean = cnum.replace("CUST-", "").strip()
+                    possible_keys.extend([f"client_{cid_int}", f"client_{cnum}", f"client_{c_num_clean}"])
+                    ctype = str(c_info.get("customer_type") or "").strip().lower()
+                    if ctype not in ("individual", "joint account", "joint"):
+                        cust_type_group = "business"
+
+                # 1. Check direct dispatches for this client (via any identifier key or customer_id)
+                cur.execute("""
+                    SELECT MAX(last_time_sent) AS max_ts 
+                    FROM requirement_email_dispatch_logs
+                    WHERE target_audience_key = ANY(%s) OR (customer_id IS NOT NULL AND customer_id = %s);
+                """, (list(set(possible_keys)), cid_int or -1))
+                row = cur.fetchone()
+                if row and row.get("max_ts"):
+                    last_ts = row["max_ts"]
+                else:
+                    # 2. Fallback to check bulk dispatches sent to this client's group or all_types
+                    cur.execute("""
+                        SELECT MAX(last_time_sent) AS max_ts
+                        FROM requirement_email_dispatch_logs
+                        WHERE target_audience_key IN ('all_types', %s);
+                    """, (cust_type_group,))
+                    b_row = cur.fetchone()
+                    if b_row and b_row.get("max_ts"):
+                        last_ts = b_row["max_ts"]
+            else:
+                # Bulk target check (all_types, individual, or business)
+                target_key = account_type if account_type in ("individual", "business") else "all_types"
+                cur.execute("""
+                    SELECT last_time_sent FROM requirement_email_dispatch_logs
+                    WHERE target_audience_key = %s;
+                """, (target_key,))
+                row = cur.fetchone()
+                if row and row.get("last_time_sent"):
+                    last_ts = row["last_time_sent"]
+
+            # Format timestamp in US Eastern Time using stdlib only (no external deps)
+            import datetime
+            eastern_offset = datetime.timezone(datetime.timedelta(hours=-4), name="EDT")
+            if last_ts:
+                if last_ts.tzinfo is None:
+                    last_ts = last_ts.replace(tzinfo=datetime.timezone.utc)
+                last_ts_eastern = last_ts.astimezone(eastern_offset)
+                formatted_str = last_ts_eastern.strftime("%m/%d/%Y %I:%M:%S %p EDT")
+            else:
+                formatted_str = "Never sent"
+
+            return {
+                "last_sent": formatted_str,
+                "raw_timestamp": str(last_ts) if last_ts else None,
+                "account_type": account_type
+            }
+    except Exception as e:
+        import traceback
+        print(f"[LAST-SENT ERROR] {e}\n{traceback.format_exc()}")
+        return {"last_sent": "Never sent", "raw_timestamp": None, "debug_error": str(e)}
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/tax-requirements/{customer_id}")
 async def get_tax_requirements(customer_id: int, request: Request, tax_year: int = None):
     """List all tax return document requirements for a customer."""
@@ -14303,101 +14400,7 @@ def init_requirement_email_tracker_table():
             conn.close()
 
 
-@app.get("/api/tax-requirements/last-sent")
-async def get_last_tax_requirements_email_sent(request: Request):
-    """Returns the Eastern (NY) timestamp of the last dispatched tax requirement email for the specified target/customer strictly from requirement_email_dispatch_logs."""
-    username = get_current_username(request)
-    if not username:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    init_requirement_email_tracker_table()
 
-    # Extract query params directly — no FastAPI validation, no 422 risk
-    q_params = request.query_params
-    target = (q_params.get("target") or "all").strip()
-    account_type = (q_params.get("account_type") or "all_types").strip()
-    customer_id_str = (q_params.get("customer_id") or "").strip()
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            last_ts = None
-            if target == "specific" and customer_id_str:
-                # Resolve customer identifiers (id, custumer_number, integer ref)
-                cur.execute("""
-                    SELECT id, custumer_number, customer_type FROM customer 
-                    WHERE id::text = %s OR custumer_number = %s OR custumer_number = %s OR id::text = %s;
-                """, (customer_id_str, customer_id_str, f"CUST-{customer_id_str}", customer_id_str.replace("CUST-", "")))
-                c_info = cur.fetchone()
-                
-                possible_keys = [f"client_{customer_id_str}"]
-                cid_int = None
-                cust_type_group = "individual"
-                if c_info:
-                    cid_int = c_info["id"]
-                    cnum = (c_info["custumer_number"] or "").strip()
-                    c_num_clean = cnum.replace("CUST-", "").strip()
-                    possible_keys.extend([f"client_{cid_int}", f"client_{cnum}", f"client_{c_num_clean}"])
-                    ctype = str(c_info.get("customer_type") or "").strip().lower()
-                    if ctype not in ("individual", "joint account", "joint"):
-                        cust_type_group = "business"
-
-                # 1. Check direct dispatches for this client (via any identifier key or customer_id)
-                cur.execute("""
-                    SELECT MAX(last_time_sent) AS max_ts 
-                    FROM requirement_email_dispatch_logs
-                    WHERE target_audience_key = ANY(%s) OR (customer_id IS NOT NULL AND customer_id = %s);
-                """, (list(set(possible_keys)), cid_int or -1))
-                row = cur.fetchone()
-                if row and row.get("max_ts"):
-                    last_ts = row["max_ts"]
-                else:
-                    # 2. Fallback to check bulk dispatches sent to this client's group or all_types
-                    cur.execute("""
-                        SELECT MAX(last_time_sent) AS max_ts
-                        FROM requirement_email_dispatch_logs
-                        WHERE target_audience_key IN ('all_types', %s);
-                    """, (cust_type_group,))
-                    b_row = cur.fetchone()
-                    if b_row and b_row.get("max_ts"):
-                        last_ts = b_row["max_ts"]
-            else:
-                # Bulk target check (all_types, individual, or business)
-                target_key = account_type if account_type in ("individual", "business") else "all_types"
-                cur.execute("""
-                    SELECT last_time_sent FROM requirement_email_dispatch_logs
-                    WHERE target_audience_key = %s;
-                """, (target_key,))
-                row = cur.fetchone()
-                if row and row.get("last_time_sent"):
-                    last_ts = row["last_time_sent"]
-
-            # Format timestamp in US Eastern Time (America/New_York) using stdlib only
-            import datetime
-            # EDT = UTC-4, EST = UTC-5; use UTC-4 (EDT) as standard
-            eastern_offset = datetime.timezone(datetime.timedelta(hours=-4), name="EDT")
-            if last_ts:
-                if last_ts.tzinfo is None:
-                    last_ts = last_ts.replace(tzinfo=datetime.timezone.utc)
-                last_ts_eastern = last_ts.astimezone(eastern_offset)
-                formatted_str = last_ts_eastern.strftime("%m/%d/%Y %I:%M:%S %p EDT")
-            else:
-                formatted_str = "Never sent"
-
-            return {
-                "last_sent": formatted_str,
-                "raw_timestamp": str(last_ts) if last_ts else None,
-                "account_type": account_type
-            }
-    except Exception as e:
-        import traceback
-        err_detail = traceback.format_exc()
-        print(f"[LAST-SENT ERROR] {e}\n{err_detail}")
-        return {"last_sent": "Never sent", "raw_timestamp": None, "debug_error": str(e)}
-    finally:
-        if conn:
-            conn.close()
 
 @app.post("/api/tax-requirements/send-email")
 async def send_tax_requirements_email(request: Request):
