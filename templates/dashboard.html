@@ -5168,7 +5168,13 @@
         }
 
         async function deleteToBeInvoicedRecord(recordId) {
-            if (!confirm("Are you sure you want to delete this record from To Be Invoiced?")) return;
+            const confirmed = await showCustomConfirm(
+                "Are you sure you want to delete this record from To Be Invoiced?",
+                "Confirm Delete",
+                "Yes, Delete",
+                "Cancel"
+            );
+            if (!confirmed) return;
             try {
                 const res = await fetch(`/api/billing/to-invoice/${recordId}`, { method: 'DELETE' });
                 if (res.ok) {
