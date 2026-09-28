@@ -6586,7 +6586,7 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
                 where_clauses.append("(LOWER(COALESCE(customer_type, '')) NOT IN ('individual', 'join account', 'joint account') AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'individual%%' AND LOWER(COALESCE(customer_type, '')) NOT LIKE 'join%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%individual 1040%%' AND LOWER(COALESCE(form_8879_type, '')) NOT LIKE '%%joint account 1040%%')")
 
             if exclude_system:
-                where_clauses.append("(custumer_number != 'CUST-0000' AND LOWER(COALESCE(customer_type, '')) != 'system')")
+                where_clauses.append("(UPPER(COALESCE(custumer_number, '')) NOT IN ('CUST-0000', 'CUT-0000', 'CUST-000') AND LOWER(COALESCE(customer_type, '')) != 'system' AND LOWER(COALESCE(legal_name, '')) NOT LIKE '%%unassigned inbound%%')")
 
             if query.strip():
                 q = f"%{query.strip()}%"

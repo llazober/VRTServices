@@ -2805,10 +2805,15 @@
                     const savedVal = clientSel.value;
                     clientSel.innerHTML = '<option value="">⏳ Loading active clients...</option>';
                     try {
-                        const res = await fetch('/api/customers');
+                        const res = await fetch('/api/customers?exclude_system=true');
                         const data = await res.json();
                         const customers = Array.isArray(data) ? data : (data.customers || []);
-                        const activeCusts = customers.filter(c => (c.status || '').toLowerCase() === 'active');
+                        const activeCusts = customers.filter(c => {
+                            const status = (c.status || '').toLowerCase();
+                            const num = (c.custumer_number || c.customer_number || '').trim().toUpperCase();
+                            const type = (c.customer_type || '').trim().toLowerCase();
+                            return status === 'active' && num !== 'CUST-0000' && num !== 'CUT-0000' && num !== 'CUST-000' && type !== 'system';
+                        });
                         
                         if (activeCusts.length === 0) {
                             clientSel.innerHTML = '<option value="">No active clients found</option>';
@@ -4965,7 +4970,12 @@
                 const res = await fetch('/api/customers?exclude_system=true');
                 if (res.ok) {
                     const data = await res.json();
-                    const customers = data.customers || [];
+                    const rawCusts = data.customers || (Array.isArray(data) ? data : []);
+                    const customers = rawCusts.filter(c => {
+                        const num = (c.custumer_number || c.customer_number || '').trim().toUpperCase();
+                        const type = (c.customer_type || '').trim().toLowerCase();
+                        return num !== 'CUST-0000' && num !== 'CUT-0000' && num !== 'CUST-000' && type !== 'system';
+                    });
                     const optionsHtml = '<option value="">-- Select Client / Customer --</option>' +
                         customers.map(c => {
                             const name = c.legal_name || c.display_name || ('Customer #' + c.id);
@@ -11440,14 +11450,25 @@
             }
 
             try {
-                const res = await fetch('/api/customers?business_only=true');
+                const res = await fetch('/api/customers?exclude_system=true');
                 if (res.ok) {
                     const data = await res.json();
-                    allCustomersCache = data.customers || [];
+                    const rawCusts = data.customers || (Array.isArray(data) ? data : []);
+                    allCustomersCache = rawCusts.filter(c => {
+                        const num = (c.custumer_number || c.customer_number || '').trim().toUpperCase();
+                        const type = (c.customer_type || '').trim().toLowerCase();
+                        const name = (c.legal_name || c.display_name || '').trim().toUpperCase();
+                        return num !== 'CUST-0000' && num !== 'CUT-0000' && num !== 'CUST-000' && type !== 'system' && !name.includes('UNASSIGNED INBOUND');
+                    });
                     const select = document.getElementById('esignCustomerSelect');
                     if (select) {
                         select.innerHTML = '<option value="">-- Select Customer --</option>' + 
-                            allCustomersCache.map(c => `<option value="${c.id}">${escapeHtml(c.legal_name || '')} (${c.parent_name || 'No Parent'})</option>`).join('');
+                            allCustomersCache.map(c => {
+                                const name = c.legal_name || c.display_name || ('Customer #' + c.id);
+                                const num = c.custumer_number || ('CUST-' + c.id);
+                                const typeStr = c.customer_type ? ` [${c.customer_type}]` : '';
+                                return `<option value="${c.id}">${escapeHtml(name)} (${num})${typeStr}</option>`;
+                            }).join('');
                         if (preselectCustomerId) {
                             select.value = preselectCustomerId;
                         }
