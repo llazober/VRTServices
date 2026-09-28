@@ -2575,10 +2575,23 @@
                             <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
                                 <div>
                                     <label style="display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">1) Email Template Type</label>
-                                    <select id="util_email_type" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
+                                    <select id="util_email_type" onchange="toggleUtilEmailTypeControls()" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; font-weight: 600; font-family: 'Outfit', sans-serif;">
                                         <option value="tax_docs_request">📩 Tax Documents Request (General Preparation Notice)</option>
                                         <option value="missing_docs">⚠️ Missing Tax Documents (Dynamic Pending Checklist)</option>
+                                        <option value="custom">✏️ Custom Email (Custom Subject & Message Body)</option>
                                     </select>
+                                </div>
+
+                                <!-- Custom Email Subject & Message Container (Shown when template type = custom) -->
+                                <div id="util_custom_email_wrapper" style="display: none; flex-direction: column; gap: 10px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 14px;">
+                                    <div>
+                                        <label style="display: block; color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Custom Subject</label>
+                                        <input type="text" id="util_custom_email_subject" placeholder="e.g. Action Required: Tax Return Preparation Notice" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 8px; padding: 9px 12px; font-size: 0.85rem; font-family: 'Outfit', sans-serif; box-sizing: border-box;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Custom Message Body</label>
+                                        <textarea id="util_custom_email_body" rows="4" placeholder="Enter your custom message body here. (Client name, portal link & credentials will be formatted automatically)" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; border-radius: 8px; padding: 9px 12px; font-size: 0.85rem; font-family: 'Outfit', sans-serif; box-sizing: border-box; resize: vertical;"></textarea>
+                                    </div>
                                 </div>
 
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -2783,6 +2796,13 @@
                     }
                 }
 
+                function toggleUtilEmailTypeControls() {
+                    const typeSel = document.getElementById('util_email_type');
+                    const customWrapper = document.getElementById('util_custom_email_wrapper');
+                    if (!typeSel || !customWrapper) return;
+                    customWrapper.style.display = (typeSel.value === 'custom') ? 'flex' : 'none';
+                }
+
                 function toggleUtilEmailTargetControls() {
                     const targetSel = document.getElementById('util_email_target');
                     const accWrapper = document.getElementById('util_account_type_wrapper');
@@ -2856,6 +2876,33 @@
                     const accountType = accTypeSel ? accTypeSel.value : 'all_types';
                     const customerId = (target === 'specific' && specificClientSel) ? specificClientSel.value : null;
 
+                    let customSubject = '';
+                    let customBody = '';
+
+                    if (emailType === 'custom') {
+                        const subjElem = document.getElementById('util_custom_email_subject');
+                        const bodyElem = document.getElementById('util_custom_email_body');
+                        customSubject = subjElem ? subjElem.value.trim() : '';
+                        customBody = bodyElem ? bodyElem.value.trim() : '';
+
+                        if (!customSubject) {
+                            if (typeof showCustomAlert === 'function') {
+                                showCustomAlert('Missing Subject', 'Please enter a Subject for the custom email.', 'warning');
+                            } else {
+                                alert('Please enter a Subject for the custom email.');
+                            }
+                            return;
+                        }
+                        if (!customBody) {
+                            if (typeof showCustomAlert === 'function') {
+                                showCustomAlert('Missing Message', 'Please enter a Message Body for the custom email.', 'warning');
+                            } else {
+                                alert('Please enter a Message Body for the custom email.');
+                            }
+                            return;
+                        }
+                    }
+
                     if (target === 'specific' && !customerId) {
                         if (typeof showCustomAlert === 'function') {
                             showCustomAlert('Missing Selection', 'Please select a specific active client from the dropdown list.', 'warning');
@@ -2865,7 +2912,7 @@
                         return;
                     }
 
-                    const typeName = emailType === 'tax_docs_request' ? 'Tax Documents Request' : 'Missing Tax Documents';
+                    const typeName = emailType === 'tax_docs_request' ? 'Tax Documents Request' : (emailType === 'custom' ? 'Custom Email' : 'Missing Tax Documents');
                     let targetDesc = target === 'specific' 
                         ? `specific client (ID: ${customerId})`
                         : `ALL active clients (${accountType === 'individual' ? 'Individual Only' : accountType === 'business' ? 'All Business Types' : 'All Types'})`;
@@ -2903,6 +2950,8 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 email_type: emailType,
+                                custom_subject: customSubject,
+                                custom_body: customBody,
                                 target: target,
                                 account_type: accountType,
                                 customer_id: customerId,
