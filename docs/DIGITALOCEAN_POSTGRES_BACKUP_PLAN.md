@@ -184,26 +184,26 @@ if __name__ == "__main__":
 
 ### Step 2: Schedule the Server Cron Job
 
-On your DigitalOcean Droplet:
+On your DigitalOcean Droplet (Easypanel Host):
 
-1. Open crontab editor:
+1. Open crontab editor on your server:
    ```bash
    crontab -e
    ```
 
-2. Add this line to run the backup script **every night at 2:00 AM US Eastern Time**:
+2. Add this line to run the multi-database backup script **every night at 2:00 AM US Eastern Time**:
    ```cron
-   0 2 * * * cd /var/www/VRTServices && /usr/bin/python3 scripts/db_backup.py >> /var/log/vrt_db_backup.log 2>&1
+   0 2 * * * cd /etc/easypanel/projects/datalazo/vrtservices/code && /usr/bin/python3 scripts/db_backup.py >> /var/log/vrt_db_backup.log 2>&1
    ```
 
 ---
 
 ### Step 3: Manual Testing & Verification
 
-Run the backup script manually anytime to verify:
+Run the backup script manually anytime from your server:
 
 ```bash
-cd /var/www/VRTServices
+cd /etc/easypanel/projects/datalazo/vrtservices/code
 python3 scripts/db_backup.py
 ```
 
