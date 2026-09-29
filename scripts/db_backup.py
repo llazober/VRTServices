@@ -1,34 +1,47 @@
-#!/usr/bin/env python3
-import os
-import sys
-import time
-import datetime
-import subprocess
-import zoneinfo
-import urllib.parse
-import psycopg2
-import boto3
-from dotenv import load_dotenv
+# Safe imports with fallback
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+try:
+    import boto3
+except ImportError:
+    boto3 = None
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-
-# Load environment variables from .env
+# Load environment variables from .env if available
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-if os.path.exists(env_path):
-    load_dotenv(env_path)
+if load_dotenv:
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+    else:
+        load_dotenv()
 else:
-    load_dotenv()
+    # Manual fallback for loading simple .env key=value pairs if dotenv package is not installed
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    os.environ.setdefault(k.strip(), v.strip())
 
 # Enforce US Eastern Time (NY)
 EASTERN_TZ = zoneinfo.ZoneInfo("America/New_York")
 NOW_ET = datetime.datetime.now(EASTERN_TZ)
 TIMESTAMP_STR = NOW_ET.strftime("%Y-%m-%d_%H-%M-%S")
 
-# Configuration from .env
+# Configuration from .env / environment
 DB_URL = os.environ.get("DATABASE_URL")
 DO_KEY = os.environ.get("DO_SPACES_KEY")
 DO_SECRET = os.environ.get("DO_SPACES_SECRET")
@@ -37,6 +50,7 @@ DO_BUCKET = os.environ.get("DO_SPACES_BUCKET", "datalazocrm")
 DO_REGION = os.environ.get("DO_SPACES_REGION", "nyc3")
 
 LOCAL_BACKUP_DIR = "/var/backups/vrt_postgres"
+
 
 # Try importing psycopg2, auto-installing if missing
 try:
