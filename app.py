@@ -731,7 +731,7 @@ def get_db_connection(db_name: str = None):
         db_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, new_path, parsed.params, parsed.query, parsed.fragment))
     else:
         raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
-    return psycopg2.connect(db_url, connect_timeout=5)
+    return psycopg2.connect(db_url, connect_timeout=5, options="-c timezone=America/New_York")
 
 _TAX_ID_CIPHER = None
 

@@ -5138,7 +5138,7 @@
 
             tbody.innerHTML = records.map(r => {
                 const dueDateFormatted = r.due_date ? r.due_date : 'N/A';
-                const dateCompFormatted = r.date_completed ? new Date(r.date_completed).toLocaleString() : 'N/A';
+                const dateCompFormatted = r.date_completed ? formatEasternDateTime(r.date_completed) : 'N/A';
                 const escLegalName = escapeHtml(r.legal_name || 'Unknown Client');
                 const escCategory = escapeHtml(r.category || 'Corporate Tax');
                 const rawCategory = (r.category || 'Corporate Tax').replace(/'/g, "\\'");
@@ -5348,7 +5348,7 @@
                     <td style="padding: 14px 18px;">
                         ${s.auto_send ? `<span style="color: #4ade80; font-weight: 700;">✓ Enabled</span>` : `<span style="color: #64748b;">Disabled</span>`}
                     </td>
-                    <td style="padding: 14px 18px; color: #94a3b8;">${s.last_billed_at ? new Date(s.last_billed_at).toLocaleDateString() : 'Never'}</td>
+                    <td style="padding: 14px 18px; color: #94a3b8;">${s.last_billed_at ? formatEasternDate(s.last_billed_at) : 'Never'}</td>
                     <td style="padding: 14px 18px;">
                         <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
                     </td>
@@ -7169,7 +7169,7 @@
                 // Render Files
                 files.forEach(f => {
                     const icon = getFileIcon(f.name);
-                    const dateStr = f.last_modified ? new Date(f.last_modified).toLocaleString() : '—';
+                    const dateStr = f.last_modified ? formatEasternDateTime(f.last_modified) : '—';
                     const isPdf = f.name.toLowerCase().endsWith('.pdf');
                     const attrKey = (f.key || '').replace(/"/g, '&quot;');
                     const attrName = (f.name || '').replace(/"/g, '&quot;');
@@ -8572,6 +8572,30 @@
             }) + ' ET';
         }
 
+        function formatEasternDate(dateInput) {
+            if (!dateInput) return '';
+            let d;
+            if (dateInput instanceof Date) {
+                d = dateInput;
+            } else {
+                let str = String(dateInput).trim();
+                if (!str) return '';
+                if (!str.includes('Z') && !str.includes('+') && !str.match(/-\d{2}:\d{2}$/)) {
+                    str = str.replace(' ', 'T') + 'Z';
+                }
+                d = new Date(str);
+            }
+            if (isNaN(d.getTime())) d = new Date(dateInput);
+            if (isNaN(d.getTime())) return String(dateInput);
+
+            return d.toLocaleDateString('en-US', {
+                timeZone: 'America/New_York',
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        }
+
         let activeHistoryCustomerId = null;
 
         let selectedCommsItem = null;
@@ -9261,7 +9285,7 @@
                 if (subtitleEl) {
                     const labelText = activeWorkflowTab === 'tax' ? 'Tax Year' : 'Period Cycle';
                     const modeLabel = data.is_in_process ? `🔄 In Process (${data.in_process_label})` : `📁 Historical Archive (${data.period})`;
-                    subtitleEl.textContent = `${labelText}: ${modeLabel} | Last Updated: ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'Just now'}`;
+                    subtitleEl.textContent = `${labelText}: ${modeLabel} | Last Updated: ${data.updated_at ? formatEasternDateTime(data.updated_at) : 'Just now'}`;
                 }
 
                 // Populate period select options dynamically
@@ -9570,7 +9594,7 @@
                 const emailLabel = document.getElementById('taxDocEmailSentLabel');
                 if (emailLabel) {
                     const sentAt = statusData.req_email_sent_at;
-                    emailLabel.textContent = sentAt ? `📧 Email sent: ${new Date(sentAt).toLocaleString()}` : '📧 Email not sent yet';
+                    emailLabel.textContent = sentAt ? `📧 Email sent: ${formatEasternDateTime(sentAt)}` : '📧 Email not sent yet';
                 }
 
                 renderTaxReqTable();
@@ -11517,8 +11541,8 @@
                 const isCompleted = (r.status || '').toLowerCase() === 'completed';
                 const badgeColor = isCompleted ? 'background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3);' 
                                                : 'background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);';
-                const sentDate = r.created_at ? new Date(r.created_at).toLocaleDateString() : '-';
-                const signedDate = r.signed_at ? new Date(r.signed_at).toLocaleDateString() : '-';
+                const sentDate = r.created_at ? formatEasternDate(r.created_at) : '-';
+                const signedDate = r.signed_at ? formatEasternDate(r.signed_at) : '-';
 
                 return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.2s ease;">
