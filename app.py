@@ -11861,7 +11861,7 @@ async def get_audit_logs(
         offset = (page - 1) * limit
         fetch_query = f"""
             SELECT id, username, action, entity_type, entity_id, details, ip_address, 
-                   to_char(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp
+                   to_char(timestamp AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as timestamp
             FROM audit_logs
             WHERE {where_sql}
             ORDER BY timestamp DESC, id DESC
@@ -11931,7 +11931,7 @@ async def export_audit_logs_csv(
         where_sql = " AND ".join(where_clauses)
         
         fetch_query = f"""
-            SELECT id, to_char(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+            SELECT id, to_char(timestamp AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
                    username, action, entity_type, entity_id, ip_address, details
             FROM audit_logs
             WHERE {where_sql}

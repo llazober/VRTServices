@@ -4929,7 +4929,7 @@
 
                 return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
-                        <td style="padding: 10px 16px; color: #94a3b8; white-space: nowrap; font-family: monospace; font-size: 0.78rem;">${l.timestamp}</td>
+                        <td style="padding: 10px 16px; color: #94a3b8; white-space: nowrap; font-family: monospace; font-size: 0.78rem;">${formatEasternDateTime(l.timestamp)}</td>
                         <td style="padding: 10px 16px; font-weight: 700; color: #fff;">👤 ${l.username || 'SYSTEM'}</td>
                         <td style="padding: 10px 16px;">${getActionBadge(l.action)}</td>
                         <td style="padding: 10px 16px;">${entityStr}</td>
