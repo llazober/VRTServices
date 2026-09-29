@@ -1,4 +1,13 @@
-# Safe imports with fallback
+#!/usr/bin/env python3
+import os
+import sys
+import time
+import datetime
+import subprocess
+import zoneinfo
+import urllib.parse
+
+# Safe imports for optional dependencies with fallback
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -18,6 +27,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
+
 
 # Load environment variables from .env if available
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
