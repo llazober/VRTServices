@@ -1112,7 +1112,10 @@
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax ID / EIN / SSN</label>
-                        <input type="text" id="customerPageFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="customerPageFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 36px 8px 12px; font-size: 0.88rem; color: #fff;">
+                            <button type="button" onclick="toggleTaxIdVisibility('customerPageFormTaxId', this)" style="position: absolute; right: 8px; background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px;" title="Show Tax ID">👁️</button>
+                        </div>
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Assigned Tax Prep</label>
@@ -3456,7 +3459,10 @@
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tax ID / EIN / SSN</label>
-                    <input type="text" id="customerFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <input type="password" id="customerFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 34px 7px 10px; font-size: 0.85rem; color: #fff;">
+                        <button type="button" onclick="toggleTaxIdVisibility('customerFormTaxId', this)" style="position: absolute; right: 6px; background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 0.95rem; padding: 2px 5px;" title="Show Tax ID">👁️</button>
+                    </div>
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned Tax Prep</label>
@@ -6504,6 +6510,60 @@
             setTimeout(() => { modal.style.display = 'none'; }, 300);
         }
 
+        function maskTaxId(val) {
+            if (!val) return '—';
+            const str = String(val).trim();
+            if (!str) return '—';
+            const digitsOnly = str.replace(/\D/g, '');
+            if (digitsOnly.length === 9) {
+                const last4 = digitsOnly.slice(-4);
+                if (str.includes('-')) {
+                    if (str.indexOf('-') === 2) {
+                        return `••-•••${last4}`;
+                    }
+                    return `•••-••-${last4}`;
+                }
+                return `•••••${last4}`;
+            }
+            if (str.length > 4) {
+                return '•'.repeat(str.length - 4) + str.slice(-4);
+            }
+            return '••••';
+        }
+
+        function toggleTaxIdVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (btn) {
+                    btn.innerHTML = '🙈';
+                    btn.title = 'Hide Tax ID';
+                }
+            } else {
+                input.type = 'password';
+                if (btn) {
+                    btn.innerHTML = '👁️';
+                    btn.title = 'Show Tax ID';
+                }
+            }
+        }
+
+        function resetTaxIdVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.type = 'password';
+                const parent = input.parentElement;
+                if (parent) {
+                    const btn = parent.querySelector('button');
+                    if (btn) {
+                        btn.innerHTML = '👁️';
+                        btn.title = 'Show Tax ID';
+                    }
+                }
+            }
+        }
+
         let hasHandledInitialUnreadUrlFilter = false;
 
         async function fetchCustomerRecords(isPage = false) {
@@ -6712,6 +6772,8 @@
                     </td>
                     <td style="padding: 12px 16px; font-weight: 700; color: #fff;">
                         ${c.legal_name}
+                        ${c.display_name && c.display_name !== c.legal_name ? `<br><span style="font-size: 0.75rem; color: #94a3b8; font-weight: 500;">${c.display_name}</span>` : ''}
+                        ${c.tax_id ? `<br><span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;" title="Tax ID">🆔 ${maskTaxId(c.tax_id)}</span>` : ''}
                     </td>
                     <td style="padding: 12px 16px; font-family: monospace; color: #c084fc; font-weight: 700;">${c.assigned_user_id || '—'}</td>
                     <td style="padding: 12px 16px; color: #cbd5e1; font-size: 0.8rem;">
@@ -7822,6 +7884,7 @@
                 setVal('customerFormLegalName', '');
                 setVal('customerFormDisplayName', '');
                 setVal('customerFormTaxId', '');
+                resetTaxIdVisibility('customerFormTaxId');
                 setVal('customerFormAssignedUserId', '');
                 setVal('customerFormStatus', 'Active');
                 setVal('customerFormPhone', '');
@@ -7859,6 +7922,7 @@
                 setVal('customerPageFormLegalName', '');
                 setVal('customerPageFormDisplayName', '');
                 setVal('customerPageFormTaxId', '');
+                resetTaxIdVisibility('customerPageFormTaxId');
                 setVal('customerPageFormAssignedUserId', '');
                 setVal('customerPageFormStatus', 'Active');
                 setVal('customerPageFormPhone', '');
@@ -7972,6 +8036,7 @@
             setVal('LegalName', rec.legal_name || '');
             setVal('DisplayName', rec.display_name || '');
             setVal('TaxId', rec.tax_id || '');
+            resetTaxIdVisibility('editCustModalTaxId');
             setVal('AssignedUserId', rec.assigned_user_id || '');
             setVal('Status', rec.status || 'Active');
             setVal('Phone', rec.phone || '');
@@ -10548,7 +10613,10 @@
             </div>
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tax ID / EIN / SSN</label>
-                <input type="text" id="editCustModalTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input type="password" id="editCustModalTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 34px 7px 10px; font-size: 0.85rem; color: #fff;">
+                    <button type="button" onclick="toggleTaxIdVisibility('editCustModalTaxId', this)" style="position: absolute; right: 6px; background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 0.95rem; padding: 2px 5px;" title="Show Tax ID">👁️</button>
+                </div>
             </div>
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Assigned Tax Prep</label>
