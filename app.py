@@ -33,6 +33,9 @@ from fastapi.requests import Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 import traceback
 import pyotp
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import qrcode
 from extractor import run_extraction, extract_check_images
 
@@ -730,6 +733,44 @@ def get_db_connection(db_name: str = None):
         raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
     return psycopg2.connect(db_url, connect_timeout=5)
 
+def get_tax_id_cipher():
+    secret = os.environ.get("TAX_ID_ENCRYPTION_KEY") or os.environ.get("SECRET_KEY") or "vrt_services_tax_id_secret_2026"
+    salt = b"vrt_tax_id_salt_2026"
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(secret.encode()))
+    return Fernet(key)
+
+def encrypt_tax_id(val: str) -> str:
+    if not val or not str(val).strip():
+        return None
+    val = str(val).strip()
+    if val.startswith("gAAAAA"):
+        return val
+    try:
+        cipher = get_tax_id_cipher()
+        return cipher.encrypt(val.encode()).decode()
+    except Exception as e:
+        print(f"Error encrypting tax_id: {e}")
+        return val
+
+def decrypt_tax_id(val: str) -> str:
+    if not val or not str(val).strip():
+        return None
+    val = str(val).strip()
+    if not val.startswith("gAAAAA"):
+        return val
+    try:
+        cipher = get_tax_id_cipher()
+        return cipher.decrypt(val.encode()).decode()
+    except Exception as e:
+        print(f"Error decrypting tax_id: {e}")
+        return val
+
 def log_audit_event(
     username: str | None = None,
     action: str = "ACTION",
@@ -844,6 +885,7 @@ def init_customer_table():
                     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS parent_name VARCHAR(200);
+                ALTER TABLE customer ALTER COLUMN tax_id TYPE VARCHAR(255);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS billing_email VARCHAR(255);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_folder_path VARCHAR(300);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
@@ -6607,6 +6649,8 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
                     row["created_at"] = str(row["created_at"])
                 if row.get("updated_at"):
                     row["updated_at"] = str(row["updated_at"])
+                if row.get("tax_id"):
+                    row["tax_id"] = decrypt_tax_id(row["tax_id"])
                 result.append(row)
             return {"customers": result}
     except Exception as e:
@@ -6635,6 +6679,8 @@ async def get_single_customer_by_id(customer_id: int, request: Request):
                 row["created_at"] = str(row["created_at"])
             if row.get("updated_at"):
                 row["updated_at"] = str(row["updated_at"])
+            if row.get("tax_id"):
+                row["tax_id"] = decrypt_tax_id(row["tax_id"])
             return {"customer": row}
     except HTTPException:
         raise
@@ -6656,7 +6702,8 @@ async def create_customer(request: Request):
     customer_type = (data.get("customer_type") or "Business").strip()
     legal_name = (data.get("legal_name") or "").strip()
     display_name = (data.get("display_name") or "").strip() or None
-    tax_id = (data.get("tax_id") or "").strip() or None
+    tax_id_raw = (data.get("tax_id") or "").strip() or None
+    tax_id = encrypt_tax_id(tax_id_raw) if tax_id_raw else None
     status = (data.get("status") or "Active").strip()
     assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
@@ -6703,6 +6750,8 @@ async def create_customer(request: Request):
                 second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4
             ))
             new_record = dict(cur.fetchone())
+            if new_record.get("tax_id"):
+                new_record["tax_id"] = decrypt_tax_id(new_record["tax_id"])
 
             # Auto-create parent mapping for the new customer
             try:
@@ -8726,7 +8775,8 @@ async def update_customer(customer_id: str, request: Request):
     customer_type = (data.get("customer_type") or "Business").strip()
     legal_name = (data.get("legal_name") or "").strip()
     display_name = (data.get("display_name") or "").strip() or None
-    tax_id = (data.get("tax_id") or "").strip() or None
+    tax_id_raw = (data.get("tax_id") or "").strip() or None
+    tax_id = encrypt_tax_id(tax_id_raw) if tax_id_raw else None
     status = (data.get("status") or "Active").strip()
     assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
@@ -8795,6 +8845,8 @@ async def update_customer(customer_id: str, request: Request):
             updated_record = cur.fetchone()
             if not updated_record:
                 raise HTTPException(status_code=404, detail="Customer not found")
+            if updated_record.get("tax_id"):
+                updated_record["tax_id"] = decrypt_tax_id(updated_record["tax_id"])
 
             # Cascade Tax Prep assignment to all compliance calendar events for this customer
             try:
