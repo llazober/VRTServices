@@ -234,14 +234,79 @@ Console Output:
 
 ---
 
+### Step 4: Web Application Backups Manager & Cloud Explorer
+
+A dedicated **DigitalOcean Storage Explorer** is built into the web application:
+
+1. **Header Shortcut**: Click `☁️ DO Backups [SPACES]` in the top right navigation bar from any screen.
+2. **Utilities Hub**: Access via **System Utilities** tab (`/utilities`) -> **Card 3: DigitalOcean Spaces Cloud Storage Backups**.
+3. **Features**:
+   - Real-time listing of all offsite backups in `datalazocrm` (`db_backups/`).
+   - All dates & timestamps formatted in **US Eastern Time (`America/New_York`)**.
+   - Instant search and database dropdown filtering (e.g. filter by `datalazo`, `VRT`, `lacteosmrp`).
+   - Secure 1-hour presigned direct download links (`📥 Download`).
+   - On-screen Disaster Recovery instructions (`ℹ️ Restore Info`).
+
+---
+
 ## 🔄 Disaster Recovery: Restoring Database Backups
 
 If you ever need to restore your database from a DigitalOcean Space backup:
 
+### Option A: Using Python Boto3 (Pre-installed in VRTServices environment - Recommended)
 ```bash
-# 1. Download target backup file from DigitalOcean Space bucket
-aws s3 cp s3://datalazocrm/db_backups/vrt_db_backup_2026-09-28_22-10-00.sql.gz . --endpoint-url https://nyc3.digitaloceanspaces.com
+cd /etc/easypanel/projects/datalazo/vrtservices/code && python3 -c "
+import boto3, os
+from dotenv import load_dotenv
+load_dotenv('/etc/easypanel/projects/datalazo/vrtservices/code/.env')
+key = os.environ.get('DO_SPACES_KEY')
+secret = os.environ.get('DO_SPACES_SECRET')
+endpoint = os.environ.get('DO_SPACES_ENDPOINT', 'https://nyc3.digitaloceanspaces.com')
+bucket = os.environ.get('DO_SPACES_BUCKET', 'datalazocrm')
+region = os.environ.get('DO_SPACES_REGION', 'nyc3')
 
-# 2. Restore into PostgreSQL database
-gunzip -c vrt_db_backup_2026-09-28_22-10-00.sql.gz | psql "$DATABASE_URL"
+s3 = boto3.client('s3', region_name=region, endpoint_url=endpoint, aws_access_key_id=key, aws_secret_access_key=secret)
+s3.download_file(bucket, 'db_backups/lacteosmrp_backup_2026-09-29_08-41-41.sql.gz', 'lacteosmrp_backup_2026-09-29_08-41-41.sql.gz')
+print('Downloaded successfully!')
+"
 ```
+
+### Option B: Using AWS CLI (Requires installing `awscli`)
+```bash
+# 1. Install AWS CLI if not already installed:
+apt update && apt install -y awscli
+
+# 2. Download target backup file from DigitalOcean Space bucket:
+aws s3 cp s3://datalazocrm/db_backups/lacteosmrp_backup_2026-09-29_08-41-41.sql.gz . --endpoint-url https://nyc3.digitaloceanspaces.com
+```
+
+### Step 2: Restore SQL Dump into PostgreSQL
+
+> **Important**: If your terminal shows `>` instead of `root@...#`, press **`Ctrl + C`** to cancel the stuck quote prompt first!
+
+#### Option A: Automatic Python Restore (Recommended - Auto-detects credentials from `.env`)
+```bash
+cd /etc/easypanel/projects/datalazo/vrtservices/code && python3 -c "
+import os, urllib.parse, subprocess
+from dotenv import load_dotenv
+load_dotenv('/etc/easypanel/projects/datalazo/vrtservices/code/.env')
+
+db_url = os.environ.get('DATABASE_URL')
+parsed = urllib.parse.urlparse(db_url)
+target_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, '/lacteosmrp', parsed.params, parsed.query, parsed.fragment))
+
+print('🚀 Restoring backup into database [lacteosmrp]...')
+cmd = f'gunzip -c lacteosmrp_backup_2026-09-29_08-41-41.sql.gz | psql \"{target_url}\"'
+res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+print(res.stdout or res.stderr)
+print('🎉 Restore completed!')
+"
+```
+
+#### Option B: Direct Shell Command
+```bash
+gunzip -c lacteosmrp_backup_2026-09-29_08-41-41.sql.gz | psql "$DATABASE_URL"
+```
+
+
+
