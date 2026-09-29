@@ -5,8 +5,16 @@ import time
 import datetime
 import subprocess
 import zoneinfo
+import urllib.parse
+import psycopg2
 import boto3
 from dotenv import load_dotenv
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 
 # Load environment variables from .env
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -21,7 +29,6 @@ NOW_ET = datetime.datetime.now(EASTERN_TZ)
 TIMESTAMP_STR = NOW_ET.strftime("%Y-%m-%d_%H-%M-%S")
 
 # Configuration from .env
-DB_NAME = os.environ.get("POSTGRES_DB") or "VRT"
 DB_URL = os.environ.get("DATABASE_URL")
 DO_KEY = os.environ.get("DO_SPACES_KEY")
 DO_SECRET = os.environ.get("DO_SPACES_SECRET")
@@ -30,12 +37,39 @@ DO_BUCKET = os.environ.get("DO_SPACES_BUCKET", "datalazocrm")
 DO_REGION = os.environ.get("DO_SPACES_REGION", "nyc3")
 
 LOCAL_BACKUP_DIR = "/var/backups/vrt_postgres"
-BACKUP_FILENAME = f"vrt_db_backup_{TIMESTAMP_STR}.sql.gz"
-LOCAL_FILE_PATH = os.path.join(LOCAL_BACKUP_DIR, BACKUP_FILENAME)
-REMOTE_KEY = f"db_backups/{BACKUP_FILENAME}"
+
+def get_all_databases(db_url):
+    """Connect to PostgreSQL server and return a list of non-template database names."""
+    try:
+        parsed = urllib.parse.urlparse(db_url)
+        # Connect to 'postgres' system database to query all databases
+        postgres_sys_url = urllib.parse.urlunparse(
+            (parsed.scheme, parsed.netloc, '/postgres', parsed.params, parsed.query, parsed.fragment)
+        )
+        conn = psycopg2.connect(postgres_sys_url)
+        cur = conn.cursor()
+        cur.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        db_names = [r[0] for r in rows if r[0]]
+        return db_names
+    except Exception as e:
+        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ Could not list databases dynamically via psycopg2: {e}")
+        # Fallback to current database in DB_URL
+        parsed = urllib.parse.urlparse(db_url)
+        default_db = parsed.path.lstrip('/') or "datalazo"
+        return [default_db]
+
+def build_db_url(base_db_url, db_name):
+    """Replace path in base_db_url with target db_name."""
+    parsed = urllib.parse.urlparse(base_db_url)
+    return urllib.parse.urlunparse(
+        (parsed.scheme, parsed.netloc, f'/{db_name}', parsed.params, parsed.query, parsed.fragment)
+    )
 
 def run_db_backup():
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🚀 Starting PostgreSQL Database Backup...")
+    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🚀 Starting PostgreSQL Multi-Database Backup...")
     
     if not DB_URL:
         print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ DATABASE_URL missing from environment/.env!")
@@ -49,53 +83,71 @@ def run_db_backup():
     if not pg_dump_path:
         print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ pg_dump command not found on host. Installing postgresql-client...")
         subprocess.run("apt-get update && apt-get install -y postgresql-client", shell=True)
-        pg_dump_path = "pg_dump"
 
-    # Dump & compress database using pg_dump
-    pg_dump_cmd = f"pg_dump '{DB_URL}' | gzip > '{LOCAL_FILE_PATH}'"
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 📦 Dumping & compressing database to {LOCAL_FILE_PATH}...")
-    
-    res = subprocess.run(pg_dump_cmd, shell=True, capture_output=True, text=True)
-    
-    file_size_bytes = os.path.getsize(LOCAL_FILE_PATH) if os.path.exists(LOCAL_FILE_PATH) else 0
-    file_size_mb = file_size_bytes / (1024 * 1024)
+    # Discover databases to backup
+    db_names = get_all_databases(DB_URL)
+    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 📋 Found {len(db_names)} database(s) to backup: {', '.join(db_names)}")
 
-    if res.returncode != 0 or file_size_bytes < 100:
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ pg_dump failed or produced empty backup ({file_size_bytes} bytes). Stdout/Stderr: {res.stderr}")
-        sys.exit(1)
+    # Initialize S3 / DO Spaces client if keys present
+    s3_client = None
+    if DO_KEY and DO_SECRET:
+        try:
+            session = boto3.session.Session()
+            s3_client = session.client(
+                's3',
+                region_name=DO_REGION,
+                endpoint_url=DO_ENDPOINT,
+                aws_access_key_id=DO_KEY,
+                aws_secret_access_key=DO_SECRET
+            )
+        except Exception as e:
+            print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ Failed to initialize DigitalOcean Spaces client: {e}")
+
+    success_count = 0
+    fail_count = 0
+
+    for db_name in db_names:
+        target_db_url = build_db_url(DB_URL, db_name)
+        backup_filename = f"{db_name}_backup_{TIMESTAMP_STR}.sql.gz"
+        local_file_path = os.path.join(LOCAL_BACKUP_DIR, backup_filename)
+        remote_key = f"db_backups/{backup_filename}"
+
+        print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 📦 Backing up database [{db_name}]...")
+        pg_dump_cmd = f"pg_dump '{target_db_url}' | gzip > '{local_file_path}'"
         
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ✅ Local backup created successfully ({file_size_mb:.2f} MB)")
+        res = subprocess.run(pg_dump_cmd, shell=True, capture_output=True, text=True)
+        file_size_bytes = os.path.getsize(local_file_path) if os.path.exists(local_file_path) else 0
+        file_size_mb = file_size_bytes / (1024 * 1024)
 
-    # Upload offsite to DigitalOcean Spaces bucket (datalazocrm)
-    if not DO_KEY or not DO_SECRET:
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ DO_SPACES_KEY or DO_SPACES_SECRET missing. Skipping offsite upload.")
-        return
+        if res.returncode != 0 or file_size_bytes < 100:
+            print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ pg_dump failed for [{db_name}]. Stdout/Stderr: {res.stderr}")
+            fail_count += 1
+            continue
 
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ☁️ Uploading to DigitalOcean Space '{DO_BUCKET}' at '{REMOTE_KEY}'...")
-    try:
-        session = boto3.session.Session()
-        s3 = session.client(
-            's3',
-            region_name=DO_REGION,
-            endpoint_url=DO_ENDPOINT,
-            aws_access_key_id=DO_KEY,
-            aws_secret_access_key=DO_SECRET
-        )
-        s3.upload_file(LOCAL_FILE_PATH, DO_BUCKET, REMOTE_KEY)
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🌐 Offsite upload to DigitalOcean Spaces completed successfully!")
-    except Exception as e:
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ Failed to upload to DigitalOcean Spaces: {e}")
+        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ✅ Local backup for [{db_name}] created: {backup_filename} ({file_size_mb:.2f} MB)")
+
+        if s3_client:
+            print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ☁️ Uploading [{db_name}] to DO Space '{DO_BUCKET}' at '{remote_key}'...")
+            try:
+                s3_client.upload_file(local_file_path, DO_BUCKET, remote_key)
+                print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🌐 Upload complete for [{db_name}]!")
+            except Exception as e:
+                print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ Failed offsite upload for [{db_name}]: {e}")
+        
+        success_count += 1
 
     # Prune local backups older than 7 days
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🧹 Cleaning up local backups older than 7 days...")
+    print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🧹 Cleaning up local backups older than 7 days...")
     cutoff_time = time.time() - (7 * 86400)
-    for fname in os.listdir(LOCAL_BACKUP_DIR):
-        fpath = os.path.join(LOCAL_BACKUP_DIR, fname)
-        if os.path.isfile(fpath) and fname.startswith("vrt_db_backup_") and os.path.getmtime(fpath) < cutoff_time:
-            os.remove(fpath)
-            print(f"   Deleted old local backup: {fname}")
+    if os.path.exists(LOCAL_BACKUP_DIR):
+        for fname in os.listdir(LOCAL_BACKUP_DIR):
+            fpath = os.path.join(LOCAL_BACKUP_DIR, fname)
+            if os.path.isfile(fpath) and "_backup_" in fname and os.path.getmtime(fpath) < cutoff_time:
+                os.remove(fpath)
+                print(f"   Deleted old local backup: {fname}")
 
-    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🎉 Database Backup Completed Successfully.")
+    print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🎉 Backup Process Completed. {success_count} succeeded, {fail_count} failed.")
 
 if __name__ == "__main__":
     run_db_backup()
+
