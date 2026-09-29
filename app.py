@@ -733,17 +733,22 @@ def get_db_connection(db_name: str = None):
         raise ValueError("DATABASE_URL environment variable is missing. Please set DATABASE_URL in your environment or .env file.")
     return psycopg2.connect(db_url, connect_timeout=5)
 
+_TAX_ID_CIPHER = None
+
 def get_tax_id_cipher():
-    secret = os.environ.get("TAX_ID_ENCRYPTION_KEY") or os.environ.get("SECRET_KEY") or "vrt_services_tax_id_secret_2026"
-    salt = b"vrt_tax_id_salt_2026"
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100000,
-    )
-    key = base64.urlsafe_b64encode(kdf.derive(secret.encode()))
-    return Fernet(key)
+    global _TAX_ID_CIPHER
+    if _TAX_ID_CIPHER is None:
+        secret = os.environ.get("TAX_ID_ENCRYPTION_KEY") or os.environ.get("SECRET_KEY") or "vrt_services_tax_id_secret_2026"
+        salt = b"vrt_tax_id_salt_2026"
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(secret.encode()))
+        _TAX_ID_CIPHER = Fernet(key)
+    return _TAX_ID_CIPHER
 
 def encrypt_tax_id(val: str) -> str:
     if not val or not str(val).strip():
