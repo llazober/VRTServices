@@ -38,28 +38,43 @@ DO_REGION = os.environ.get("DO_SPACES_REGION", "nyc3")
 
 LOCAL_BACKUP_DIR = "/var/backups/vrt_postgres"
 
+# Try importing psycopg2, auto-installing if missing
+try:
+    import psycopg2
+except ImportError:
+    print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ psycopg2 not found. Installing psycopg2-binary...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "psycopg2-binary"], capture_output=True)
+    try:
+        import psycopg2
+    except ImportError:
+        psycopg2 = None
+
 def get_all_databases(db_url):
     """Connect to PostgreSQL server and return a list of non-template database names."""
-    try:
-        parsed = urllib.parse.urlparse(db_url)
-        # Connect to 'postgres' system database to query all databases
-        postgres_sys_url = urllib.parse.urlunparse(
-            (parsed.scheme, parsed.netloc, '/postgres', parsed.params, parsed.query, parsed.fragment)
-        )
-        conn = psycopg2.connect(postgres_sys_url)
-        cur = conn.cursor()
-        cur.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        db_names = [r[0] for r in rows if r[0]]
-        return db_names
-    except Exception as e:
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ Could not list databases dynamically via psycopg2: {e}")
-        # Fallback to current database in DB_URL
-        parsed = urllib.parse.urlparse(db_url)
-        default_db = parsed.path.lstrip('/') or "datalazo"
-        return [default_db]
+    if psycopg2:
+        try:
+            parsed = urllib.parse.urlparse(db_url)
+            postgres_sys_url = urllib.parse.urlunparse(
+                (parsed.scheme, parsed.netloc, '/postgres', parsed.params, parsed.query, parsed.fragment)
+            )
+            conn = psycopg2.connect(postgres_sys_url)
+            cur = conn.cursor()
+            cur.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            db_names = [r[0] for r in rows if r[0]]
+            if db_names:
+                return db_names
+        except Exception as e:
+            print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ Dynamic database query error: {e}")
+
+    # Fallback: parse base db name from DB_URL and ensure both VRT and datalazo are included
+    parsed = urllib.parse.urlparse(db_url)
+    default_db = parsed.path.lstrip('/') or "datalazo"
+    fallback_set = {default_db, "VRT", "datalazo"}
+    return sorted(list(fallback_set))
+
 
 def build_db_url(base_db_url, db_name):
     """Replace path in base_db_url with target db_name."""
