@@ -3655,8 +3655,8 @@
                     </div>
                 </div>
                 <div>
-                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description</label>
-                    <input type="text" id="scheduleDescInput" placeholder="e.g. Monthly Bookkeeping, Accounting & Tax Advisory Services" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description (Multi-line)</label>
+                    <textarea id="scheduleDescInput" rows="3" placeholder="Enter service description (Press Enter for a new line):&#10;1) Monthly Bookkeeping&#10;2) Tax Advisory Services" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none; resize: vertical; font-family: inherit; line-height: 1.5;"></textarea>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div>
@@ -3710,8 +3710,8 @@
                     </div>
                 </div>
                 <div>
-                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description *</label>
-                    <input type="text" id="invoiceDescInput" required placeholder="e.g. Tax Return Preparation & Annual E-Filing Authorization" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Service Description (Multi-line) *</label>
+                    <textarea id="invoiceDescInput" required rows="4" placeholder="Enter items / description (Press Enter for a new line):&#10;1) Tax Prep&#10;2) Bookkeeping" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none; resize: vertical; font-family: inherit; line-height: 1.5;"></textarea>
                 </div>
                 <div>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; padding: 6px 0;">
@@ -5265,7 +5265,7 @@
                         </td>
                         <td style="padding: 14px 18px; color: #cbd5e1;">${formatDateMMDDYYYY(inv.issue_date)}</td>
                         <td style="padding: 14px 18px; color: #f87171; font-weight: 600;">${formatDateMMDDYYYY(inv.due_date)}</td>
-                        <td style="padding: 14px 18px; color: #94a3b8; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${inv.description || ''}</td>
+                        <td style="padding: 14px 18px; color: #cbd5e1; max-width: 280px; white-space: pre-wrap; font-size: 0.84rem; line-height: 1.4;">${inv.description ? escapeHtml(inv.description) : '—'}</td>
                         <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem;">$${parseFloat(inv.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td style="padding: 14px 18px;">
                             <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${inv.status}</span>
@@ -5500,7 +5500,7 @@
                 const dueElem = document.getElementById('invoiceDueDateInput');
                 if (dueElem) dueElem.value = todayStr;
                 const descElem = document.getElementById('invoiceDescInput');
-                if (descElem && !descElem.value) descElem.value = 'Tax Return Preparation';
+                if (descElem) descElem.value = '';
                 modal.style.display = 'flex';
                 modal.style.opacity = '1';
             }

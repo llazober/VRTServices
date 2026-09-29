@@ -10492,7 +10492,7 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
                 </thead>
                 <tbody>
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 16px; font-size: 14px; color: #1e293b;">{description}</td>
+                        <td style="padding: 16px; font-size: 14px; color: #1e293b; white-space: pre-wrap; line-height: 1.6;">{description}</td>
                         <td style="padding: 16px; font-size: 15px; font-weight: 700; text-align: right; color: #0f172a;">${total_amount:,.2f}</td>
                     </tr>
                 </tbody>
