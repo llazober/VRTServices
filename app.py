@@ -772,8 +772,7 @@ def decrypt_tax_id(val: str) -> str:
     try:
         cipher = get_tax_id_cipher()
         return cipher.decrypt(val.encode()).decode()
-    except Exception as e:
-        print(f"Error decrypting tax_id: {e}")
+    except Exception:
         return val
 
 def log_audit_event(
