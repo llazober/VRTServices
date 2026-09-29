@@ -9,7 +9,11 @@ import boto3
 from dotenv import load_dotenv
 
 # Load environment variables from .env
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 # Enforce US Eastern Time (NY)
 EASTERN_TZ = zoneinfo.ZoneInfo("America/New_York")
@@ -33,22 +37,36 @@ REMOTE_KEY = f"db_backups/{BACKUP_FILENAME}"
 def run_db_backup():
     print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🚀 Starting PostgreSQL Database Backup...")
     
-    # 1. Ensure local backup directory exists
+    if not DB_URL:
+        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ DATABASE_URL missing from environment/.env!")
+        sys.exit(1)
+
+    # Ensure local backup directory exists
     os.makedirs(LOCAL_BACKUP_DIR, exist_ok=True)
     
-    # 2. Dump & compress database using pg_dump
+    # Check if pg_dump is installed on host
+    pg_dump_path = subprocess.run("which pg_dump", shell=True, capture_output=True, text=True).stdout.strip()
+    if not pg_dump_path:
+        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ pg_dump command not found on host. Installing postgresql-client...")
+        subprocess.run("apt-get update && apt-get install -y postgresql-client", shell=True)
+        pg_dump_path = "pg_dump"
+
+    # Dump & compress database using pg_dump
     pg_dump_cmd = f"pg_dump '{DB_URL}' | gzip > '{LOCAL_FILE_PATH}'"
     print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 📦 Dumping & compressing database to {LOCAL_FILE_PATH}...")
     
     res = subprocess.run(pg_dump_cmd, shell=True, capture_output=True, text=True)
-    if res.returncode != 0:
-        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ pg_dump failed: {res.stderr}")
+    
+    file_size_bytes = os.path.getsize(LOCAL_FILE_PATH) if os.path.exists(LOCAL_FILE_PATH) else 0
+    file_size_mb = file_size_bytes / (1024 * 1024)
+
+    if res.returncode != 0 or file_size_bytes < 100:
+        print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ pg_dump failed or produced empty backup ({file_size_bytes} bytes). Stdout/Stderr: {res.stderr}")
         sys.exit(1)
         
-    file_size_mb = os.path.getsize(LOCAL_FILE_PATH) / (1024 * 1024)
     print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ✅ Local backup created successfully ({file_size_mb:.2f} MB)")
 
-    # 3. Upload offsite to DigitalOcean Spaces bucket (datalazocrm)
+    # Upload offsite to DigitalOcean Spaces bucket (datalazocrm)
     if not DO_KEY or not DO_SECRET:
         print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ⚠️ DO_SPACES_KEY or DO_SPACES_SECRET missing. Skipping offsite upload.")
         return
@@ -68,7 +86,7 @@ def run_db_backup():
     except Exception as e:
         print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ Failed to upload to DigitalOcean Spaces: {e}")
 
-    # 4. Prune local backups older than 7 days
+    # Prune local backups older than 7 days
     print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🧹 Cleaning up local backups older than 7 days...")
     cutoff_time = time.time() - (7 * 86400)
     for fname in os.listdir(LOCAL_BACKUP_DIR):
