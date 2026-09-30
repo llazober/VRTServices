@@ -1045,6 +1045,18 @@
                                     <option value="all" style="background: #0f172a; color: #fff;">All Statuses</option>
                                 </select>
                             </div>
+                            <div style="display: flex; align-items: center; gap: 6px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 6px 12px;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: #38bdf8;">🏷️ Type:</span>
+                                <select id="customerPageTypeSelect" onchange="onCustomerTypeFilterChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
+                                    <option value="all" selected style="background: #0f172a; color: #fff;">All Types</option>
+                                    <option value="Business" style="background: #0f172a; color: #fff;">Business</option>
+                                    <option value="Individual" style="background: #0f172a; color: #fff;">Individual</option>
+                                    <option value="Joint Account" style="background: #0f172a; color: #fff;">Joint Account</option>
+                                    <option value="Partner" style="background: #0f172a; color: #fff;">Partner</option>
+                                    <option value="Government" style="background: #0f172a; color: #fff;">Government</option>
+                                    <option value="System" style="background: #0f172a; color: #fff;">System</option>
+                                </select>
+                            </div>
                             <div style="display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 6px 12px;">
                                 <span style="font-size: 0.8rem; font-weight: 700; color: #c084fc;">👤 Tax Prep:</span>
                                 <select id="customerPageAssignedUserSelect" onchange="customerCurrentPage=1; renderCustomerTable()" style="background: transparent; border: none; color: #fff; font-size: 0.85rem; font-weight: 700; outline: none; cursor: pointer;">
@@ -3402,6 +3414,18 @@
                             <option value="Active" selected style="background: #0f172a; color: #00e676;">Active Only</option>
                             <option value="Inactive" style="background: #0f172a; color: #ffb300;">Inactive Only</option>
                             <option value="all" style="background: #0f172a; color: #fff;">All Statuses</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 6px 12px;">
+                        <span style="font-size: 0.78rem; font-weight: 700; color: #38bdf8;">🏷️ Type:</span>
+                        <select id="customerModalTypeSelect" onchange="onCustomerTypeFilterChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 0.82rem; font-weight: 700; outline: none; cursor: pointer;">
+                            <option value="all" selected style="background: #0f172a; color: #fff;">All Types</option>
+                            <option value="Business" style="background: #0f172a; color: #fff;">Business</option>
+                            <option value="Individual" style="background: #0f172a; color: #fff;">Individual</option>
+                            <option value="Joint Account" style="background: #0f172a; color: #fff;">Joint Account</option>
+                            <option value="Partner" style="background: #0f172a; color: #fff;">Partner</option>
+                            <option value="Government" style="background: #0f172a; color: #fff;">Government</option>
+                            <option value="System" style="background: #0f172a; color: #fff;">System</option>
                         </select>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 10px; padding: 6px 12px;">
@@ -6584,6 +6608,7 @@
                 currentCustomerRecords = data.customers || [];
                 currentCustomerList = currentCustomerRecords;
                 updateCustomerPageUserDropdown();
+                updateCustomerTypeDropdown();
                 if (!hasHandledInitialUnreadUrlFilter) {
                     hasHandledInitialUnreadUrlFilter = true;
                     const urlParams = new URLSearchParams(window.location.search);
@@ -6598,6 +6623,12 @@
                             cleanUrl.searchParams.delete('filter');
                             window.history.replaceState({}, '', cleanUrl);
                         }
+                    }
+                    if (urlParams.get('type')) {
+                        const pageTypeSel = document.getElementById('customerPageTypeSelect');
+                        const modalTypeSel = document.getElementById('customerModalTypeSelect');
+                        if (pageTypeSel) pageTypeSel.value = urlParams.get('type');
+                        if (modalTypeSel) modalTypeSel.value = urlParams.get('type');
                     }
                 }
                 renderCustomerTable();
@@ -6634,6 +6665,45 @@
             }
         }
 
+        function updateCustomerTypeDropdown() {
+            const pageSelect = document.getElementById('customerPageTypeSelect');
+            const modalSelect = document.getElementById('customerModalTypeSelect');
+            if (!pageSelect && !modalSelect) return;
+
+            const currentVal = (pageSelect ? pageSelect.value : null) || (modalSelect ? modalSelect.value : 'all');
+            
+            const standardTypes = ['Business', 'Individual', 'Joint Account', 'Partner', 'Government', 'System'];
+            const typesSet = new Set(standardTypes);
+            
+            (currentCustomerRecords || []).forEach(c => {
+                const tStr = (c.customer_type || c.type || '').trim();
+                if (tStr) {
+                    let exists = Array.from(typesSet).some(st => st.toLowerCase() === tStr.toLowerCase());
+                    if (!exists) {
+                        typesSet.add(tStr);
+                    }
+                }
+            });
+
+            const sortedTypes = Array.from(typesSet);
+            let html = `<option value="all" style="background: #0f172a; color: #fff;">All Types</option>`;
+            sortedTypes.forEach(t => {
+                const escaped = t.replace(/"/g, '&quot;');
+                html += `<option value="${escaped}" style="background: #0f172a; color: #fff;">${t}</option>`;
+            });
+
+            [pageSelect, modalSelect].forEach(select => {
+                if (select) {
+                    select.innerHTML = html;
+                    if (Array.from(select.options).some(o => o.value === currentVal)) {
+                        select.value = currentVal;
+                    } else {
+                        select.value = 'all';
+                    }
+                }
+            });
+        }
+
         let customerCurrentPage = 1;
         const CUSTOMERS_PER_PAGE = 10;
 
@@ -6655,6 +6725,15 @@
             customerCurrentPage = 1;
             const pageSel = document.getElementById('customerPageUnreadSelect');
             const modalSel = document.getElementById('customerModalUnreadSelect');
+            if (pageSel && pageSel.value !== sourceVal) pageSel.value = sourceVal;
+            if (modalSel && modalSel.value !== sourceVal) modalSel.value = sourceVal;
+            renderCustomerTable();
+        }
+
+        function onCustomerTypeFilterChange(sourceVal) {
+            customerCurrentPage = 1;
+            const pageSel = document.getElementById('customerPageTypeSelect');
+            const modalSel = document.getElementById('customerModalTypeSelect');
             if (pageSel && pageSel.value !== sourceVal) pageSel.value = sourceVal;
             if (modalSel && modalSel.value !== sourceVal) modalSel.value = sourceVal;
             renderCustomerTable();
@@ -6697,6 +6776,18 @@
                 recordsToDisplay = recordsToDisplay.filter(c => !c.assigned_user_id || !String(c.assigned_user_id).trim());
             } else if (selectedUserFilter && selectedUserFilter !== 'all') {
                 recordsToDisplay = recordsToDisplay.filter(c => String(c.assigned_user_id || '').trim().toLowerCase() === selectedUserFilter.trim().toLowerCase());
+            }
+
+            // Customer Type Filter
+            const pageTypeSel = document.getElementById('customerPageTypeSelect');
+            const modalTypeSel = document.getElementById('customerModalTypeSelect');
+            const selectedTypeFilter = (pageTypeSel ? pageTypeSel.value : null) || (modalTypeSel ? modalTypeSel.value : 'all');
+
+            if (selectedTypeFilter && selectedTypeFilter !== 'all') {
+                recordsToDisplay = recordsToDisplay.filter(c => {
+                    const cType = String(c.customer_type || c.type || 'Business').trim().toLowerCase();
+                    return cType === selectedTypeFilter.trim().toLowerCase();
+                });
             }
 
             // Unread / Alert Email Filter
