@@ -10521,6 +10521,21 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
     </div>
     """
 
+def log_invoice_communication(cur, customer_id, sender_email: str, recipient_email: str, reply_to_email: str | None, subject: str, body_summary: str):
+    """Logs outbound invoice email to customer_communications history table."""
+    try:
+        cur.execute("""
+            INSERT INTO customer_communications (
+                customer_id, direction, sender_email, recipient_email, reply_to_email,
+                subject, body_text, status, is_read, created_at
+            ) VALUES (
+                %s, 'OUTBOUND', %s, %s, %s, %s, %s, 'DELIVERED', TRUE, (NOW() AT TIME ZONE 'America/New_York')
+            );
+        """, (customer_id, sender_email, recipient_email, reply_to_email, subject, body_summary))
+        print(f"[COMM LOG INVOICE] Saved OUTBOUND invoice email log for Customer #{customer_id} ({recipient_email}).")
+    except Exception as e:
+        print(f"[COMM LOG INVOICE ERROR] Failed to record invoice communication for Customer #{customer_id}: {e}")
+
 def check_billing_admin_access(request: Request):
     username = get_current_username(request)
     if not username or not is_admin_user(username):
@@ -10890,6 +10905,11 @@ async def create_manual_invoice(request: Request):
                     try:
                         send_resend_email(email_payload)
                         cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                        from_email_header = format_resend_from_header("VRT Services Billing")
+                        reply_to_str = reply_to_list[0] if reply_to_list else None
+                        subject_text = email_payload["subject"]
+                        body_summary = f"Invoice #{inv_number} sent to {cust_email} for ${amount:,.2f} USD.\nDescription: {description}"
+                        log_invoice_communication(cur, customer_id, from_email_header, cust_email, reply_to_str, subject_text, body_summary)
                         conn.commit()
                     except Exception as e_send:
                         print(f"Error sending manual invoice email: {e_send}")
@@ -10951,6 +10971,11 @@ async def send_invoice_email(invoice_id: str, request: Request):
             resend_res = send_resend_email(email_payload)
 
             cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (row["id"],))
+            from_email_header = format_resend_from_header("VRT Services Billing")
+            reply_to_str = reply_to_list[0] if reply_to_list else None
+            subject_text = email_payload["subject"]
+            body_summary = f"Invoice #{inv_dict['invoice_number']} sent to {cust_email} for ${float(inv_dict['total_amount']):,.2f} USD.\nDescription: {inv_dict.get('description', '') or 'N/A'}"
+            log_invoice_communication(cur, inv_dict["customer_id"], from_email_header, cust_email, reply_to_str, subject_text, body_summary)
             conn.commit()
 
             return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}", "resend": resend_res}
@@ -11175,6 +11200,11 @@ def run_daily_billing_job():
                         try:
                             send_resend_email(email_payload)
                             cur.execute("UPDATE customer_invoices SET status = 'SENT' WHERE id = %s;", (inv_id,))
+                            from_email_header = format_resend_from_header("VRT Services Billing")
+                            reply_to_str = reply_to_list[0] if reply_to_list else None
+                            subject_text = email_payload["subject"]
+                            body_summary = f"Recurring Invoice #{inv_number} sent to {cust_email} for ${amount:,.2f} USD.\nDescription: {desc}"
+                            log_invoice_communication(cur, s["customer_id"], from_email_header, cust_email, reply_to_str, subject_text, body_summary)
                             conn.commit()
                         except Exception as e_s:
                             print(f"[RECURRING BILLING SEND ERROR] Invoice #{inv_number}: {e_s}")
