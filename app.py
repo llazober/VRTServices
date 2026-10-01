@@ -10848,10 +10848,18 @@ async def list_invoices(request: Request, status: str = "ALL", customer_id: str 
             today = datetime.date.today()
             for r in rows:
                 row = dict(r)
-                if row["status"] == "SENT" and row["due_date"] and row["due_date"] < today:
+                if row["status"] == "SENT" and row.get("due_date") and row["due_date"] < today:
                     row["status"] = "OVERDUE"
-                row["issue_date"] = str(row["issue_date"])
-                row["due_date"] = str(row["due_date"])
+                if isinstance(row.get("issue_date"), (datetime.date, datetime.datetime)):
+                    row["issue_date"] = row["issue_date"].strftime("%Y-%m-%d")
+                else:
+                    row["issue_date"] = str(row.get("issue_date") or "")[:10]
+
+                if isinstance(row.get("due_date"), (datetime.date, datetime.datetime)):
+                    row["due_date"] = row["due_date"].strftime("%Y-%m-%d")
+                else:
+                    row["due_date"] = str(row.get("due_date") or "")[:10]
+
                 row["created_at"] = str(row["created_at"])
                 row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
 
