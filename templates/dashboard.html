@@ -5483,6 +5483,17 @@
             `;
         }
 
+        function formatDateMMDDYYYY(dateStr) {
+            if (!dateStr) return '';
+            const norm = normalizeDateToYYYYMMDD(dateStr);
+            if (!norm) return String(dateStr);
+            const parts = norm.split('-');
+            if (parts.length === 3) {
+                return `${parts[1]}/${parts[2]}/${parts[0]}`;
+            }
+            return String(dateStr);
+        }
+
         function normalizeDateToYYYYMMDD(dateVal) {
             if (!dateVal) return '';
             const s = String(dateVal).trim();
