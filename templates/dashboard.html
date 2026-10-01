@@ -5416,7 +5416,7 @@
                         <td style="padding: 14px 18px; text-align: right;">
                             <div style="display: flex; gap: 6px; justify-content: flex-end;">
                                 <button onclick="viewInvoiceHtml('${inv.id}', '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
-                                <button onclick="openCustomerStorageModal(event, ${inv.customer_id})" title="Open Customer Storage Modal" style="padding: 6px 10px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📁 Folder</button>
+                                <button onclick="openCustomerStorageModal(event, ${inv.customer_id}, '${inv.id}', '${inv.invoice_number}')" title="Open Customer Storage Modal to attach files to invoice" style="padding: 6px 10px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📁 Folder</button>
                                 ${inv.status !== 'PAID' && inv.status !== 'CANCELLED' ? `<button onclick="openInvoicePaidModal('${inv.id}', '${inv.invoice_number}')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
                                 ${inv.status !== 'CANCELLED' ? `<button onclick="sendInvoiceEmail('${inv.id}')" title="Send Resend Email to Client Immediately" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>` : ''}
                                 <button onclick="openInvoiceHistoryModal('${inv.id}', '${inv.invoice_number}')" title="View Audit History" style="padding: 6px 10px; background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.3); color: #fbbf24; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📜 History</button>
@@ -5848,21 +5848,42 @@
         let activeAttachCustomerId = null;
 
         async function openInvoiceAttachFileModal(invoiceId, customerId, invoiceNumber) {
-            closeAllAppModals();
-            activeAttachInvoiceId = invoiceId;
-            activeAttachCustomerId = customerId;
+            openCustomerStorageModal(null, customerId, invoiceId, invoiceNumber);
+        }
 
-            const titleElem = document.getElementById('invoiceAttachTitleText');
-            if (titleElem) titleElem.innerText = invoiceNumber ? `#${invoiceNumber}` : `#INV-${invoiceId}`;
+        async function attachFileFromStorageModal(event, invoiceId, filePath, fileName) {
+            if (event && event.stopPropagation) event.stopPropagation();
+            if (!invoiceId || !filePath) return;
 
-            const modal = document.getElementById('billingInvoiceAttachModal');
-            if (modal) {
-                modal.style.display = 'flex';
-                modal.style.opacity = '1';
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/attachments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_path: filePath, file_name: fileName || filePath.split('/').pop() })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to attach file to invoice');
+
+                const invLabel = activeAttachInvoiceNumber ? `#${activeAttachInvoiceNumber}` : `#INV-${invoiceId}`;
+                const displayName = fileName || filePath.split('/').pop();
+
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("File Attached", `✅ "${displayName}" attached to Invoice ${invLabel}`, "success");
+                } else {
+                    alert(`✅ "${displayName}" attached to Invoice ${invLabel}`);
+                }
+
+                if (typeof loadBillingInvoices === 'function') {
+                    loadBillingInvoices();
+                }
+            } catch (err) {
+                console.error('Error attaching file from storage modal:', err);
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Error", err.message || "Failed to attach file.", "error");
+                } else {
+                    alert(`⚠️ ${err.message}`);
+                }
             }
-
-            await loadCurrentInvoiceAttachments(invoiceId);
-            await loadCustomerStorageForInvoice(customerId);
         }
 
         function closeInvoiceAttachModal() {
@@ -7417,13 +7438,26 @@
         let currentStoragePrefix = '';
         let currentStorageData = null;
 
-        async function openCustomerStorageModal(event, customerId) {
+        async function openCustomerStorageModal(event, customerId, targetInvoiceId = null, targetInvoiceNumber = null) {
             if (event) {
                 event.stopPropagation();
                 if (event.preventDefault) event.preventDefault();
             }
             currentStorageCustomerId = customerId;
             currentStoragePrefix = '';
+            activeAttachInvoiceId = targetInvoiceId || null;
+            activeAttachInvoiceNumber = targetInvoiceNumber || null;
+
+            const modeBanner = document.getElementById('storageInvoiceAttachModeBanner');
+            if (modeBanner) {
+                if (activeAttachInvoiceId) {
+                    const invLabel = activeAttachInvoiceNumber ? `#${activeAttachInvoiceNumber}` : `#INV-${activeAttachInvoiceId}`;
+                    modeBanner.style.display = 'block';
+                    modeBanner.innerHTML = `📎 Attachment Mode Active for <strong>Invoice ${invLabel}</strong> — Click '📎 Attach to Invoice' next to any file below to attach it to the invoice before emailing.`;
+                } else {
+                    modeBanner.style.display = 'none';
+                }
+            }
 
             // Hide/Show Send Email and Workflow Checklist buttons based on CUT-0000
             let custNum = '';
@@ -7470,6 +7504,10 @@
             setTimeout(() => { modal.style.display = 'none'; }, 150);
             currentStorageCustomerId = null;
             currentStorageData = null;
+            activeAttachInvoiceId = null;
+            activeAttachInvoiceNumber = null;
+            const modeBanner = document.getElementById('storageInvoiceAttachModeBanner');
+            if (modeBanner) modeBanner.style.display = 'none';
             const spinner = document.getElementById('storageLoadingSpinner');
             if (spinner) spinner.style.display = 'none';
         }
@@ -7622,6 +7660,10 @@
                     const attrName = (f.name || '').replace(/"/g, '&quot;');
                     const attrUrl = (f.url || '').replace(/"/g, '&quot;');
 
+                    const attachBtnHtml = activeAttachInvoiceId
+                        ? `<button class="storage-attach-invoice-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.45); color: #34d399; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Attach file to invoice #${activeAttachInvoiceNumber || ''}">📎 Attach to Invoice</button>`
+                        : '';
+
                     rowsHtml += `
                         <tr class="storage-item-row ${isPdf ? 'storage-pdf-row' : ''}" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" data-name-search="${f.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 10px 12px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px; word-break: break-all; ${isPdf ? 'cursor: pointer;' : ''}">
@@ -7631,6 +7673,7 @@
                             <td style="padding: 10px 12px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${formatBytes(f.size)}</td>
                             <td style="padding: 10px 12px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;">${dateStr}</td>
                             <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
+                                ${attachBtnHtml}
                                 ${isPdf ? `<button class="storage-preview-pdf-btn" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" style="padding: 4px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Preview PDF inside modal window">👁️ Preview</button>` : `<button class="storage-convert-file-pdf-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Convert file to PDF (Moves original to Raw_Originals/)">📄 -> PDF</button>`}
                                 <button class="storage-rename-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Rename file">✏️ Rename</button>
                                 <button class="storage-move-file-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Move file to another folder">🚚 Move</button>
@@ -7645,6 +7688,14 @@
             tbody.innerHTML = rowsHtml;
 
             // Delegated event handler: navigate on row/button click using data-prefix
+            tbody.querySelectorAll('.storage-attach-invoice-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    attachFileFromStorageModal(e, activeAttachInvoiceId, key, name);
+                });
+            });
             tbody.querySelectorAll('.storage-nav-row').forEach(row => {
                 row.addEventListener('click', (e) => {
                     if (e.target.closest('.storage-open-btn') || e.target.closest('.storage-delete-folder-btn')) return;
