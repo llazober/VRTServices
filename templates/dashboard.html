@@ -3751,21 +3751,45 @@
         </div>
     </div>
 
-    <!-- Confirm Payment Modal with Paid Date Picker -->
+    <!-- Confirm Payment Modal with Paid Date Picker & Partial Payment support -->
     <div id="billingInvoicePaidModal" class="app-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483647; justify-content: center; align-items: center;">
-        <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 500px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;">
+        <div style="background: #141722; border: 1px solid var(--border-color); border-radius: 20px; max-width: 90%; width: 520px; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;">
             <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #4ade80; margin: 0; display: flex; align-items: center; gap: 8px;">
-                    ✅ Mark Invoice Paid - <span id="invoicePaidModalTitle">#INV</span>
+                    💳 <span id="invoicePaidModalHeaderLabel">Record Payment</span> - <span id="invoicePaidModalTitle">#INV</span>
                 </h3>
                 <button onclick="closeInvoicePaidModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.3rem; padding: 4px;">✕</button>
             </div>
             <form onsubmit="submitInvoicePaid(event)" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
                 <input type="hidden" id="invoicePaidTargetId">
-                <div>
-                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Invoice Paid Date *</label>
-                    <input type="date" id="invoicePaidDateInput" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                
+                <!-- Financial Summary Badge -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">TOTAL INVOICE</span>
+                        <div id="invoicePaidTotalSummary" style="font-size: 1.05rem; font-weight: 800; color: #fff;">$0.00</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">PAID TO DATE</span>
+                        <div id="invoicePaidPriorSummary" style="font-size: 1.05rem; font-weight: 800; color: #38bdf8;">$0.00</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.72rem; color: #facc15; text-transform: uppercase; font-weight: 800;">REMAINING BAL</span>
+                        <div id="invoicePaidBalanceSummary" style="font-size: 1.05rem; font-weight: 900; color: #facc15;">$0.00</div>
+                    </div>
                 </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Payment Date *</label>
+                        <input type="date" id="invoicePaidDateInput" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #34d399; margin-bottom: 6px;">Payment Amount ($) *</label>
+                        <input type="number" step="0.01" min="0.01" id="invoicePaidAmountInput" required oninput="updateInvoicePaidSubmitBtnText()" placeholder="0.00" style="width: 100%; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; color: #34d399; outline: none;">
+                    </div>
+                </div>
+
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Payment Method</label>
                     <select id="invoicePaidMethodSelect" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
@@ -3779,7 +3803,7 @@
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Transaction / Check Ref # (Optional)</label>
-                    <input type="text" id="invoicePaidRefInput" placeholder="e.g. Check #1042 or TXN-998" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    <input type="text" id="invoicePaidRefInput" placeholder="e.g. Zelle Ref / Check #1042 / TXN-998" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Notes / Remarks (Optional)</label>
@@ -3787,7 +3811,7 @@
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
                     <button type="button" onclick="closeInvoicePaidModal()" style="padding: 10px 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem; font-weight: 700; border-radius: 10px; cursor: pointer;">Cancel</button>
-                    <button type="submit" style="padding: 10px 24px; background: linear-gradient(135deg, #4ade80, #22c55e); color: #000; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 222, 128, 0.35);">Confirm Paid</button>
+                    <button type="submit" id="invoicePaidSubmitBtn" style="padding: 10px 24px; background: linear-gradient(135deg, #4ade80, #22c55e); color: #000; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 222, 128, 0.35);">Confirm Paid</button>
                 </div>
             </form>
         </div>
@@ -5376,22 +5400,44 @@
             }
 
             tbody.innerHTML = pageInvoices.map(inv => {
+                const totalAmt = parseFloat(inv.total_amount || 0);
+                const amtPaid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? totalAmt : 0));
+                const balDue = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, totalAmt - amtPaid);
+
                 let badgeStyle = "background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);";
-                if (inv.status === 'PAID') badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
-                else if (inv.status === 'SENT') badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
-                else if (inv.status === 'OVERDUE') badgeStyle = "background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);";
-                else if (inv.status === 'CANCELLED') badgeStyle = "background: rgba(100, 116, 139, 0.2); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3);";
+                let statusLabel = inv.status;
+
+                if (inv.status === 'PAID' || (balDue <= 0 && amtPaid > 0)) {
+                    badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
+                    statusLabel = 'PAID';
+                } else if (inv.status === 'PARTIALLY_PAID' || inv.status === 'PARTIAL' || (amtPaid > 0 && balDue > 0)) {
+                    badgeStyle = "background: rgba(245, 158, 11, 0.18); color: #facc15; border: 1px solid rgba(245, 158, 11, 0.45);";
+                    statusLabel = 'PARTIAL';
+                } else if (inv.status === 'SENT') {
+                    badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
+                } else if (inv.status === 'OVERDUE') {
+                    badgeStyle = "background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);";
+                } else if (inv.status === 'CANCELLED') {
+                    badgeStyle = "background: rgba(100, 116, 139, 0.2); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3);";
+                }
 
                 let attBadge = '';
                 if (inv.attachments_count && inv.attachments_count > 0) {
-                    attBadge = `<span onclick="openInvoiceAttachFileModal('${inv.id}', ${inv.customer_id}, '${inv.invoice_number}')" title="View attached files" style="cursor: pointer; font-size: 0.73rem; background: rgba(52, 211, 153, 0.15); color: #34d399; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3); margin-right: 8px; vertical-align: middle; display: inline-flex; align-items: center;">📎 ${inv.attachments_count} file(s) attached</span>`;
+                    attBadge = `<span onclick="openInvoiceAttachFileModal('${inv.id}', ${inv.customer_id}, '${inv.invoice_number}')" title="View attached files or detach files" style="cursor: pointer; font-size: 0.73rem; background: rgba(52, 211, 153, 0.15); color: #34d399; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3); margin-right: 8px; vertical-align: middle; display: inline-flex; align-items: center;">📎 ${inv.attachments_count} file(s) attached</span>`;
                 }
 
                 let historyDatesDisplay = '';
-                if (inv.status === 'PAID') {
+                if (inv.status === 'PAID' || balDue <= 0) {
                     historyDatesDisplay = `<div style="font-size: 0.73rem; color: #4ade80; margin-top: 3px; font-weight: 700;">Paid: ${formatDateMMDDYYYY(inv.paid_date || inv.paid_at)}</div>`;
+                } else if (amtPaid > 0 && balDue > 0) {
+                    historyDatesDisplay = `<div style="font-size: 0.73rem; color: #facc15; margin-top: 3px; font-weight: 700;">Paid: $${amtPaid.toFixed(2)} / Bal: $${balDue.toFixed(2)}</div>`;
                 } else if (inv.last_sent_date) {
                     historyDatesDisplay = `<div style="font-size: 0.73rem; color: #38bdf8; margin-top: 3px; font-weight: 700;">Sent: ${formatDateMMDDYYYY(inv.last_sent_date)}</div>`;
+                }
+
+                let amountDisplay = `$${totalAmt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (amtPaid > 0 && balDue > 0) {
+                    amountDisplay += `<span style="font-size: 0.74rem; color: #facc15; display: block; font-weight: 700;">Bal: $${balDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
                 }
 
                 return `
@@ -5408,10 +5454,10 @@
                         <td style="padding: 14px 18px; color: #cbd5e1; max-width: 280px; white-space: pre-wrap; font-size: 0.84rem; line-height: 1.4; vertical-align: middle;">
                             ${inv.description ? escapeHtml(inv.description) : '—'}
                         </td>
-                        <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem; vertical-align: middle;">$${parseFloat(inv.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td style="padding: 14px 18px; font-weight: 800; color: #fff; font-size: 0.95rem; vertical-align: middle;">${amountDisplay}</td>
                         <td style="padding: 14px 18px; vertical-align: middle;">
                             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 3px;">
-                                <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${inv.status}</span>
+                                <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${statusLabel}</span>
                                 ${historyDatesDisplay}
                             </div>
                         </td>
@@ -5426,9 +5472,9 @@
                                     <a href="#" onclick="openCustomerStorageModal(event, ${inv.customer_id}, '${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #34d399; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                                         📁 Folder & Attachments
                                     </a>
-                                    ${inv.status !== 'PAID' && inv.status !== 'CANCELLED' ? `
+                                    ${inv.status !== 'CANCELLED' && balDue > 0 ? `
                                     <a href="#" onclick="openInvoicePaidModal('${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #4ade80; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
-                                        ✅ Mark as Paid
+                                        💳 Record Payment ${amtPaid > 0 ? '(Partial)' : ''}
                                     </a>
                                     ` : ''}
                                     ${inv.status !== 'CANCELLED' ? `
@@ -5773,19 +5819,80 @@
             }
         }
 
-        // ── Invoice Paid Modal Functions ──
+        // ── Invoice Paid & Partial Payment Modal Functions ──
+        let currentPayingInvoiceRemainingBalance = 0;
+        let currentPayingInvoiceTotalAmount = 0;
+
         function openInvoicePaidModal(invoiceId, invoiceNumber) {
             closeAllAppModals();
             const targetInput = document.getElementById('invoicePaidTargetId');
             const titleElem = document.getElementById('invoicePaidModalTitle');
+            const headerLabel = document.getElementById('invoicePaidModalHeaderLabel');
             const dateElem = document.getElementById('invoicePaidDateInput');
+            const amtInput = document.getElementById('invoicePaidAmountInput');
+            const totalSumElem = document.getElementById('invoicePaidTotalSummary');
+            const priorSumElem = document.getElementById('invoicePaidPriorSummary');
+            const balSumElem = document.getElementById('invoicePaidBalanceSummary');
+
             if (targetInput) targetInput.value = invoiceId;
             if (titleElem) titleElem.innerText = invoiceNumber ? `#${invoiceNumber}` : `#INV-${invoiceId}`;
             if (dateElem) dateElem.value = new Date().toISOString().split('T')[0];
+
+            const inv = (typeof billingAllInvoices !== 'undefined' && Array.isArray(billingAllInvoices))
+                ? billingAllInvoices.find(i => String(i.id) === String(invoiceId) || String(i.invoice_number) === String(invoiceNumber))
+                : null;
+
+            const totalAmt = inv ? parseFloat(inv.total_amount || 0) : 0;
+            const alreadyPaid = inv ? parseFloat(inv.amount_paid || (inv.status === 'PAID' ? inv.total_amount : 0)) : 0;
+            const remainingBal = Math.max(0, totalAmt - alreadyPaid);
+
+            currentPayingInvoiceRemainingBalance = remainingBal;
+            currentPayingInvoiceTotalAmount = totalAmt;
+
+            if (totalSumElem) totalSumElem.textContent = `$${totalAmt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            if (priorSumElem) priorSumElem.textContent = `$${alreadyPaid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            if (balSumElem) balSumElem.textContent = `$${remainingBal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            if (amtInput) {
+                amtInput.value = remainingBal > 0 ? remainingBal.toFixed(2) : totalAmt.toFixed(2);
+                amtInput.max = remainingBal > 0 ? remainingBal : totalAmt;
+            }
+
+            if (headerLabel) {
+                headerLabel.textContent = alreadyPaid > 0 ? 'Record Additional Payment' : (remainingBal < totalAmt && remainingBal > 0 ? 'Record Balance Payment' : 'Record Payment');
+            }
+
+            updateInvoicePaidSubmitBtnText();
+
             const modal = document.getElementById('billingInvoicePaidModal');
             if (modal) {
                 modal.style.display = 'flex';
                 modal.style.opacity = '1';
+            }
+        }
+
+        function updateInvoicePaidSubmitBtnText() {
+            const amtInput = document.getElementById('invoicePaidAmountInput');
+            const submitBtn = document.getElementById('invoicePaidSubmitBtn');
+            if (!amtInput || !submitBtn) return;
+
+            const enteredAmt = parseFloat(amtInput.value || 0);
+            const remainingBal = currentPayingInvoiceRemainingBalance;
+
+            if (enteredAmt <= 0) {
+                submitBtn.textContent = 'Enter Valid Amount';
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.5';
+            } else if (enteredAmt < remainingBal - 0.009) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.textContent = `Confirm Partial Payment ($${enteredAmt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                submitBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            } else {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.textContent = `Confirm Paid ($${enteredAmt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                submitBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
             }
         }
 
@@ -5798,12 +5905,19 @@
             event.preventDefault();
             const invId = document.getElementById('invoicePaidTargetId').value;
             const paidDate = document.getElementById('invoicePaidDateInput').value;
+            const paidAmt = document.getElementById('invoicePaidAmountInput').value;
             const method = document.getElementById('invoicePaidMethodSelect').value;
             const ref = document.getElementById('invoicePaidRefInput').value;
             const notes = document.getElementById('invoicePaidNotesInput').value;
 
-            if (!invId || !paidDate) {
-                showCustomAlert("Error", "Invoice ID and Paid Date are required.", "error");
+            if (!invId || !paidDate || !paidAmt) {
+                showCustomAlert("Error", "Invoice ID, Payment Date, and Payment Amount are required.", "error");
+                return;
+            }
+
+            const numPaidAmt = parseFloat(paidAmt);
+            if (isNaN(numPaidAmt) || numPaidAmt <= 0) {
+                showCustomAlert("Error", "Please enter a valid positive payment amount.", "error");
                 return;
             }
 
@@ -5813,6 +5927,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         status: 'PAID',
+                        payment_amount: numPaidAmt,
                         paid_date: paidDate,
                         payment_method: method,
                         transaction_ref: ref,
@@ -5820,13 +5935,14 @@
                     })
                 });
                 if (res.ok) {
+                    const data = await res.json();
                     closeInvoicePaidModal();
-                    showCustomAlert("Success", "Invoice marked as PAID!", "success");
+                    showCustomAlert("Payment Recorded", data.message || "Payment recorded successfully!", "success");
                     loadBillingOverview();
                     loadBillingInvoices();
                 } else {
                     const err = await res.json();
-                    showCustomAlert("Error", err.detail || "Failed to mark invoice as paid.", "error");
+                    showCustomAlert("Error", err.detail || "Failed to record payment.", "error");
                 }
             } catch (e) {
                 showCustomAlert("Error", "Server error updating invoice status.", "error");
@@ -7619,7 +7735,9 @@
                                 📎 Attach Selected File(s)
                             </button>
                         </div>
+                        <div id="storageModalAttachedFilesList" style="margin-top: 10px; font-size: 0.78rem;"></div>
                     `;
+                    renderStorageModalAttachedFiles(activeAttachInvoiceId);
                 } else {
                     modeBanner.style.display = 'none';
                 }
@@ -7934,6 +8052,14 @@
                     openMoveFileModal(e, key, name);
                 });
             });
+            tbody.querySelectorAll('.storage-attach-invoice-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-key');
+                    const name = btn.getAttribute('data-name');
+                    attachSingleFileFromStorageModal(key, name);
+                });
+            });
             tbody.querySelectorAll('.storage-delete-file-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -8028,6 +8154,10 @@
             chks.forEach(c => { c.checked = false; });
             updateStorageBatchSelectionState();
 
+            if (activeAttachInvoiceId) {
+                renderStorageModalAttachedFiles(activeAttachInvoiceId);
+            }
+
             if (typeof loadBillingInvoices === 'function') {
                 loadBillingInvoices();
             }
@@ -8045,6 +8175,80 @@
                 } else {
                     alert(msg);
                 }
+            }
+        }
+
+        async function attachSingleFileFromStorageModal(filePath, fileName) {
+            if (!activeAttachInvoiceId) {
+                showCustomAlert("Error", "No active invoice target selected.", "error");
+                return;
+            }
+            try {
+                const res = await fetch(`/api/billing/invoices/${activeAttachInvoiceId}/attachments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_path: filePath, file_name: fileName })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    if (typeof showToast === 'function') {
+                        showToast(`Attached '${fileName}' to invoice`, 'success');
+                    } else {
+                        showCustomAlert("File Attached", `Attached '${fileName}' to invoice`, "success");
+                    }
+                    renderStorageModalAttachedFiles(activeAttachInvoiceId);
+                    if (typeof loadBillingInvoices === 'function') loadBillingInvoices();
+                } else {
+                    showCustomAlert("Error", data.detail || "Failed to attach file.", "error");
+                }
+            } catch (err) {
+                showCustomAlert("Error", err.message || "Error attaching file.", "error");
+            }
+        }
+
+        async function renderStorageModalAttachedFiles(invoiceId) {
+            const listEl = document.getElementById('storageModalAttachedFilesList');
+            if (!listEl || !invoiceId) return;
+            listEl.innerHTML = `<span style="color: #94a3b8; font-size: 0.78rem;">Loading current invoice attachments...</span>`;
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/attachments`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const atts = data.attachments || [];
+                    if (atts.length === 0) {
+                        listEl.innerHTML = `<div style="font-size: 0.76rem; color: #94a3b8; font-style: italic;">No files attached to this invoice yet. Select files below to attach.</div>`;
+                        return;
+                    }
+                    listEl.innerHTML = `<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(52, 211, 153, 0.25);">
+                        <strong style="color: #38bdf8; font-size: 0.78rem;">📎 Currently Attached (${atts.length}):</strong> ` + atts.map(a => `
+                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; border-radius: 6px; font-size: 0.75rem; font-weight: 700;">
+                            📎 ${escapeHtml(a.file_name)}
+                            <button type="button" onclick="detachFileFromStorageModal('${invoiceId}', ${a.id}, '${escapeHtml(a.file_name).replace(/'/g, "\\'")}')" title="Detach file from invoice" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; font-weight: 800; cursor: pointer; margin-left: 4px;">🗑️ Detach</button>
+                        </span>
+                    `).join(' ') + `</div>`;
+                }
+            } catch (e) {
+                listEl.innerHTML = `<span style="color: #f87171; font-size: 0.78rem;">Error loading attachments.</span>`;
+            }
+        }
+
+        async function detachFileFromStorageModal(invoiceId, attachmentId, fileName) {
+            const confirmDetach = await showCustomConfirm(`Are you sure you want to detach "${fileName}" from this invoice?\n\n(The file will remain safely in customer storage).`, "Detach File from Invoice", "Detach File", "Cancel");
+            if (!confirmDetach) return;
+
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/attachments/${attachmentId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert("File Detached", `Detached '${fileName}' from invoice.`, "success");
+                    }
+                    renderStorageModalAttachedFiles(invoiceId);
+                    if (typeof loadBillingInvoices === 'function') loadBillingInvoices();
+                } else {
+                    alert('Failed to detach file.');
+                }
+            } catch (e) {
+                alert('Error detaching file: ' + e.message);
             }
         }
 

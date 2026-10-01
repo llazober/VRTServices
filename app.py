@@ -1235,6 +1235,8 @@ def init_billing_tables():
                 CREATE INDEX IF NOT EXISTS idx_to_invoice_status ON to_invoice (status);
                 CREATE INDEX IF NOT EXISTS idx_inv_hist_invoice_id ON customer_invoice_history (invoice_id);
                 CREATE INDEX IF NOT EXISTS idx_inv_att_invoice_id ON customer_invoice_attachments (invoice_id);
+                ALTER TABLE customer_invoices ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12, 2) NOT NULL DEFAULT 0.00;
+                UPDATE customer_invoices SET amount_paid = total_amount WHERE status = 'PAID' AND (amount_paid IS NULL OR amount_paid = 0);
             """)
             conn.commit()
             print("Billing tables (customer_billing_schedules, customer_invoices, to_invoice, customer_invoice_history, customer_invoice_attachments) initialized successfully in VRT database.")
@@ -10811,6 +10813,11 @@ async def list_invoices(request: Request, status: str = "ALL", customer_id: str 
                 row["created_at"] = str(row["created_at"])
                 row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
 
+                total_val = float(row.get("total_amount") or 0.0)
+                paid_val = float(row.get("amount_paid") or (total_val if row.get("status") == "PAID" else 0.0))
+                row["amount_paid"] = paid_val
+                row["balance_due"] = max(0.0, total_val - paid_val)
+
                 # Fetch last email sent date from customer_invoice_history
                 cur.execute("""
                     SELECT event_date FROM customer_invoice_history
@@ -11277,7 +11284,9 @@ async def update_invoice_status(invoice_id: str, request: Request):
     notes = payload.get("notes") or ""
     paid_date_req = payload.get("paid_date") or get_eastern_today_date_str()
 
-    if new_status not in ["PAID", "SENT", "OVERDUE", "DRAFT", "CANCELLED", "VOID"]:
+    req_amount_paid = payload.get("payment_amount") or payload.get("amount_paid")
+
+    if new_status not in ["PAID", "PARTIALLY_PAID", "PARTIAL", "SENT", "OVERDUE", "DRAFT", "CANCELLED", "VOID"]:
         raise HTTPException(status_code=400, detail="Invalid status value.")
 
     conn = None
@@ -11286,9 +11295,9 @@ async def update_invoice_status(invoice_id: str, request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             inv_str = str(invoice_id).strip()
             if inv_str.isdigit():
-                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount, amount_paid, status FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
             else:
-                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+                cur.execute("SELECT id, schedule_id, customer_id, invoice_number, total_amount, amount_paid, status FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
             inv_row = cur.fetchone()
             if not inv_row:
                 raise HTTPException(status_code=404, detail="Invoice not found.")
@@ -11310,17 +11319,54 @@ async def update_invoice_status(invoice_id: str, request: Request):
                     INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
                     VALUES (%s, %s, %s, %s, %s, %s);
                 """, (inv_id, customer_id, new_status, paid_date_req, username, notes or f"Invoice status changed to {new_status}"))
-            elif new_status == "PAID":
+                conn.commit()
+                return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
+
+            elif new_status in ["PAID", "PARTIALLY_PAID", "PARTIAL"]:
+                total_amt = float(inv_row.get("total_amount") or 0.0)
+                existing_paid = float(inv_row.get("amount_paid") or (total_amt if inv_row.get("status") == "PAID" else 0.0))
+
+                if req_amount_paid is not None and str(req_amount_paid).strip() != "":
+                    try:
+                        new_payment = float(req_amount_paid)
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail="Invalid payment amount.")
+                    current_total_paid = existing_paid + new_payment
+                else:
+                    new_payment = max(0.0, total_amt - existing_paid)
+                    current_total_paid = total_amt
+
+                if current_total_paid >= total_amt - 0.009:
+                    final_status = "PAID"
+                    current_total_paid = total_amt
+                    balance_due = 0.00
+                else:
+                    final_status = "PARTIALLY_PAID"
+                    balance_due = max(0.0, total_amt - current_total_paid)
+
                 cur.execute("""
                     UPDATE customer_invoices 
-                    SET status = %s, paid_at = %s, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    SET status = %s, amount_paid = %s, paid_at = %s, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s;
-                """, (new_status, paid_date_req, payment_method, transaction_ref, notes, inv_id))
+                """, (final_status, current_total_paid, paid_date_req, payment_method, transaction_ref, notes, inv_id))
+
+                event_type = "PAID" if final_status == "PAID" else "PARTIAL_PAYMENT"
+                history_note = f"Payment of ${new_payment:,.2f} recorded via {payment_method}. Total Paid: ${current_total_paid:,.2f}. Remaining Balance: ${balance_due:,.2f}. Ref: {transaction_ref}. Notes: {notes}"
 
                 cur.execute("""
                     INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
-                    VALUES (%s, %s, 'PAID', %s, %s, %s);
-                """, (inv_id, customer_id, paid_date_req, username, f"Payment recorded via {payment_method}. Ref: {transaction_ref}. Notes: {notes}"))
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (inv_id, customer_id, event_type, paid_date_req, username, history_note))
+
+                conn.commit()
+                msg = f"Payment of ${new_payment:,.2f} recorded. Status: {final_status}. Remaining Balance: ${balance_due:,.2f}"
+                return {
+                    "status": "success",
+                    "message": msg,
+                    "invoice_status": final_status,
+                    "amount_paid": current_total_paid,
+                    "balance_due": balance_due
+                }
             else:
                 cur.execute("""
                     UPDATE customer_invoices 
@@ -11333,11 +11379,8 @@ async def update_invoice_status(invoice_id: str, request: Request):
                     VALUES (%s, %s, %s, %s, %s, %s);
                 """, (inv_id, customer_id, new_status, paid_date_req, username, notes or f"Invoice status updated to {new_status}"))
 
-            conn.commit()
-            return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
-
-            conn.commit()
-            return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
+                conn.commit()
+                return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
     except HTTPException:
         raise
     except Exception as e:
