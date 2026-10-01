@@ -1304,7 +1304,7 @@
 
                     <!-- Status Filter Dropdown, Issue Date Range & Search -->
                     <div id="billingInvoiceFilters" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div id="billingStatusFilterGroup" style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Status:</label>
                             <select id="billingStatusFilterSelect" onchange="filterBillingTable(true)" style="background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; padding: 7px 12px; font-size: 0.85rem; color: #ffffff; outline: none; cursor: pointer;">
                                 <option value="ALL" style="background-color: #0f172a; color: #ffffff;">All Statuses</option>
@@ -1315,11 +1315,11 @@
                                 <option value="CANCELLED" style="background-color: #0f172a; color: #ffffff;">CANCELLED</option>
                             </select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div id="billingStartDateGroup" style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Start Date:</label>
                             <input type="date" id="billingStartDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div id="billingEndDateGroup" style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">End Date:</label>
                             <input type="date" id="billingEndDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
@@ -5242,7 +5242,11 @@
             const invSec = document.getElementById('billingInvoicesSection');
             const toBeInvSec = document.getElementById('billingToBeInvoicedSection');
             const schedSec = document.getElementById('billingSchedulesSection');
-            const statusSelect = document.getElementById('billingStatusFilterSelect');
+
+            const statusGroup = document.getElementById('billingStatusFilterGroup');
+            const startDateGroup = document.getElementById('billingStartDateGroup');
+            const endDateGroup = document.getElementById('billingEndDateGroup');
+            const summaryCard = document.getElementById('billingSingleSummaryCard');
             const searchInput = document.getElementById('billingSearchInput');
 
             if (invBtn) { invBtn.style.background = 'transparent'; invBtn.style.color = '#94a3b8'; }
@@ -5256,18 +5260,27 @@
             if (tabName === 'invoices') {
                 if (invBtn) { invBtn.style.background = 'var(--primary-grad)'; invBtn.style.color = '#fff'; }
                 if (invSec) invSec.style.display = 'block';
-                if (statusSelect) statusSelect.style.display = 'inline-block';
+                if (statusGroup) statusGroup.style.display = 'flex';
+                if (startDateGroup) startDateGroup.style.display = 'flex';
+                if (endDateGroup) endDateGroup.style.display = 'flex';
+                if (summaryCard) summaryCard.style.display = 'block';
                 if (searchInput) searchInput.placeholder = "Search invoice # or client...";
             } else if (tabName === 'to_be_invoiced') {
                 if (toBeInvBtn) { toBeInvBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)'; toBeInvBtn.style.color = '#fff'; }
                 if (toBeInvSec) toBeInvSec.style.display = 'block';
-                if (statusSelect) statusSelect.style.display = 'none';
+                if (statusGroup) statusGroup.style.display = 'none';
+                if (startDateGroup) startDateGroup.style.display = 'none';
+                if (endDateGroup) endDateGroup.style.display = 'none';
+                if (summaryCard) summaryCard.style.display = 'none';
                 if (searchInput) searchInput.placeholder = "Search client or category...";
                 loadToBeInvoicedRecords();
             } else {
                 if (schedBtn) { schedBtn.style.background = 'linear-gradient(135deg, #c084fc, #9333ea)'; schedBtn.style.color = '#fff'; }
                 if (schedSec) schedSec.style.display = 'block';
-                if (statusSelect) statusSelect.style.display = 'none';
+                if (statusGroup) statusGroup.style.display = 'none';
+                if (startDateGroup) startDateGroup.style.display = 'none';
+                if (endDateGroup) endDateGroup.style.display = 'none';
+                if (summaryCard) summaryCard.style.display = 'none';
                 if (searchInput) searchInput.placeholder = "Search schedule or client...";
             }
             filterBillingTable(true);
@@ -5379,6 +5392,7 @@
         function renderSingleInvoiceSummaryCard(filteredInvoices, selectedStatus, startDateVal, endDateVal) {
             const container = document.getElementById('billingSingleSummaryCard');
             if (!container) return;
+            container.style.display = 'block';
 
             const invs = filteredInvoices || [];
             const count = invs.length;
