@@ -5413,20 +5413,44 @@
                         <td style="padding: 14px 18px;">
                             <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; ${badgeStyle}">${inv.status}</span>
                         </td>
-                        <td style="padding: 14px 18px; text-align: right;">
-                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                                <button onclick="viewInvoiceHtml('${inv.id}', '${inv.invoice_number}')" title="View / Print Invoice HTML" style="padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📄 View</button>
-                                <button onclick="openCustomerStorageModal(event, ${inv.customer_id}, '${inv.id}', '${inv.invoice_number}')" title="Open Customer Storage Modal to attach files to invoice" style="padding: 6px 10px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📁 Folder</button>
-                                ${inv.status !== 'PAID' && inv.status !== 'CANCELLED' ? `<button onclick="openInvoicePaidModal('${inv.id}', '${inv.invoice_number}')" title="Mark as Paid" style="padding: 6px 10px; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✅ Paid</button>` : ''}
-                                ${inv.status !== 'CANCELLED' ? `<button onclick="sendInvoiceEmail('${inv.id}')" title="Send Resend Email to Client Immediately" style="padding: 6px 10px; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">✉️ Email</button>` : ''}
-                                <button onclick="openInvoiceHistoryModal('${inv.id}', '${inv.invoice_number}')" title="View Audit History" style="padding: 6px 10px; background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.3); color: #fbbf24; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">📜 History</button>
-                                ${inv.status !== 'CANCELLED' ? `<button onclick="voidInvoice('${inv.id}', '${inv.invoice_number}')" title="Void Invoice & Revert Schedule Date" style="padding: 6px 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🚫 Void</button>` : ''}
-                                <button onclick="deleteInvoice('${inv.id}')" title="Delete Invoice Record" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️</button>
+                        <td style="padding: 14px 18px; text-align: right; white-space: nowrap; position: relative;">
+                            <div style="display: inline-block; position: relative;">
+                                <button onclick="toggleInvoiceActionMenu(event, '${inv.id}')" style="padding: 5px 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #e2e8f0; border-radius: 6px; font-size: 0.72rem; font-weight: 800; cursor: pointer;" title="More Actions">•••</button>
+                                <div id="invoiceActionMenu-${inv.id}" class="invoice-action-dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 1000; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); min-width: 200px; text-align: left; padding: 6px 0; backdrop-filter: blur(12px);">
+                                    <a href="#" onclick="viewInvoiceHtml('${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        📄 View / Print Invoice
+                                    </a>
+                                    <a href="#" onclick="openCustomerStorageModal(event, ${inv.customer_id}, '${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #34d399; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        📁 Folder & Attachments
+                                    </a>
+                                    ${inv.status !== 'PAID' && inv.status !== 'CANCELLED' ? `
+                                    <a href="#" onclick="openInvoicePaidModal('${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #4ade80; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        ✅ Mark as Paid
+                                    </a>
+                                    ` : ''}
+                                    ${inv.status !== 'CANCELLED' ? `
+                                    <a href="#" onclick="sendInvoiceEmail('${inv.id}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #c084fc; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        ✉️ Send Email
+                                    </a>
+                                    ` : ''}
+                                    <a href="#" onclick="openInvoiceHistoryModal('${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #fbbf24; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        📜 View Audit History
+                                    </a>
+                                    ${inv.status !== 'CANCELLED' ? `
+                                    <a href="#" onclick="voidInvoice('${inv.id}', '${inv.invoice_number}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #f59e0b; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                        🚫 Void Invoice
+                                    </a>
+                                    ` : ''}
+                                    <a href="#" onclick="deleteInvoice('${inv.id}'); closeAllInvoiceActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #f87171; font-size: 0.78rem; font-weight: 600; text-decoration: none;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='transparent'">
+                                        🗑️ Delete Invoice
+                                    </a>
+                                </div>
                             </div>
                         </td>
                     </tr>
                 `;
             }).join('');
+            document.querySelectorAll('body > .invoice-action-dropdown-menu').forEach(m => m.remove());
         }
 
         async function loadBillingSchedules() {
@@ -5497,12 +5521,22 @@
                     <td style="padding: 14px 18px;">
                         <span style="padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);">${s.status || 'Active'}</span>
                     </td>
-                    <td style="padding: 14px 18px; text-align: right; white-space: nowrap;">
-                        <button onclick="editSchedule('${s.id}')" title="Edit Recurring Schedule" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; margin-right: 6px;">✏️ Edit</button>
-                        <button onclick="deleteSchedule('${s.id}')" title="Delete Recurring Schedule" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700;">🗑️ Delete</button>
+                    <td style="padding: 14px 18px; text-align: right; white-space: nowrap; position: relative;">
+                        <div style="display: inline-block; position: relative;">
+                            <button onclick="toggleScheduleActionMenu(event, '${s.id}')" style="padding: 5px 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #e2e8f0; border-radius: 6px; font-size: 0.72rem; font-weight: 800; cursor: pointer;" title="More Actions">•••</button>
+                            <div id="scheduleActionMenu-${s.id}" class="schedule-action-dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 1000; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); min-width: 170px; text-align: left; padding: 6px 0; backdrop-filter: blur(12px);">
+                                <a href="#" onclick="editSchedule('${s.id}'); closeAllScheduleActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #38bdf8; font-size: 0.78rem; font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                                    ✏️ Edit Schedule
+                                </a>
+                                <a href="#" onclick="deleteSchedule('${s.id}'); closeAllScheduleActionMenus(); return false;" style="display: block; padding: 8px 14px; color: #f87171; font-size: 0.78rem; font-weight: 600; text-decoration: none;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='transparent'">
+                                    🗑️ Delete Schedule
+                                </a>
+                            </div>
+                        </div>
                     </td>
                 </tr>
             `).join('');
+            document.querySelectorAll('body > .schedule-action-dropdown-menu').forEach(m => m.remove());
         }
 
         function filterBillingTable(resetPages = true) {
@@ -7385,13 +7419,123 @@
             }
         }
 
+        function toggleInvoiceActionMenu(event, invoiceId) {
+            if (event) event.stopPropagation();
+            const btn = event ? event.currentTarget : null;
+            if (!btn) return;
+
+            const parent = btn.parentElement;
+            const targetMenu = parent ? (parent.querySelector('.invoice-action-dropdown-menu') || document.getElementById(`invoiceActionMenu-${invoiceId}`)) : document.getElementById(`invoiceActionMenu-${invoiceId}`);
+            if (!targetMenu) return;
+
+            const isVisible = targetMenu.style.display !== 'none';
+            closeAllInvoiceActionMenus();
+            closeAllScheduleActionMenus();
+
+            if (!isVisible) {
+                if (targetMenu.parentElement !== document.body) {
+                    document.body.appendChild(targetMenu);
+                }
+
+                targetMenu.style.display = 'block';
+                targetMenu.style.position = 'fixed';
+                targetMenu.style.zIndex = '2147483647';
+                targetMenu.style.maxHeight = '';
+                targetMenu.style.overflowY = '';
+
+                const rect = btn.getBoundingClientRect();
+                const menuHeight = targetMenu.offsetHeight || 250;
+                const windowHeight = window.innerHeight;
+                const windowWidth = window.innerWidth;
+
+                let rightOffset = windowWidth - rect.right;
+                if (rightOffset < 10) rightOffset = 10;
+                targetMenu.style.right = rightOffset + 'px';
+                targetMenu.style.left = 'auto';
+
+                const spaceBelow = windowHeight - rect.bottom;
+                const spaceAbove = rect.top;
+
+                if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
+                    targetMenu.style.top = (rect.bottom + 4) + 'px';
+                    targetMenu.style.bottom = 'auto';
+                    if (menuHeight > spaceBelow - 10) {
+                        targetMenu.style.maxHeight = Math.max(150, spaceBelow - 14) + 'px';
+                        targetMenu.style.overflowY = 'auto';
+                    }
+                } else {
+                    targetMenu.style.bottom = (windowHeight - rect.top + 4) + 'px';
+                    targetMenu.style.top = 'auto';
+                    if (menuHeight > spaceAbove - 10) {
+                        targetMenu.style.maxHeight = Math.max(150, spaceAbove - 14) + 'px';
+                        targetMenu.style.overflowY = 'auto';
+                    }
+                }
+            }
+        }
+
+        function closeAllInvoiceActionMenus() {
+            document.querySelectorAll('.invoice-action-dropdown-menu').forEach(m => m.style.display = 'none');
+        }
+
+        function toggleScheduleActionMenu(event, scheduleId) {
+            if (event) event.stopPropagation();
+            const btn = event ? event.currentTarget : null;
+            if (!btn) return;
+
+            const parent = btn.parentElement;
+            const targetMenu = parent ? (parent.querySelector('.schedule-action-dropdown-menu') || document.getElementById(`scheduleActionMenu-${scheduleId}`)) : document.getElementById(`scheduleActionMenu-${scheduleId}`);
+            if (!targetMenu) return;
+
+            const isVisible = targetMenu.style.display !== 'none';
+            closeAllScheduleActionMenus();
+            closeAllInvoiceActionMenus();
+
+            if (!isVisible) {
+                if (targetMenu.parentElement !== document.body) {
+                    document.body.appendChild(targetMenu);
+                }
+
+                targetMenu.style.display = 'block';
+                targetMenu.style.position = 'fixed';
+                targetMenu.style.zIndex = '2147483647';
+
+                const rect = btn.getBoundingClientRect();
+                const menuHeight = targetMenu.offsetHeight || 120;
+                const windowHeight = window.innerHeight;
+                const windowWidth = window.innerWidth;
+
+                let rightOffset = windowWidth - rect.right;
+                if (rightOffset < 10) rightOffset = 10;
+                targetMenu.style.right = rightOffset + 'px';
+                targetMenu.style.left = 'auto';
+
+                const spaceBelow = windowHeight - rect.bottom;
+                const spaceAbove = rect.top;
+
+                if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
+                    targetMenu.style.top = (rect.bottom + 4) + 'px';
+                    targetMenu.style.bottom = 'auto';
+                } else {
+                    targetMenu.style.bottom = (windowHeight - rect.top + 4) + 'px';
+                    targetMenu.style.top = 'auto';
+                }
+            }
+        }
+
+        function closeAllScheduleActionMenus() {
+            document.querySelectorAll('.schedule-action-dropdown-menu').forEach(m => m.style.display = 'none');
+        }
+
         document.addEventListener('click', function(e) {
-            if (!e.target.closest('.cust-action-dropdown-menu') && !e.target.closest('button[title="More Actions"]')) {
+            if (!e.target.closest('.cust-action-dropdown-menu') && !e.target.closest('.invoice-action-dropdown-menu') && !e.target.closest('.schedule-action-dropdown-menu') && !e.target.closest('button[title="More Actions"]')) {
                 document.querySelectorAll('.cust-action-dropdown-menu').forEach(m => m.style.display = 'none');
+                closeAllInvoiceActionMenus();
+                closeAllScheduleActionMenus();
             }
         });
         window.addEventListener('scroll', function() {
-            const openMenus = document.querySelectorAll('.cust-action-dropdown-menu');
+            const openMenus = document.querySelectorAll('.cust-action-dropdown-menu, .invoice-action-dropdown-menu, .schedule-action-dropdown-menu');
             if (openMenus.length > 0) {
                 openMenus.forEach(m => {
                     if (m.style.display !== 'none') m.style.display = 'none';
