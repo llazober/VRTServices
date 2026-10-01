@@ -7453,7 +7453,16 @@
                 if (activeAttachInvoiceId) {
                     const invLabel = activeAttachInvoiceNumber ? `#${activeAttachInvoiceNumber}` : `#INV-${activeAttachInvoiceId}`;
                     modeBanner.style.display = 'block';
-                    modeBanner.innerHTML = `📎 Attachment Mode Active for <strong>Invoice ${invLabel}</strong> — Click '📎 Attach to Invoice' next to any file below to attach it to the invoice before emailing.`;
+                    modeBanner.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                📎 Attachment Mode Active for <strong>Invoice ${invLabel}</strong> — Select checkbox next to any file(s) below and click '📎 Attach Selected File(s)' or click '📎 Attach to Invoice' next to individual files.
+                            </div>
+                            <button type="button" id="storageBatchAttachInvoiceBtn" onclick="attachSelectedStorageFilesToInvoice()" style="display: none; padding: 6px 14px; background: #34d399; color: #000; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 12px rgba(52, 211, 153, 0.4);">
+                                📎 Attach Selected File(s)
+                            </button>
+                        </div>
+                    `;
                 } else {
                     modeBanner.style.display = 'none';
                 }
@@ -7779,6 +7788,7 @@
             const chks = document.querySelectorAll('.storage-item-select-chk:checked');
             const mergeBtn = document.getElementById('storageMergePdfBtn');
             const moveBtn = document.getElementById('storageBatchMoveBtn');
+            const attachBatchBtn = document.getElementById('storageBatchAttachInvoiceBtn');
             const selectAllChk = document.getElementById('storageSelectAllChk');
             const allChks = document.querySelectorAll('.storage-item-select-chk');
 
@@ -7798,8 +7808,80 @@
                     moveBtn.style.display = 'none';
                 }
             }
+            if (attachBatchBtn) {
+                if (activeAttachInvoiceId && chks.length > 0) {
+                    attachBatchBtn.style.display = 'inline-block';
+                    const invLabel = activeAttachInvoiceNumber ? `#${activeAttachInvoiceNumber}` : `#INV-${activeAttachInvoiceId}`;
+                    attachBatchBtn.innerHTML = `📎 Attach (${chks.length}) Selected File(s) to Invoice ${invLabel}`;
+                } else {
+                    attachBatchBtn.style.display = 'none';
+                }
+            }
             if (selectAllChk && allChks.length > 0) {
                 selectAllChk.checked = (chks.length === allChks.length);
+            }
+        }
+
+        async function attachSelectedStorageFilesToInvoice() {
+            const chks = Array.from(document.querySelectorAll('.storage-item-select-chk:checked'));
+            if (!chks.length) {
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("No Selection", "Please check the box next to at least one file to attach.", "warning");
+                } else {
+                    alert('Please select at least one file to attach.');
+                }
+                return;
+            }
+            if (!activeAttachInvoiceId) {
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Error", "No active invoice target found.", "error");
+                } else {
+                    alert('No active invoice selected.');
+                }
+                return;
+            }
+
+            const invLabel = activeAttachInvoiceNumber ? `#${activeAttachInvoiceNumber}` : `#INV-${activeAttachInvoiceId}`;
+            let successCount = 0;
+            let errors = [];
+
+            for (const chk of chks) {
+                const filePath = chk.getAttribute('data-key');
+                const fileName = chk.getAttribute('data-name') || filePath.split('/').pop();
+                try {
+                    const res = await fetch(`/api/billing/invoices/${activeAttachInvoiceId}/attachments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ file_path: filePath, file_name: fileName })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || `Failed to attach ${fileName}`);
+                    successCount++;
+                } catch (err) {
+                    errors.push(err.message);
+                }
+            }
+
+            chks.forEach(c => { c.checked = false; });
+            updateStorageBatchSelectionState();
+
+            if (typeof loadBillingInvoices === 'function') {
+                loadBillingInvoices();
+            }
+
+            if (errors.length === 0) {
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Files Attached", `✅ Successfully attached ${successCount} file(s) to Invoice ${invLabel}!`, "success");
+                } else {
+                    alert(`✅ Successfully attached ${successCount} file(s) to Invoice ${invLabel}!`);
+                }
+            } else {
+                const msg = `Attached ${successCount} file(s). Errors:\n` + errors.join('\n');
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert("Attachment Results", msg, successCount > 0 ? "warning" : "error");
+                } else {
+                    alert(msg);
+                }
             }
         }
 
