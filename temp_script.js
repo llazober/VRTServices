@@ -4464,6 +4464,7 @@
             const inProcessSlug = (data && data.in_process_period) ? data.in_process_period : 'in_process';
             const historical = (data && data.historical_periods) ? data.historical_periods : [];
 
+            const seenLabels = new Set();
             if (activeWorkflowTab === 'tax') {
                 if (labelEl) labelEl.textContent = 'TAX YEAR:';
                 optionsHtml += `<option value="${inProcessSlug}">🔄 In Process (${inProcessLabel})</option>`;
@@ -4472,7 +4473,10 @@
                     historical.forEach(hp => {
                         const slug = typeof hp === 'object' ? hp.slug : hp;
                         const label = typeof hp === 'object' ? hp.label : `Tax Year ${hp}`;
-                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                        if (!seenLabels.has(label)) {
+                            seenLabels.add(label);
+                            optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                        }
                     });
                 }
             } else {
@@ -4483,7 +4487,10 @@
                     historical.forEach(hp => {
                         const slug = typeof hp === 'object' ? hp.slug : hp;
                         const label = typeof hp === 'object' ? hp.label : `Period ${hp}`;
-                        optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                        if (!seenLabels.has(label)) {
+                            seenLabels.add(label);
+                            optionsHtml += `<option value="${slug}">📁 ${label}</option>`;
+                        }
                     });
                 }
             }

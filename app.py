@@ -8527,6 +8527,7 @@ async def get_customer_checklist(customer_id: str, period: str = None, workflow_
             """, (real_cust_id,))
             archived_rows = cur.fetchall() or []
             historical_periods = []
+            seen_labels = set()
             for r in archived_rows:
                 p_slug = r["period"]
                 if p_slug < in_process_slug:
@@ -8542,10 +8543,13 @@ async def get_customer_checklist(customer_id: str, period: str = None, workflow_
                             bool(r.get("tax_accepted"))
                         ]) == 8
                         if tax_done:
-                            historical_periods.append({
-                                "slug": p_slug,
-                                "label": format_period_label(p_slug, workflow_tab)
-                            })
+                            lbl = format_period_label(p_slug, workflow_tab)
+                            if lbl not in seen_labels:
+                                seen_labels.add(lbl)
+                                historical_periods.append({
+                                    "slug": p_slug,
+                                    "label": lbl
+                                })
                     else:
                         bk_done = sum([
                             bool(r.get("bank_statement_received")),
@@ -8554,10 +8558,13 @@ async def get_customer_checklist(customer_id: str, period: str = None, workflow_
                             bool(r.get("accountant_reviewed"))
                         ]) == 4
                         if bk_done:
-                            historical_periods.append({
-                                "slug": p_slug,
-                                "label": format_period_label(p_slug, workflow_tab)
-                            })
+                            lbl = format_period_label(p_slug, workflow_tab)
+                            if lbl not in seen_labels:
+                                seen_labels.add(lbl)
+                                historical_periods.append({
+                                    "slug": p_slug,
+                                    "label": lbl
+                                })
 
         bk_steps = {
             "bank_statement_received": bool(row.get("bank_statement_received")) if row else False,
