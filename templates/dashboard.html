@@ -5483,6 +5483,31 @@
             `;
         }
 
+        function normalizeDateToYYYYMMDD(dateVal) {
+            if (!dateVal) return '';
+            const s = String(dateVal).trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+                return s.slice(0, 10);
+            }
+            const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (m) {
+                const mm = m[1].padStart(2, '0');
+                const dd = m[2].padStart(2, '0');
+                const yyyy = m[3];
+                return `${yyyy}-${mm}-${dd}`;
+            }
+            try {
+                const d = new Date(s);
+                if (!isNaN(d.getTime())) {
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    return `${yyyy}-${mm}-${dd}`;
+                }
+            } catch (e) {}
+            return s.slice(0, 10);
+        }
+
         function filterBillingTable(resetPages = true) {
             if (resetPages) {
                 billingInvoicesCurrentPage = 1;
@@ -5508,9 +5533,9 @@
                     if (!matchesQuery) return false;
 
                     // 2. Issue Date Range Filter
-                    const issueDateStr = (inv.issue_date || '').slice(0, 10);
-                    if (startDateVal && issueDateStr < startDateVal) return false;
-                    if (endDateVal && issueDateStr > endDateVal) return false;
+                    const issueDateNorm = normalizeDateToYYYYMMDD(inv.issue_date);
+                    if (startDateVal && issueDateNorm < startDateVal) return false;
+                    if (endDateVal && issueDateNorm > endDateVal) return false;
 
                     // 3. Status Filter
                     const total = parseFloat(inv.total_amount || 0);

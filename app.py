@@ -10479,6 +10479,45 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
     cust_num = customer.get("custumer_number") or ""
     email = customer.get("email") or ""
 
+    amount_paid = float(invoice.get("amount_paid") or (total_amount if invoice.get("status") == "PAID" else 0.0))
+    bal_due = invoice.get("balance_due")
+    if bal_due is None:
+        bal_due = max(0.0, total_amount - amount_paid)
+    else:
+        bal_due = float(bal_due)
+
+    st = (invoice.get("status") or "").upper()
+    is_partial = (st in ["PARTIAL", "PARTIALLY_PAID"]) or (amount_paid > 0 and bal_due > 0 and st != "PAID")
+
+    if is_partial:
+        badge_html = '<span style="display: inline-block; font-size: 13px; font-weight: 700; background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.4);">PARTIAL STATEMENT</span>'
+        totals_table_html = f"""
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; overflow: hidden;">
+                <tr>
+                    <td style="text-align: right; font-size: 13px; color: #64748b; font-weight: 600; padding: 8px 14px;">Original Total Billed:</td>
+                    <td style="text-align: right; font-size: 14px; color: #0f172a; font-weight: 700; width: 160px; padding: 8px 14px;">${total_amount:,.2f} USD</td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; font-size: 13px; color: #16a34a; font-weight: 700; padding: 8px 14px;">Less Payment(s) Received:</td>
+                    <td style="text-align: right; font-size: 14px; color: #16a34a; font-weight: 700; width: 160px; padding: 8px 14px;">-${amount_paid:,.2f} USD</td>
+                </tr>
+                <tr style="border-top: 2px solid #f59e0b; background: #fef3c7;">
+                    <td style="text-align: right; font-size: 15px; color: #b45309; font-weight: 800; padding: 12px 14px;">REMAINING BALANCE DUE:</td>
+                    <td style="text-align: right; font-size: 22px; color: #d97706; font-weight: 800; width: 160px; padding: 12px 14px;">${bal_due:,.2f} USD</td>
+                </tr>
+            </table>
+        """
+    else:
+        badge_html = '<span style="display: inline-block; font-size: 14px; font-weight: 700; background: #1e293b; color: #38bdf8; padding: 6px 14px; border-radius: 6px; border: 1px solid #334155;">INVOICE</span>'
+        totals_table_html = f"""
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+                <tr>
+                    <td style="text-align: right; font-size: 14px; color: #64748b; font-weight: 600;">Total Amount Due:</td>
+                    <td style="text-align: right; font-size: 22px; color: #0f172a; font-weight: 800; width: 160px;">${total_amount:,.2f} <span style="font-size: 12px; color: #64748b; font-weight: 400;">USD</span></td>
+                </tr>
+            </table>
+        """
+
     return f"""
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
         <div style="background: #0f172a; padding: 24px 32px; color: #ffffff;">
@@ -10493,7 +10532,7 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
                         </p>
                     </td>
                     <td style="text-align: right; vertical-align: top;">
-                        <span style="display: inline-block; font-size: 14px; font-weight: 700; background: #1e293b; color: #38bdf8; padding: 6px 14px; border-radius: 6px; border: 1px solid #334155;">INVOICE</span>
+                        {badge_html}
                         <p style="margin: 6px 0 0 0; font-size: 13px; color: #cbd5e1; font-family: monospace;">#{inv_num}</p>
                     </td>
                 </tr>
@@ -10530,12 +10569,7 @@ def format_invoice_email_html(invoice: dict, customer: dict) -> str:
                 </tbody>
             </table>
 
-            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
-                <tr>
-                    <td style="text-align: right; font-size: 14px; color: #64748b; font-weight: 600;">Total Amount Due:</td>
-                    <td style="text-align: right; font-size: 22px; color: #0f172a; font-weight: 800; width: 160px;">${total_amount:,.2f} <span style="font-size: 12px; color: #64748b; font-weight: 400;">USD</span></td>
-                </tr>
-            </table>
+            {totals_table_html}
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-top: 28px; font-size: 13px; color: #475569;">
                 <p style="margin: 0 0 8px 0; font-weight: 700; color: #0f172a; font-size: 14px;">💳 Terms & Conditions / Payment Instructions:</p>
@@ -11217,10 +11251,26 @@ async def send_invoice_email(invoice_id: str, request: Request):
                         except Exception as e_att:
                             print(f"Warning: Failed to fetch attachment '{fp}' from S3: {e_att}")
 
+            total_val = float(inv_dict.get("total_amount") or 0.0)
+            paid_val = float(inv_dict.get("amount_paid") or (total_val if inv_dict.get("status") == "PAID" else 0.0))
+            bal_val = inv_dict.get("balance_due")
+            if bal_val is None:
+                bal_val = max(0.0, total_val - paid_val)
+            else:
+                bal_val = float(bal_val)
+
+            st = (inv_dict.get("status") or "").upper()
+            is_partial = (st in ["PARTIAL", "PARTIALLY_PAID"]) or (paid_val > 0 and bal_val > 0 and st != "PAID")
+
+            if is_partial:
+                email_subj = f"Invoice #{inv_dict['invoice_number']} Statement from VRT Services — Remaining Balance: ${bal_val:,.2f} USD"
+            else:
+                email_subj = f"Invoice #{inv_dict['invoice_number']} from VRT Services (${total_val:,.2f} USD)"
+
             email_payload = {
                 "from": format_resend_from_header("VRT Services Billing"),
                 "to": [cust_email],
-                "subject": f"Invoice #{inv_dict['invoice_number']} from VRT Services (${float(inv_dict['total_amount']):,.2f} USD)",
+                "subject": email_subj,
                 "html": html_body
             }
             if reply_to_list:
@@ -11231,13 +11281,16 @@ async def send_invoice_email(invoice_id: str, request: Request):
             resend_res = send_resend_email(email_payload)
 
             today_et_str = get_eastern_today_date_str()
-            cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = %s;", (row["id"],))
+            cur.execute("UPDATE customer_invoices SET status = %s, issue_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = %s;", ('PARTIAL' if is_partial else 'SENT', row["id"]))
             
             from_email_header = format_resend_from_header("VRT Services Billing")
             reply_to_str = reply_to_list[0] if reply_to_list else None
             subject_text = email_payload["subject"]
             att_summary = f" (Attached: {', '.join(att_names)})" if att_names else ""
-            body_summary = f"Invoice #{inv_dict['invoice_number']} sent to {cust_email} for ${float(inv_dict['total_amount']):,.2f} USD.{att_summary}\nDescription: {inv_dict.get('description', '') or 'N/A'}"
+            if is_partial:
+                body_summary = f"Invoice #{inv_dict['invoice_number']} statement sent to {cust_email} (Total: ${total_val:,.2f}, Paid: ${paid_val:,.2f}, Remaining Balance: ${bal_val:,.2f} USD).{att_summary}\nDescription: {inv_dict.get('description', '') or 'N/A'}"
+            else:
+                body_summary = f"Invoice #{inv_dict['invoice_number']} sent to {cust_email} for ${total_val:,.2f} USD.{att_summary}\nDescription: {inv_dict.get('description', '') or 'N/A'}"
             log_invoice_communication(cur, inv_dict["customer_id"], from_email_header, cust_email, reply_to_str, subject_text, body_summary)
 
             username = get_current_username(request) or "system"
