@@ -1317,11 +1317,11 @@
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Start Date:</label>
-                            <input type="date" id="billingStartDateInput" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
+                            <input type="date" id="billingStartDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">End Date:</label>
-                            <input type="date" id="billingEndDateInput" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
+                            <input type="date" id="billingEndDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
                         <input type="text" id="billingSearchInput" onkeyup="filterBillingTable()" placeholder="Search invoice # or client..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 7px 14px; font-size: 0.85rem; color: #fff; outline: none; width: 190px;">
                         <button type="button" onclick="resetBillingFilters()" style="padding: 7px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer;" title="Reset all filters">Clear Filters</button>
@@ -5515,8 +5515,10 @@
             const statusSelect = document.getElementById('billingStatusFilterSelect');
             const selectedStatus = (statusSelect ? statusSelect.value : 'ALL').toUpperCase();
 
-            const startDateVal = document.getElementById('billingStartDateInput')?.value || '';
-            const endDateVal = document.getElementById('billingEndDateInput')?.value || '';
+            const rawStart = document.getElementById('billingStartDateInput')?.value || '';
+            const rawEnd = document.getElementById('billingEndDateInput')?.value || '';
+            const startDateVal = normalizeDateToYYYYMMDD(rawStart);
+            const endDateVal = normalizeDateToYYYYMMDD(rawEnd);
 
             const todayStr = new Date().toISOString().split('T')[0];
 
