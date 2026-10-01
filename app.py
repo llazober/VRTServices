@@ -10585,15 +10585,21 @@ async def get_billing_overview(request: Request):
             cur.execute("""
                 SELECT 
                     COALESCE(SUM(total_amount), 0) AS total_billed,
+                    COALESCE(SUM(COALESCE(amount_paid, CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END)), 0) AS total_collected,
+                    COALESCE(SUM(CASE WHEN status NOT IN ('PAID', 'CANCELLED') THEN COALESCE(balance_due, total_amount) ELSE 0 END), 0) AS total_outstanding,
+                    COALESCE(SUM(CASE WHEN status = 'SENT' AND (due_date >= CURRENT_DATE OR due_date IS NULL) THEN total_amount ELSE 0 END), 0) AS total_sent,
+                    COALESCE(SUM(CASE WHEN status IN ('PARTIAL', 'PARTIALLY_PAID') OR (amount_paid > 0 AND amount_paid < total_amount AND status != 'PAID') THEN total_amount ELSE 0 END), 0) AS total_partial,
                     COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_paid,
-                    COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_collected,
-                    COALESCE(SUM(CASE WHEN status = 'SENT' THEN total_amount ELSE 0 END), 0) AS total_outstanding,
+                    COALESCE(SUM(CASE WHEN status = 'DRAFT' THEN total_amount ELSE 0 END), 0) AS total_draft,
+                    COALESCE(SUM(CASE WHEN status = 'CANCELLED' THEN total_amount ELSE 0 END), 0) AS total_cancelled,
                     COALESCE(SUM(CASE WHEN status = 'OVERDUE' OR (status = 'SENT' AND due_date < CURRENT_DATE) THEN total_amount ELSE 0 END), 0) AS total_overdue,
-                    COUNT(CASE WHEN status = 'SENT' THEN 1 END) AS count_sent,
+                    COUNT(CASE WHEN status = 'SENT' AND (due_date >= CURRENT_DATE OR due_date IS NULL) THEN 1 END) AS count_sent,
+                    COUNT(CASE WHEN status IN ('PARTIAL', 'PARTIALLY_PAID') OR (amount_paid > 0 AND amount_paid < total_amount AND status != 'PAID') THEN 1 END) AS count_partial,
                     COUNT(CASE WHEN status = 'PAID' THEN 1 END) AS count_paid,
+                    COUNT(CASE WHEN status = 'DRAFT' THEN 1 END) AS count_draft,
+                    COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) AS count_cancelled,
                     COUNT(CASE WHEN status = 'OVERDUE' OR (status = 'SENT' AND due_date < CURRENT_DATE) THEN 1 END) AS count_overdue
-                FROM customer_invoices
-                WHERE status != 'CANCELLED';
+                FROM customer_invoices;
             """)
             stats = cur.fetchone() or {}
 
@@ -10790,6 +10796,8 @@ async def list_invoices(request: Request, status: str = "ALL", customer_id: str 
             if status and status.upper() != "ALL":
                 if status.upper() == "OVERDUE":
                     sql += " AND (i.status = 'OVERDUE' OR (i.status = 'SENT' AND i.due_date < CURRENT_DATE))"
+                elif status.upper() in ["PARTIAL", "PARTIALLY_PAID"]:
+                    sql += " AND (i.status IN ('PARTIAL', 'PARTIALLY_PAID') OR (i.amount_paid > 0 AND i.amount_paid < i.total_amount AND i.status != 'PAID'))"
                 else:
                     sql += " AND i.status = %s"
                     params.append(status.upper())

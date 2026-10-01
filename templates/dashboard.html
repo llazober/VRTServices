@@ -1304,9 +1304,10 @@
 
                     <!-- Status Filter Dropdown & Search -->
                     <div id="billingInvoiceFilters" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                        <select id="billingStatusFilterSelect" onchange="loadBillingInvoices()" style="background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #ffffff; outline: none; cursor: pointer;">
+                        <select id="billingStatusFilterSelect" onchange="filterBillingTable(true)" style="background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #ffffff; outline: none; cursor: pointer;">
                             <option value="ALL" style="background-color: #0f172a; color: #ffffff;">All Statuses</option>
                             <option value="SENT" style="background-color: #0f172a; color: #ffffff;">SENT (Pending Payment)</option>
+                            <option value="PARTIAL" style="background-color: #0f172a; color: #ffffff;">PARTIAL (Partially Paid)</option>
                             <option value="PAID" style="background-color: #0f172a; color: #ffffff;">PAID (Settled)</option>
                             <option value="DRAFT" style="background-color: #0f172a; color: #ffffff;">DRAFT</option>
                             <option value="CANCELLED" style="background-color: #0f172a; color: #ffffff;">CANCELLED</option>
@@ -1314,6 +1315,9 @@
                         <input type="text" id="billingSearchInput" onkeyup="filterBillingTable()" placeholder="Search invoice # or client..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 14px; font-size: 0.85rem; color: #fff; outline: none; width: 220px;">
                     </div>
                 </div>
+
+                <!-- Invoice Total Amount by Status Summary Bar -->
+                <div id="billingStatusSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 14px; margin-bottom: 6px;"></div>
 
                 <!-- Invoices Table View -->
                 <div id="billingInvoicesSection" style="display: block;">
@@ -5346,19 +5350,153 @@
         }
 
         async function loadBillingInvoices() {
-            const filterElem = document.getElementById('billingStatusFilterSelect');
-            const statusFilter = filterElem ? filterElem.value : 'ALL';
             try {
-                const res = await fetch(`/api/billing/invoices?status=${statusFilter}`);
+                const res = await fetch(`/api/billing/invoices?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     billingAllInvoices = Array.isArray(data) ? data : (data.invoices || data.data || []);
                     const cntElem = document.getElementById('billingInvoicesCount');
                     if (cntElem) cntElem.innerText = billingAllInvoices.length;
+                    renderInvoiceTotalsSummaryByStatus(billingAllInvoices);
                     filterBillingTable(false);
                 }
             } catch (err) {
                 console.error("[LOAD INVOICES ERROR]:", err);
+            }
+        }
+
+        function renderInvoiceTotalsSummaryByStatus(allInvoices) {
+            const container = document.getElementById('billingStatusSummaryCards');
+            if (!container) return;
+
+            let sentSum = 0, sentCnt = 0;
+            let partialSum = 0, partialPaidSum = 0, partialBalSum = 0, partialCnt = 0;
+            let paidSum = 0, paidCnt = 0;
+            let draftSum = 0, draftCnt = 0;
+            let overdueSum = 0, overdueCnt = 0;
+            let cancelledSum = 0, cancelledCnt = 0;
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            (allInvoices || []).forEach(inv => {
+                const total = parseFloat(inv.total_amount || 0);
+                const paid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? total : 0));
+                const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
+
+                const st = (inv.status || '').toUpperCase();
+                const isOverdue = st === 'OVERDUE' || (st === 'SENT' && inv.due_date && inv.due_date < todayStr);
+
+                if (st === 'PAID' || (bal <= 0 && paid > 0)) {
+                    paidSum += total;
+                    paidCnt++;
+                } else if (st === 'PARTIAL' || st === 'PARTIALLY_PAID' || (paid > 0 && bal > 0)) {
+                    partialSum += total;
+                    partialPaidSum += paid;
+                    partialBalSum += bal;
+                    partialCnt++;
+                } else if (isOverdue) {
+                    overdueSum += total;
+                    overdueCnt++;
+                } else if (st === 'SENT') {
+                    sentSum += total;
+                    sentCnt++;
+                } else if (st === 'DRAFT') {
+                    draftSum += total;
+                    draftCnt++;
+                } else if (st === 'CANCELLED') {
+                    cancelledSum += total;
+                    cancelledCnt++;
+                }
+            });
+
+            const sel = (document.getElementById('billingStatusFilterSelect')?.value || 'ALL').toUpperCase();
+
+            const cards = [
+                { id: 'ALL', label: 'All Invoices', count: (allInvoices || []).length, total: (allInvoices || []).reduce((a, b) => a + parseFloat(b.total_amount || 0), 0), icon: '📊', color: '#38bdf8', border: 'rgba(56, 189, 248, 0.35)', bg: 'rgba(56, 189, 248, 0.08)' },
+                { id: 'SENT', label: 'SENT (Pending)', count: sentCnt, total: sentSum, icon: '✉️', color: '#38bdf8', border: 'rgba(56, 189, 248, 0.3)', bg: 'rgba(56, 189, 248, 0.06)' },
+                { id: 'PARTIAL', label: 'PARTIAL (Paid/Bal)', count: partialCnt, total: partialSum, sub: `Paid: $${partialPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Bal: $${partialBalSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: '🟡', color: '#facc15', border: 'rgba(250, 204, 21, 0.4)', bg: 'rgba(250, 204, 21, 0.08)' },
+                { id: 'PAID', label: 'PAID (Settled)', count: paidCnt, total: paidSum, icon: '🟢', color: '#4ade80', border: 'rgba(74, 222, 128, 0.35)', bg: 'rgba(74, 222, 128, 0.08)' },
+                { id: 'DRAFT', label: 'DRAFT', count: draftCnt, total: draftSum, icon: '📝', color: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)', bg: 'rgba(148, 163, 184, 0.06)' },
+                { id: 'OVERDUE', label: 'OVERDUE', count: overdueCnt, total: overdueSum, icon: '🔴', color: '#f87171', border: 'rgba(248, 113, 113, 0.35)', bg: 'rgba(248, 113, 113, 0.08)' }
+            ];
+
+            container.innerHTML = cards.map(c => {
+                const isSelected = sel === c.id;
+                const borderCss = isSelected ? `2px solid ${c.color}` : `1px solid ${c.border}`;
+                const opacityCss = isSelected ? '1' : (sel !== 'ALL' ? '0.65' : '1');
+
+                return `
+                    <div onclick="selectInvoiceStatusFilter('${c.id}')" style="background: ${c.bg}; border: ${borderCss}; border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all 0.2s; opacity: ${opacityCss}; box-shadow: ${isSelected ? '0 0 12px ' + c.border : 'none'};" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 0.72rem; font-weight: 800; color: ${c.color}; text-transform: uppercase; letter-spacing: 0.5px;">${c.icon} ${c.label}</span>
+                            <span style="font-size: 0.72rem; font-weight: 800; background: rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 10px; color: #fff;">${c.count}</span>
+                        </div>
+                        <div style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #fff;">
+                            $${c.total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                        ${c.sub ? `<div style="font-size: 0.68rem; color: #facc15; font-weight: 700; margin-top: 2px;">${c.sub}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectInvoiceStatusFilter(statusVal) {
+            const selectEl = document.getElementById('billingStatusFilterSelect');
+            if (selectEl) {
+                selectEl.value = statusVal;
+                filterBillingTable(true);
+            }
+        }
+
+        function filterBillingTable(resetPages = true) {
+            if (resetPages) {
+                billingInvoicesCurrentPage = 1;
+                billingSchedulesCurrentPage = 1;
+            }
+            const input = document.getElementById('billingSearchInput');
+            const query = (input ? input.value : '').toLowerCase().trim();
+            const statusSelect = document.getElementById('billingStatusFilterSelect');
+            const selectedStatus = (statusSelect ? statusSelect.value : 'ALL').toUpperCase();
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            if (billingActiveSubTab === 'invoices') {
+                const filtered = billingAllInvoices.filter(inv => {
+                    const matchesQuery = (inv.invoice_number || '').toLowerCase().includes(query) ||
+                        (inv.legal_name || '').toLowerCase().includes(query) ||
+                        (inv.description || '').toLowerCase().includes(query) ||
+                        (inv.email || '').toLowerCase().includes(query);
+                    if (!matchesQuery) return false;
+
+                    const total = parseFloat(inv.total_amount || 0);
+                    const paid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? total : 0));
+                    const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
+                    const st = (inv.status || '').toUpperCase();
+
+                    if (selectedStatus === 'ALL') return true;
+                    if (selectedStatus === 'PARTIAL') {
+                        return st === 'PARTIAL' || st === 'PARTIALLY_PAID' || (paid > 0 && bal > 0 && st !== 'PAID');
+                    }
+                    if (selectedStatus === 'SENT') {
+                        return st === 'SENT' && (!inv.due_date || inv.due_date >= todayStr);
+                    }
+                    if (selectedStatus === 'PAID') {
+                        return st === 'PAID' || (bal <= 0 && paid > 0);
+                    }
+                    if (selectedStatus === 'OVERDUE') {
+                        return st === 'OVERDUE' || (st === 'SENT' && inv.due_date && inv.due_date < todayStr);
+                    }
+                    return st === selectedStatus;
+                });
+                renderInvoiceTotalsSummaryByStatus(billingAllInvoices);
+                renderBillingInvoicesTable(filtered);
+            } else {
+                const filtered = billingAllSchedules.filter(s => 
+                    (s.legal_name || '').toLowerCase().includes(query) ||
+                    (s.custumer_number || '').toLowerCase().includes(query) ||
+                    (s.description || '').toLowerCase().includes(query)
+                );
+                renderBillingSchedulesTable(filtered);
             }
         }
 
