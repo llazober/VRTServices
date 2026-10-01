@@ -1207,14 +1207,37 @@ def init_billing_tables():
                     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS customer_invoice_history (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    invoice_id          BIGINT NOT NULL REFERENCES customer_invoices(id) ON DELETE CASCADE,
+                    customer_id         BIGINT NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+                    event_type          VARCHAR(50) NOT NULL,
+                    event_date          DATE NOT NULL DEFAULT CURRENT_DATE,
+                    sent_by             VARCHAR(100),
+                    recipient_email     VARCHAR(255),
+                    attachments         JSONB DEFAULT '[]'::jsonb,
+                    notes               TEXT,
+                    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS customer_invoice_attachments (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    invoice_id          BIGINT NOT NULL REFERENCES customer_invoices(id) ON DELETE CASCADE,
+                    file_path           TEXT NOT NULL,
+                    file_name           VARCHAR(255) NOT NULL,
+                    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON customer_invoices (customer_id);
                 CREATE INDEX IF NOT EXISTS idx_invoices_status ON customer_invoices (status);
                 CREATE INDEX IF NOT EXISTS idx_schedules_billing_day ON customer_billing_schedules (billing_day);
                 CREATE INDEX IF NOT EXISTS idx_to_invoice_customer_id ON to_invoice (customer_id);
                 CREATE INDEX IF NOT EXISTS idx_to_invoice_status ON to_invoice (status);
+                CREATE INDEX IF NOT EXISTS idx_inv_hist_invoice_id ON customer_invoice_history (invoice_id);
+                CREATE INDEX IF NOT EXISTS idx_inv_att_invoice_id ON customer_invoice_attachments (invoice_id);
             """)
             conn.commit()
-            print("Billing tables (customer_billing_schedules, customer_invoices, to_invoice) initialized successfully in VRT database.")
+            print("Billing tables (customer_billing_schedules, customer_invoices, to_invoice, customer_invoice_history, customer_invoice_attachments) initialized successfully in VRT database.")
     except Exception as e:
         print(f"Error initializing billing tables: {e}")
     finally:
@@ -10735,9 +10758,17 @@ async def update_billing_schedule(schedule_id: str, request: Request):
     finally:
         if conn: conn.close()
 
+def get_eastern_today_date_str():
+    import datetime, zoneinfo
+    try:
+        tz = zoneinfo.ZoneInfo("America/New_York")
+        return datetime.datetime.now(tz).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.date.today().strftime("%Y-%m-%d")
+
 @app.get("/api/billing/invoices")
 async def list_invoices(request: Request, status: str = "ALL", customer_id: str = None):
-    """List invoices with optional status and customer filter."""
+    """List invoices with optional status and customer filter, enriched with history and pre-attached files."""
     check_billing_admin_access(request)
     conn = None
     try:
@@ -10779,10 +10810,179 @@ async def list_invoices(request: Request, status: str = "ALL", customer_id: str 
                 row["due_date"] = str(row["due_date"])
                 row["created_at"] = str(row["created_at"])
                 row["paid_at"] = str(row["paid_at"]) if row.get("paid_at") else None
+
+                # Fetch last email sent date from customer_invoice_history
+                cur.execute("""
+                    SELECT event_date FROM customer_invoice_history
+                    WHERE invoice_id = %s AND event_type = 'EMAIL_SENT'
+                    ORDER BY id DESC LIMIT 1;
+                """, (row["id"],))
+                hist_sent = cur.fetchone()
+                row["last_sent_date"] = str(hist_sent["event_date"]) if hist_sent else (row["issue_date"] if row["status"] in ["SENT", "PAID"] else None)
+
+                # Fetch paid date
+                cur.execute("""
+                    SELECT event_date FROM customer_invoice_history
+                    WHERE invoice_id = %s AND event_type = 'PAID'
+                    ORDER BY id DESC LIMIT 1;
+                """, (row["id"],))
+                hist_paid = cur.fetchone()
+                row["paid_date"] = str(hist_paid["event_date"]) if hist_paid else (str(row["paid_at"])[:10] if row.get("paid_at") else None)
+
+                # Fetch pre-attached files for this invoice
+                cur.execute("SELECT id, file_path, file_name, created_at FROM customer_invoice_attachments WHERE invoice_id = %s ORDER BY id ASC;", (row["id"],))
+                att_rows = cur.fetchall() or []
+                att_list = []
+                for a in att_rows:
+                    a_dict = dict(a)
+                    if a_dict.get("created_at"): a_dict["created_at"] = str(a_dict["created_at"])
+                    att_list.append(a_dict)
+                row["attachments"] = att_list
+                row["attachments_count"] = len(att_list)
+
+                # Fetch total history record count
+                cur.execute("SELECT COUNT(*) as cnt FROM customer_invoice_history WHERE invoice_id = %s;", (row["id"],))
+                cnt_row = cur.fetchone()
+                row["history_count"] = cnt_row["cnt"] if cnt_row else 0
+
                 res.append(row)
             return {"invoices": res, "data": res}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/billing/invoices/{invoice_id}/history")
+async def get_invoice_history(invoice_id: str, request: Request):
+    """Fetch audit history events for an invoice."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            inv_str = str(invoice_id).strip()
+            inv_id = None
+            if inv_str.isdigit():
+                cur.execute("SELECT id FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+            else:
+                cur.execute("SELECT id FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invoice not found.")
+            inv_id = row["id"]
+
+            cur.execute("""
+                SELECT id, invoice_id, customer_id, event_type, event_date, sent_by, recipient_email, attachments, notes, created_at
+                FROM customer_invoice_history
+                WHERE invoice_id = %s
+                ORDER BY id DESC;
+            """, (inv_id,))
+            hist_rows = cur.fetchall() or []
+            res = []
+            for r in hist_rows:
+                h = dict(r)
+                h["event_date"] = str(h["event_date"])
+                h["created_at"] = str(h["created_at"])
+                res.append(h)
+            return {"history": res, "invoice_id": inv_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/billing/invoices/{invoice_id}/attachments")
+async def get_invoice_attachments(invoice_id: str, request: Request):
+    """Fetch pre-attached files for an invoice."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                cur.execute("SELECT id FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+            else:
+                cur.execute("SELECT id FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invoice not found.")
+
+            cur.execute("SELECT id, invoice_id, file_path, file_name, created_at FROM customer_invoice_attachments WHERE invoice_id = %s ORDER BY id ASC;", (row["id"],))
+            atts = cur.fetchall() or []
+            res = []
+            for a in atts:
+                d = dict(a)
+                d["created_at"] = str(d["created_at"])
+                res.append(d)
+            return {"attachments": res, "invoice_id": row["id"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/billing/invoices/{invoice_id}/attachments")
+async def add_invoice_attachment(invoice_id: str, request: Request):
+    """Pre-attach a file (e.g. from customer storage folder) to an invoice before emailing."""
+    check_billing_admin_access(request)
+    payload = await request.json()
+    file_path = (payload.get("file_path") or "").strip()
+    file_name = (payload.get("file_name") or "").strip()
+    if not file_path or not file_name:
+        raise HTTPException(status_code=400, detail="file_path and file_name are required.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            inv_str = str(invoice_id).strip()
+            if inv_str.isdigit():
+                cur.execute("SELECT id, customer_id FROM customer_invoices WHERE id = %s OR invoice_number = %s;", (int(inv_str), inv_str))
+            else:
+                cur.execute("SELECT id, customer_id FROM customer_invoices WHERE invoice_number = %s;", (inv_str,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invoice not found.")
+
+            cur.execute("""
+                INSERT INTO customer_invoice_attachments (invoice_id, file_path, file_name)
+                VALUES (%s, %s, %s)
+                RETURNING id;
+            """, (row["id"], file_path, file_name))
+            att_id = cur.fetchone()["id"]
+
+            username = get_current_username(request) or "system"
+            import json
+            cur.execute("""
+                INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, attachments, notes)
+                VALUES (%s, %s, 'ATTACHMENT_ADDED', CURRENT_DATE, %s, %s, %s);
+            """, (row["id"], row["customer_id"], username, json.dumps([file_name]), f"Attached file '{file_name}' from customer folder"))
+
+            conn.commit()
+            return {"status": "success", "attachment_id": att_id, "file_name": file_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.delete("/api/billing/invoices/{invoice_id}/attachments/{attachment_id}")
+async def delete_invoice_attachment(invoice_id: str, attachment_id: int, request: Request):
+    """Remove a pre-attached file from an invoice."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM customer_invoice_attachments WHERE id = %s;", (attachment_id,))
+            conn.commit()
+            return {"status": "success", "message": "Attachment removed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -10841,7 +11041,7 @@ async def delete_to_invoice_record(record_id: int, request: Request):
 
 @app.post("/api/billing/invoices")
 async def create_manual_invoice(request: Request):
-    """Create a manual one-off invoice and optionally send immediately."""
+    """Create a manual one-off invoice and optionally send immediately (defaults send_now to False)."""
     check_billing_admin_access(request)
     payload = await request.json()
     customer_id = payload.get("customer_id")
@@ -10850,7 +11050,7 @@ async def create_manual_invoice(request: Request):
     due_days = int(payload.get("due_days") or 15)
     custom_due_date = payload.get("due_date")
     to_invoice_id = payload.get("to_invoice_id")
-    send_now = bool(payload.get("send_now", True))
+    send_now = bool(payload.get("send_now", False))
 
     if not customer_id or amount <= 0:
         raise HTTPException(status_code=400, detail="Valid customer_id and positive amount required.")
@@ -10883,6 +11083,13 @@ async def create_manual_invoice(request: Request):
             """, (inv_number, customer_id, amount, amount, today, due_date, description))
             inv_row = cur.fetchone()
             inv_id = inv_row["id"]
+
+            username = get_current_username(request) or "system"
+            today_et_str = get_eastern_today_date_str()
+            cur.execute("""
+                INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
+                VALUES (%s, %s, 'DRAFT_CREATED', %s, %s, %s);
+            """, (inv_id, customer_id, today_et_str, username, f"Invoice #{inv_number} created in DRAFT status for ${amount:,.2f} USD."))
 
             if to_invoice_id:
                 try:
@@ -10917,6 +11124,12 @@ async def create_manual_invoice(request: Request):
                         subject_text = email_payload["subject"]
                         body_summary = f"Invoice #{inv_number} sent to {cust_email} for ${amount:,.2f} USD.\nDescription: {description}"
                         log_invoice_communication(cur, customer_id, from_email_header, cust_email, reply_to_str, subject_text, body_summary)
+                        
+                        import json
+                        cur.execute("""
+                            INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, recipient_email, notes)
+                            VALUES (%s, %s, 'EMAIL_SENT', %s, %s, %s, %s);
+                        """, (inv_id, customer_id, today_et_str, username, cust_email, body_summary))
                         conn.commit()
                     except Exception as e_send:
                         print(f"Error sending manual invoice email: {e_send}")
@@ -10931,7 +11144,7 @@ async def create_manual_invoice(request: Request):
 
 @app.post("/api/billing/invoices/{invoice_id}/send")
 async def send_invoice_email(invoice_id: str, request: Request):
-    """Sends or resends an invoice to customer via Resend API."""
+    """Sends or resends an invoice to customer via Resend API immediately with any pre-attached files included."""
     check_billing_admin_access(request)
     conn = None
     try:
@@ -10966,6 +11179,29 @@ async def send_invoice_email(invoice_id: str, request: Request):
             reply_to_val = get_resend_reply_to_email()
             reply_to_list = parse_reply_to_list(reply_to_val)
 
+            # Check for pre-attached files for this invoice
+            cur.execute("SELECT file_path, file_name FROM customer_invoice_attachments WHERE invoice_id = %s;", (row["id"],))
+            att_rows = cur.fetchall() or []
+            resend_attachments = []
+            att_names = []
+
+            if att_rows:
+                import base64
+                client, err = get_s3_client()
+                bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
+                for att in att_rows:
+                    fn = att["file_name"]
+                    fp = att["file_path"].lstrip("/")
+                    att_names.append(fn)
+                    if client and bucket:
+                        try:
+                            s3_obj = client.get_object(Bucket=bucket, Key=fp)
+                            content_bytes = s3_obj["Body"].read()
+                            b64_str = base64.b64encode(content_bytes).decode("utf-8")
+                            resend_attachments.append({"filename": fn, "content": b64_str})
+                        except Exception as e_att:
+                            print(f"Warning: Failed to fetch attachment '{fp}' from S3: {e_att}")
+
             email_payload = {
                 "from": format_resend_from_header("VRT Services Billing"),
                 "to": [cust_email],
@@ -10974,15 +11210,28 @@ async def send_invoice_email(invoice_id: str, request: Request):
             }
             if reply_to_list:
                 email_payload["reply_to"] = reply_to_list if len(reply_to_list) > 1 else reply_to_list[0]
+            if resend_attachments:
+                email_payload["attachments"] = resend_attachments
 
             resend_res = send_resend_email(email_payload)
 
-            cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE WHERE id = %s;", (row["id"],))
+            today_et_str = get_eastern_today_date_str()
+            cur.execute("UPDATE customer_invoices SET status = 'SENT', issue_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = %s;", (row["id"],))
+            
             from_email_header = format_resend_from_header("VRT Services Billing")
             reply_to_str = reply_to_list[0] if reply_to_list else None
             subject_text = email_payload["subject"]
-            body_summary = f"Invoice #{inv_dict['invoice_number']} sent to {cust_email} for ${float(inv_dict['total_amount']):,.2f} USD.\nDescription: {inv_dict.get('description', '') or 'N/A'}"
+            att_summary = f" (Attached: {', '.join(att_names)})" if att_names else ""
+            body_summary = f"Invoice #{inv_dict['invoice_number']} sent to {cust_email} for ${float(inv_dict['total_amount']):,.2f} USD.{att_summary}\nDescription: {inv_dict.get('description', '') or 'N/A'}"
             log_invoice_communication(cur, inv_dict["customer_id"], from_email_header, cust_email, reply_to_str, subject_text, body_summary)
+
+            username = get_current_username(request) or "system"
+            import json
+            cur.execute("""
+                INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, recipient_email, attachments, notes)
+                VALUES (%s, %s, 'EMAIL_SENT', %s, %s, %s, %s, %s);
+            """, (row["id"], inv_dict["customer_id"], today_et_str, username, cust_email, json.dumps(att_names), body_summary))
+
             conn.commit()
 
             return {"status": "success", "message": f"Invoice #{inv_dict['invoice_number']} sent to {cust_email}", "resend": resend_res}
@@ -11019,13 +11268,14 @@ def revert_schedule_last_billed_at_if_needed(cur, schedule_id: int, target_invoi
 @app.put("/api/billing/invoices/{invoice_id}/status")
 @app.post("/api/billing/invoices/{invoice_id}/status")
 async def update_invoice_status(invoice_id: str, request: Request):
-    """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes, reverting recurring schedule last_billed_at if voided."""
+    """Updates invoice status e.g. MARK AS PAID or CANCELLED with notes & paid_date selection, reverting recurring schedule last_billed_at if voided."""
     check_billing_admin_access(request)
     payload = await request.json()
     new_status = (payload.get("status") or "PAID").upper()
     payment_method = payload.get("payment_method") or "ACH / Bank Transfer"
     transaction_ref = payload.get("transaction_ref") or ""
     notes = payload.get("notes") or ""
+    paid_date_req = payload.get("paid_date") or get_eastern_today_date_str()
 
     if new_status not in ["PAID", "SENT", "OVERDUE", "DRAFT", "CANCELLED", "VOID"]:
         raise HTTPException(status_code=400, detail="Invalid status value.")
@@ -11045,6 +11295,8 @@ async def update_invoice_status(invoice_id: str, request: Request):
 
             inv_id = inv_row["id"]
             schedule_id = inv_row.get("schedule_id")
+            customer_id = inv_row.get("customer_id")
+            username = get_current_username(request) or "system"
 
             if new_status in ["CANCELLED", "VOID"]:
                 revert_schedule_last_billed_at_if_needed(cur, schedule_id, inv_id)
@@ -11052,19 +11304,37 @@ async def update_invoice_status(invoice_id: str, request: Request):
                     UPDATE customer_invoices 
                     SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s;
-                """, (new_status, notes or f"Voided by admin on {datetime.date.today()}", inv_id))
+                """, (new_status, notes or f"Voided by admin on {get_eastern_today_date_str()}", inv_id))
+
+                cur.execute("""
+                    INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (inv_id, customer_id, new_status, paid_date_req, username, notes or f"Invoice status changed to {new_status}"))
             elif new_status == "PAID":
                 cur.execute("""
                     UPDATE customer_invoices 
-                    SET status = %s, paid_at = CURRENT_TIMESTAMP, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
+                    SET status = %s, paid_at = %s, payment_method = %s, transaction_ref = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s;
-                """, (new_status, payment_method, transaction_ref, notes, inv_id))
+                """, (new_status, paid_date_req, payment_method, transaction_ref, notes, inv_id))
+
+                cur.execute("""
+                    INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
+                    VALUES (%s, %s, 'PAID', %s, %s, %s);
+                """, (inv_id, customer_id, paid_date_req, username, f"Payment recorded via {payment_method}. Ref: {transaction_ref}. Notes: {notes}"))
             else:
                 cur.execute("""
                     UPDATE customer_invoices 
                     SET status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s;
                 """, (new_status, notes, inv_id))
+
+                cur.execute("""
+                    INSERT INTO customer_invoice_history (invoice_id, customer_id, event_type, event_date, sent_by, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (inv_id, customer_id, new_status, paid_date_req, username, notes or f"Invoice status updated to {new_status}"))
+
+            conn.commit()
+            return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
 
             conn.commit()
             return {"status": "success", "message": f"Invoice #{invoice_id} status updated to {new_status}."}
