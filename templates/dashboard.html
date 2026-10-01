@@ -1328,11 +1328,11 @@
                     </div>
                 </div>
 
-                <!-- Single Dynamic Total Summary Card (Updates with Status Combo & Date Range) -->
-                <div id="billingSingleSummaryCard" style="margin-top: 14px; margin-bottom: 6px;"></div>
-
                 <!-- Invoices Table View -->
                 <div id="billingInvoicesSection" style="display: block;">
+                    <!-- Single Dynamic Total Summary Card (Updates with Status Combo & Date Range) -->
+                    <div id="billingSingleSummaryCard" style="margin-bottom: 14px;"></div>
+
                     <div style="overflow-x: auto; border: 1px solid var(--border-color); border-top-left-radius: 16px; border-top-right-radius: 16px; background: rgba(0,0,0,0.2);">
                         <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
                             <thead>
@@ -5157,6 +5157,7 @@
 
         async function initBillingModule() {
             console.log("[BILLING MODULE] Initializing Billing Dashboard...");
+            switchBillingSubTab('invoices');
             await Promise.all([
                 loadBillingOverview(),
                 loadBillingInvoices(),
@@ -5389,114 +5390,6 @@
             }
         }
 
-        function renderSingleInvoiceSummaryCard(filteredInvoices, selectedStatus, startDateVal, endDateVal) {
-            const container = document.getElementById('billingSingleSummaryCard');
-            if (!container) return;
-            container.style.display = 'block';
-
-            const invs = filteredInvoices || [];
-            const count = invs.length;
-
-            let totalBilledSum = 0;
-            let totalPaidSum = 0;
-            let totalBalanceSum = 0;
-
-            invs.forEach(inv => {
-                const total = parseFloat(inv.total_amount || 0);
-                const paid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? total : 0));
-                const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
-
-                totalBilledSum += total;
-                totalPaidSum += paid;
-                totalBalanceSum += bal;
-            });
-
-            let title = 'ALL INVOICES SUMMARY';
-            let icon = '📊';
-            let color = '#38bdf8';
-            let bg = 'rgba(56, 189, 248, 0.08)';
-            let border = 'rgba(56, 189, 248, 0.3)';
-
-            if (selectedStatus === 'PARTIAL') {
-                title = 'PARTIAL PAYMENT SUMMARY';
-                icon = '🟡';
-                color = '#facc15';
-                bg = 'rgba(250, 204, 21, 0.08)';
-                border = 'rgba(250, 204, 21, 0.35)';
-            } else if (selectedStatus === 'SENT') {
-                title = 'SENT (PENDING PAYMENT) SUMMARY';
-                icon = '✉️';
-                color = '#38bdf8';
-                bg = 'rgba(56, 189, 248, 0.08)';
-                border = 'rgba(56, 189, 248, 0.3)';
-            } else if (selectedStatus === 'PAID') {
-                title = 'PAID & SETTLED SUMMARY';
-                icon = '🟢';
-                color = '#4ade80';
-                bg = 'rgba(74, 222, 128, 0.08)';
-                border = 'rgba(74, 222, 128, 0.35)';
-            } else if (selectedStatus === 'DRAFT') {
-                title = 'DRAFT INVOICES SUMMARY';
-                icon = '📝';
-                color = '#94a3b8';
-                bg = 'rgba(148, 163, 184, 0.08)';
-                border = 'rgba(148, 163, 184, 0.3)';
-            } else if (selectedStatus === 'CANCELLED') {
-                title = 'CANCELLED INVOICES SUMMARY';
-                icon = '🚫';
-                color = '#64748b';
-                bg = 'rgba(100, 116, 139, 0.1)';
-                border = 'rgba(100, 116, 139, 0.3)';
-            } else if (selectedStatus === 'OVERDUE') {
-                title = 'OVERDUE INVOICES SUMMARY';
-                icon = '🔴';
-                color = '#f87171';
-                bg = 'rgba(248, 113, 113, 0.08)';
-                border = 'rgba(248, 113, 113, 0.35)';
-            }
-
-            let dateRangeBadge = '';
-            if (startDateVal || endDateVal) {
-                const sFmt = startDateVal ? formatDateMMDDYYYY(startDateVal) : 'Start';
-                const eFmt = endDateVal ? formatDateMMDDYYYY(endDateVal) : 'Latest';
-                dateRangeBadge = `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; border-radius: 8px; font-size: 0.75rem; font-weight: 700; margin-left: 8px;">📅 Issue: ${sFmt} – ${eFmt}</span>`;
-            }
-
-            let subtextHtml = `<span style="color: #cbd5e1;">Filtered: <strong>${count}</strong> invoice(s)</span>`;
-            if (selectedStatus === 'PARTIAL') {
-                subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Paid To Date: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Remaining Balance: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
-            } else if (selectedStatus === 'ALL') {
-                subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Collected: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Outstanding: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
-            } else if (selectedStatus === 'SENT' || selectedStatus === 'OVERDUE') {
-                subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Outstanding Balance: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
-            } else if (selectedStatus === 'PAID') {
-                subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Total Collected: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
-            }
-
-            container.innerHTML = `
-                <div style="background: ${bg}; border: 1px solid ${border}; border-radius: 16px; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.25);">
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
-                            <span style="font-size: 0.8rem; font-weight: 800; color: ${color}; text-transform: uppercase; letter-spacing: 0.8px; font-family: 'Outfit', sans-serif;">
-                                ${icon} ${title}
-                            </span>
-                            <span style="font-size: 0.72rem; font-weight: 800; background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 10px; color: #fff;">${count} Invoice${count === 1 ? '' : 's'}</span>
-                            ${dateRangeBadge}
-                        </div>
-                        <div style="font-size: 0.84rem; font-family: inherit; line-height: 1.4;">
-                            ${subtextHtml}
-                        </div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 0.7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Filtered Total Amount</div>
-                        <div style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff;">
-                            $${totalBilledSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
         function formatDateMMDDYYYY(dateStr) {
             if (!dateStr) return '';
             const norm = normalizeDateToYYYYMMDD(dateStr);
@@ -5528,6 +5421,118 @@
                 return `${yyyy}-${mm}-${dd}`;
             }
             return s.slice(0, 10);
+        }
+
+        function renderSingleInvoiceSummaryCard(filteredInvoices, selectedStatus, startDateVal, endDateVal) {
+            try {
+                const container = document.getElementById('billingSingleSummaryCard');
+                if (!container) return;
+                container.style.display = 'block';
+
+                const invs = filteredInvoices || [];
+                const count = invs.length;
+
+                let totalBilledSum = 0;
+                let totalPaidSum = 0;
+                let totalBalanceSum = 0;
+
+                invs.forEach(inv => {
+                    const total = parseFloat(inv.total_amount || 0);
+                    const paid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? total : 0));
+                    const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
+
+                    totalBilledSum += total;
+                    totalPaidSum += paid;
+                    totalBalanceSum += bal;
+                });
+
+                let title = 'ALL INVOICES SUMMARY';
+                let icon = '📊';
+                let color = '#38bdf8';
+                let bg = 'rgba(56, 189, 248, 0.08)';
+                let border = 'rgba(56, 189, 248, 0.3)';
+
+                if (selectedStatus === 'PARTIAL') {
+                    title = 'PARTIAL PAYMENT SUMMARY';
+                    icon = '🟡';
+                    color = '#facc15';
+                    bg = 'rgba(250, 204, 21, 0.08)';
+                    border = 'rgba(250, 204, 21, 0.35)';
+                } else if (selectedStatus === 'SENT') {
+                    title = 'SENT (PENDING PAYMENT) SUMMARY';
+                    icon = '✉️';
+                    color = '#38bdf8';
+                    bg = 'rgba(56, 189, 248, 0.08)';
+                    border = 'rgba(56, 189, 248, 0.3)';
+                } else if (selectedStatus === 'PAID') {
+                    title = 'PAID & SETTLED SUMMARY';
+                    icon = '🟢';
+                    color = '#4ade80';
+                    bg = 'rgba(74, 222, 128, 0.08)';
+                    border = 'rgba(74, 222, 128, 0.35)';
+                } else if (selectedStatus === 'DRAFT') {
+                    title = 'DRAFT INVOICES SUMMARY';
+                    icon = '📝';
+                    color = '#94a3b8';
+                    bg = 'rgba(148, 163, 184, 0.08)';
+                    border = 'rgba(148, 163, 184, 0.3)';
+                } else if (selectedStatus === 'CANCELLED') {
+                    title = 'CANCELLED INVOICES SUMMARY';
+                    icon = '🚫';
+                    color = '#64748b';
+                    bg = 'rgba(100, 116, 139, 0.1)';
+                    border = 'rgba(100, 116, 139, 0.3)';
+                } else if (selectedStatus === 'OVERDUE') {
+                    title = 'OVERDUE INVOICES SUMMARY';
+                    icon = '🔴';
+                    color = '#f87171';
+                    bg = 'rgba(248, 113, 113, 0.08)';
+                    border = 'rgba(248, 113, 113, 0.35)';
+                }
+
+                let dateRangeBadge = '';
+                if (startDateVal || endDateVal) {
+                    const sFmt = startDateVal ? formatDateMMDDYYYY(startDateVal) : 'Start';
+                    const eFmt = endDateVal ? formatDateMMDDYYYY(endDateVal) : 'Latest';
+                    dateRangeBadge = `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; border-radius: 8px; font-size: 0.75rem; font-weight: 700; margin-left: 8px;">📅 Issue: ${sFmt} – ${eFmt}</span>`;
+                }
+
+                let subtextHtml = `<span style="color: #cbd5e1;">Filtered: <strong>${count}</strong> invoice(s)</span>`;
+                if (selectedStatus === 'PARTIAL') {
+                    subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Paid To Date: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Remaining Balance: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                } else if (selectedStatus === 'ALL') {
+                    subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Collected: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Outstanding: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                } else if (selectedStatus === 'SENT' || selectedStatus === 'OVERDUE') {
+                    subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #facc15; font-weight: 700;">Outstanding Balance: $${totalBalanceSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                } else if (selectedStatus === 'PAID') {
+                    subtextHtml += ` <span style="color: #64748b;">|</span> <span style="color: #4ade80; font-weight: 700;">Total Collected: $${totalPaidSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                }
+
+                container.innerHTML = `
+                    <div style="background: ${bg}; border: 1px solid ${border}; border-radius: 16px; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.25);">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                                <span style="font-size: 0.8rem; font-weight: 800; color: ${color}; text-transform: uppercase; letter-spacing: 0.8px; font-family: 'Outfit', sans-serif;">
+                                    ${icon} ${title}
+                                </span>
+                                <span style="font-size: 0.72rem; font-weight: 800; background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 10px; color: #fff;">${count} Invoice${count === 1 ? '' : 's'}</span>
+                                ${dateRangeBadge}
+                            </div>
+                            <div style="font-size: 0.84rem; font-family: inherit; line-height: 1.4;">
+                                ${subtextHtml}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Filtered Total Amount</div>
+                            <div style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff;">
+                                $${totalBilledSum.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error("[SUMMARY CARD ERROR]:", err);
+            }
         }
 
         function filterBillingTable(resetPages = true) {
