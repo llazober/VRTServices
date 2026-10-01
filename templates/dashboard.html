@@ -7711,6 +7711,28 @@
         let currentStoragePrefix = '';
         let currentStorageData = null;
 
+        let activeAttachInvoiceAttachments = [];
+
+        async function fetchActiveInvoiceAttachments(invoiceId) {
+            if (!invoiceId) {
+                activeAttachInvoiceAttachments = [];
+                return;
+            }
+            try {
+                const res = await fetch(`/api/billing/invoices/${invoiceId}/attachments`);
+                if (res.ok) {
+                    const data = await res.json();
+                    activeAttachInvoiceAttachments = data.attachments || [];
+                    renderStorageModalAttachedFiles(invoiceId);
+                    if (currentStorageData) {
+                        renderStorageItems(currentStorageData.subfolders, currentStorageData.files);
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching invoice attachments:', e);
+            }
+        }
+
         async function openCustomerStorageModal(event, customerId, targetInvoiceId = null, targetInvoiceNumber = null) {
             if (event) {
                 event.stopPropagation();
@@ -7720,6 +7742,7 @@
             currentStoragePrefix = '';
             activeAttachInvoiceId = targetInvoiceId || null;
             activeAttachInvoiceNumber = targetInvoiceNumber || null;
+            activeAttachInvoiceAttachments = [];
 
             const modeBanner = document.getElementById('storageInvoiceAttachModeBanner');
             if (modeBanner) {
@@ -7737,7 +7760,7 @@
                         </div>
                         <div id="storageModalAttachedFilesList" style="margin-top: 10px; font-size: 0.78rem;"></div>
                     `;
-                    renderStorageModalAttachedFiles(activeAttachInvoiceId);
+                    fetchActiveInvoiceAttachments(activeAttachInvoiceId);
                 } else {
                     modeBanner.style.display = 'none';
                 }
@@ -7947,9 +7970,20 @@
                     const attrName = (f.name || '').replace(/"/g, '&quot;');
                     const attrUrl = (f.url || '').replace(/"/g, '&quot;');
 
-                    const attachBtnHtml = activeAttachInvoiceId
-                        ? `<button class="storage-attach-invoice-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.45); color: #34d399; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Attach file to invoice #${activeAttachInvoiceNumber || ''}">📎 Attach to Invoice</button>`
-                        : '';
+                    let attachBtnHtml = '';
+                    if (activeAttachInvoiceId) {
+                        const existingAtt = activeAttachInvoiceAttachments.find(a => 
+                            a.file_path === f.key || 
+                            a.file_name === f.name || 
+                            (a.file_path && a.file_path.endsWith('/' + f.name))
+                        );
+
+                        if (existingAtt) {
+                            attachBtnHtml = `<button class="storage-detach-invoice-btn" data-att-id="${existingAtt.id}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.25); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 800; cursor: pointer; margin-right: 6px;" title="Detach file from invoice #${activeAttachInvoiceNumber || ''}">🗑️ Detach</button>`;
+                        } else {
+                            attachBtnHtml = `<button class="storage-attach-invoice-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.45); color: #34d399; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Attach file to invoice #${activeAttachInvoiceNumber || ''}">📎 Attach to Invoice</button>`;
+                        }
+                    }
 
                     rowsHtml += `
                         <tr class="storage-item-row ${isPdf ? 'storage-pdf-row' : ''}" data-key="${attrKey}" data-name="${attrName}" data-url="${attrUrl}" data-name-search="${f.name.toLowerCase().replace(/"/g, '&quot;')}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
@@ -8050,6 +8084,14 @@
                     const key = btn.getAttribute('data-key');
                     const name = btn.getAttribute('data-name');
                     openMoveFileModal(e, key, name);
+                });
+            });
+            tbody.querySelectorAll('.storage-detach-invoice-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const attId = btn.getAttribute('data-att-id');
+                    const name = btn.getAttribute('data-name');
+                    detachFileFromStorageModal(activeAttachInvoiceId, attId, name);
                 });
             });
             tbody.querySelectorAll('.storage-attach-invoice-btn').forEach(btn => {
@@ -8155,7 +8197,7 @@
             updateStorageBatchSelectionState();
 
             if (activeAttachInvoiceId) {
-                renderStorageModalAttachedFiles(activeAttachInvoiceId);
+                await fetchActiveInvoiceAttachments(activeAttachInvoiceId);
             }
 
             if (typeof loadBillingInvoices === 'function') {
@@ -8196,7 +8238,7 @@
                     } else {
                         showCustomAlert("File Attached", `Attached '${fileName}' to invoice`, "success");
                     }
-                    renderStorageModalAttachedFiles(activeAttachInvoiceId);
+                    await fetchActiveInvoiceAttachments(activeAttachInvoiceId);
                     if (typeof loadBillingInvoices === 'function') loadBillingInvoices();
                 } else {
                     showCustomAlert("Error", data.detail || "Failed to attach file.", "error");
@@ -8242,7 +8284,7 @@
                     if (typeof showCustomAlert === 'function') {
                         showCustomAlert("File Detached", `Detached '${fileName}' from invoice.`, "success");
                     }
-                    renderStorageModalAttachedFiles(invoiceId);
+                    await fetchActiveInvoiceAttachments(invoiceId);
                     if (typeof loadBillingInvoices === 'function') loadBillingInvoices();
                 } else {
                     alert('Failed to detach file.');
@@ -11039,6 +11081,7 @@
                 <button id="storageCommsHistoryBtn" onclick="openCustomerCommsHistoryModal(currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Open Customer Communication History">💬 Comms. History</button>
             </div>
         </div>
+        <div id="storageInvoiceAttachModeBanner" style="display: none; padding: 12px 24px; background: rgba(56, 189, 248, 0.1); border-bottom: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 0.85rem;"></div>
         <div style="padding: 10px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
             <input type="text" id="storageFileSearchInput" placeholder="🔍 Search current folder..." oninput="filterStorageItems()" style="width: 100%; padding: 8px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-size: 0.82rem; outline: none;">
         </div>
