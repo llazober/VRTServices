@@ -2735,7 +2735,8 @@
                 const originalName = chk.getAttribute('data-name');
                 if (!originalName) continue;
                 
-                let sanitizedName = originalName.replace(/[_\s]?\d{4}.*?(?=\.\w+$)/, '');
+                let sanitizedName = originalName.replace(/\.[^/.]+$/, "");
+                sanitizedName = sanitizedName.replace(/[_\s]?(19|20)\d{2}(?:[_\s]?[\(\)\d]+)?$/, "");
                 
                 let alreadyExists = false;
                 for (const req of existingReqs) {
@@ -2756,7 +2757,7 @@
                 
                 let docType = "OTHER";
                 const upperName = sanitizedName.toUpperCase();
-                const typeMatch = upperName.match(/^(W-2|1099-[A-Z]+|1099|1098-[A-Z]+|1098|1095-[A-Z]+|1040|K-1)/);
+                const typeMatch = upperName.match(/^(W-2|1099-[A-Z]+|1099|1098-[A-Z]+|1098|1095-[A-Z]+|1040|K-1|SSA-1099)/);
                 if (typeMatch) docType = typeMatch[1];
 
                 try {
