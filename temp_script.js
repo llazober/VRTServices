@@ -2719,14 +2719,11 @@
 
             if (!confirm(`Add ${chks.length} file(s) to the Tax Document Tracker for Tax Year ${taxYear}? (Duplicates will be skipped)`)) return;
 
-            let existingLabels = new Set();
+            let existingReqs = [];
             try {
                 const fetchRes = await fetch(`/api/tax-requirements/${currentStorageCustomerId}?tax_year=${taxYear}`);
                 const fetchData = await fetchRes.json();
-                const existingReqs = fetchData.requirements || [];
-                existingReqs.forEach(req => {
-                    if (req.doc_label) existingLabels.add(req.doc_label.toLowerCase());
-                });
+                existingReqs = fetchData.requirements || [];
             } catch (err) {
                 console.error('Error fetching existing requirements for duplicate check:', err);
             }
@@ -2738,9 +2735,21 @@
                 const originalName = chk.getAttribute('data-name');
                 if (!originalName) continue;
                 
-                let sanitizedName = originalName.replace(/[_\s]?\d{4}(?=\.\w+$)/, '');
+                let sanitizedName = originalName.replace(/[_\s]?\d{4}.*?(?=\.\w+$)/, '');
                 
-                if (existingLabels.has(sanitizedName.toLowerCase())) {
+                let alreadyExists = false;
+                for (const req of existingReqs) {
+                    if (req.source_description && req.source_description.toLowerCase() === originalName.toLowerCase()) {
+                        alreadyExists = true;
+                        break;
+                    }
+                    if (!req.source_description && req.doc_label && req.doc_label.toLowerCase() === sanitizedName.toLowerCase()) {
+                        alreadyExists = true;
+                        break;
+                    }
+                }
+                
+                if (alreadyExists) {
                     skippedCount++;
                     continue; 
                 }
@@ -2759,6 +2768,7 @@
                             tax_year: taxYear,
                             doc_type: docType,
                             doc_label: sanitizedName,
+                            source_description: originalName,
                             is_required: true
                         })
                     });
