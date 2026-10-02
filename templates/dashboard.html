@@ -12792,6 +12792,7 @@ function filterBillingTable(resetPages = true) {
                 const cur = custSelect.value;
                 custSelect.innerHTML = `<option value="">Select Customer *</option>` + custs.map(c => `<option value="${c.id}">${c.legal_name} (${c.custumer_number || ''})</option>`).join('');
                 if (cur) custSelect.value = cur;
+                makeCustomerSelectSearchable('complianceModalCustomer');
             }
             if (filterCust) {
                 const cur = filterCust.value;
@@ -12830,6 +12831,8 @@ function filterBillingTable(resetPages = true) {
                 document.getElementById('complianceFormId').value = '';
                 document.getElementById('complianceModalTitle').textContent = '➕ Create Compliance Deadline';
                 document.getElementById('complianceModalTitleInput').value = '';
+                document.getElementById('complianceModalCustomer').value = '';
+                refreshSearchableCombobox('complianceModalCustomer');
                 document.getElementById('complianceModalCategory').value = 'Sales Tax';
                 document.getElementById('complianceModalDueDate').value = new Date().toISOString().split('T')[0];
                 document.getElementById('complianceModalJurisdiction').value = 'Federal';
@@ -12859,6 +12862,7 @@ function filterBillingTable(resetPages = true) {
             document.getElementById('complianceFormId').value = ev.id;
             document.getElementById('complianceModalTitle').textContent = '✏️ Edit Compliance Deadline';
             document.getElementById('complianceModalCustomer').value = ev.customer_id;
+            refreshSearchableCombobox('complianceModalCustomer');
             document.getElementById('complianceModalCategory').value = ev.category;
             document.getElementById('complianceModalTitleInput').value = ev.title;
             document.getElementById('complianceModalDueDate').value = ev.due_date ? ev.due_date.split('T')[0] : '';
