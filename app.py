@@ -881,6 +881,7 @@ def init_customer_table():
                     phone           VARCHAR(50),
                     email           VARCHAR(200),
                     website         VARCHAR(300),
+                    tax_services_fee NUMERIC(12, 2) DEFAULT 0.00,
                     notes           TEXT,
                     parent_name     VARCHAR(200),
                     do_folder_path  VARCHAR(300),
@@ -895,6 +896,7 @@ def init_customer_table():
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS assigned_user_id VARCHAR(100);
                 ALTER TABLE customer ALTER COLUMN assigned_user_id TYPE VARCHAR(100) USING assigned_user_id::text;
+                ALTER TABLE customer ADD COLUMN IF NOT EXISTS tax_services_fee NUMERIC(12, 2) DEFAULT 0.00;
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS identity_verified BOOLEAN DEFAULT FALSE;
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS verification_method VARCHAR(50);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS id_type VARCHAR(100);
@@ -6680,6 +6682,7 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
                     row["updated_at"] = str(row["updated_at"])
                 if row.get("tax_id"):
                     row["tax_id"] = decrypt_tax_id(row["tax_id"])
+                row["tax_services_fee"] = float(row.get("tax_services_fee") or 0.0)
                 result.append(row)
             return {"customers": result}
     except Exception as e:
@@ -6710,6 +6713,7 @@ async def get_single_customer_by_id(customer_id: int, request: Request):
                 row["updated_at"] = str(row["updated_at"])
             if row.get("tax_id"):
                 row["tax_id"] = decrypt_tax_id(row["tax_id"])
+            row["tax_services_fee"] = float(row.get("tax_services_fee") or 0.0)
             return {"customer": row}
     except HTTPException:
         raise
@@ -6738,6 +6742,11 @@ async def create_customer(request: Request):
     phone = (data.get("phone") or "").strip() or None
     email = (data.get("email") or "").strip() or None
     website = (data.get("website") or "").strip() or None
+    tax_services_fee_raw = data.get("tax_services_fee")
+    try:
+        tax_services_fee = float(tax_services_fee_raw) if tax_services_fee_raw not in (None, "") else 0.0
+    except (ValueError, TypeError):
+        tax_services_fee = 0.0
     notes = (data.get("notes") or "").strip() or None
     parent_name = (data.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
     form_8879_type = (data.get("form_8879_type") or "Form 8879 (Individual 1040)").strip()
@@ -6763,24 +6772,25 @@ async def create_customer(request: Request):
             cur.execute("""
                 INSERT INTO customer (
                     custumer_number, customer_type, legal_name, display_name,
-                    tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                    tax_id, status, assigned_user_id, phone, email, website, tax_services_fee, notes, parent_name,
                     form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
                     second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4,
                     created_at, updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s,
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING *;
             """, (
                 custumer_number, customer_type, legal_name, display_name,
-                tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                tax_id, status, assigned_user_id, phone, email, website, tax_services_fee, notes, parent_name,
                 form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
                 second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4
             ))
             new_record = dict(cur.fetchone())
             if new_record.get("tax_id"):
                 new_record["tax_id"] = decrypt_tax_id(new_record["tax_id"])
+            new_record["tax_services_fee"] = float(new_record.get("tax_services_fee") or 0.0)
 
             # Auto-create parent mapping for the new customer
             try:
@@ -8818,6 +8828,11 @@ async def update_customer(customer_id: str, request: Request):
     phone = (data.get("phone") or "").strip() or None
     email = (data.get("email") or "").strip() or None
     website = (data.get("website") or "").strip() or None
+    tax_services_fee_raw = data.get("tax_services_fee")
+    try:
+        tax_services_fee = float(tax_services_fee_raw) if tax_services_fee_raw not in (None, "") else 0.0
+    except (ValueError, TypeError):
+        tax_services_fee = 0.0
     notes = (data.get("notes") or "").strip() or None
     parent_name = (data.get("parent_name") or get_user_parent_name(username) or "VRT Services").strip()
     form_8879_type = (data.get("form_8879_type") or "Form 8879 (Individual 1040)").strip()
@@ -8858,6 +8873,7 @@ async def update_customer(customer_id: str, request: Request):
                     phone = %s,
                     email = %s,
                     website = %s,
+                    tax_services_fee = %s,
                     notes = %s,
                     parent_name = %s,
                     form_8879_type = %s,
@@ -8873,7 +8889,7 @@ async def update_customer(customer_id: str, request: Request):
                 RETURNING *;
             """, (
                 custumer_number, customer_type, legal_name, display_name,
-                tax_id, status, assigned_user_id, phone, email, website, notes, parent_name,
+                tax_id, status, assigned_user_id, phone, email, website, tax_services_fee, notes, parent_name,
                 form_8879_type, second_signer_name, second_signer_email, second_signer_phone,
                 second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4,
                 real_cust_id
@@ -8907,6 +8923,7 @@ async def update_customer(customer_id: str, request: Request):
                 res["created_at"] = str(res["created_at"])
             if res.get("updated_at"):
                 res["updated_at"] = str(res["updated_at"])
+            res["tax_services_fee"] = float(res.get("tax_services_fee") or 0.0)
             log_audit_event(username, "UPDATE_CUSTOMER", "Customer", real_cust_id, {"custumer_number": custumer_number, "legal_name": legal_name}, request=request)
             return {"message": "Customer updated successfully", "customer": res}
     except psycopg2.IntegrityError:

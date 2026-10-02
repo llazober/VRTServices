@@ -1156,6 +1156,13 @@
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Website</label>
                         <input type="url" id="customerPageFormWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: #fff;">
                     </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax Services Fee ($)</label>
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <span style="position: absolute; left: 12px; color: #94a3b8; font-weight: 700; font-size: 0.88rem;">$</span>
+                            <input type="number" step="0.01" min="0" id="customerPageFormTaxServicesFee" placeholder="0.00" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 12px 8px 26px; font-size: 0.88rem; color: #fff;">
+                        </div>
+                    </div>
                     <div id="customerPageFormJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px; margin-top: 4px;">
                         <div style="font-size: 0.84rem; font-weight: 800; color: #34d399; margin-bottom: 10px; text-transform: uppercase;">
                             👥 Joint Account — Second Signer / Spouse Information
@@ -3530,6 +3537,13 @@
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Website</label>
                     <input type="url" id="customerFormWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tax Services Fee ($)</label>
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <span style="position: absolute; left: 10px; color: #94a3b8; font-weight: 700; font-size: 0.85rem;">$</span>
+                        <input type="number" step="0.01" min="0" id="customerFormTaxServicesFee" placeholder="0.00" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px 7px 24px; font-size: 0.85rem; color: #fff;">
+                    </div>
                 </div>
                 <div id="customerFormJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 14px; margin-top: 4px;">
                     <div style="font-size: 0.82rem; font-weight: 800; color: #34d399; margin-bottom: 8px; text-transform: uppercase;">
@@ -9135,6 +9149,7 @@ function filterBillingTable(resetPages = true) {
                 setVal('customerFormPhone', '');
                 setVal('customerFormEmail', '');
                 setVal('customerFormWebsite', '');
+                setVal('customerFormTaxServicesFee', '');
                 setVal('customerFormNotes', '');
                 onCustomerTypeChange('customerForm', true);
                 const schedCb = document.getElementById('customerFormPresetSchedule');
@@ -9173,6 +9188,7 @@ function filterBillingTable(resetPages = true) {
                 setVal('customerPageFormPhone', '');
                 setVal('customerPageFormEmail', '');
                 setVal('customerPageFormWebsite', '');
+                setVal('customerPageFormTaxServicesFee', '');
                 setVal('customerPageFormNotes', '');
                 onCustomerTypeChange('customerPageForm', true);
                 const schedCb = document.getElementById('customerPageFormPresetSchedule');
@@ -9214,6 +9230,7 @@ function filterBillingTable(resetPages = true) {
                 phone: getVal('Phone'),
                 email: getVal('Email'),
                 website: getVal('Website'),
+                tax_services_fee: parseFloat(getVal('TaxServicesFee')) || 0,
                 notes: getVal('Notes')
             };
 
@@ -9287,6 +9304,7 @@ function filterBillingTable(resetPages = true) {
             setVal('Phone', rec.phone || '');
             setVal('Email', rec.email || '');
             setVal('Website', rec.website || '');
+            setVal('TaxServicesFee', (rec.tax_services_fee !== undefined && rec.tax_services_fee !== null) ? rec.tax_services_fee : '');
             setVal('Notes', rec.notes || '');
 
             onCustomerTypeChange('editCustModal', false);
@@ -9320,6 +9338,7 @@ function filterBillingTable(resetPages = true) {
                 phone: getVal('Phone'),
                 email: getVal('Email'),
                 website: getVal('Website'),
+                tax_services_fee: parseFloat(getVal('TaxServicesFee')) || 0,
                 notes: getVal('Notes'),
                 parent_name: CURRENT_PARENT_NAME,
                 create_preset_schedule: presetCb ? presetCb.checked : true
@@ -11923,6 +11942,13 @@ function filterBillingTable(resetPages = true) {
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Website</label>
                 <input type="url" id="editCustModalWebsite" placeholder="https://www.acme.com" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: #fff;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Tax Services Fee ($)</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <span style="position: absolute; left: 10px; color: #94a3b8; font-weight: 700; font-size: 0.85rem;">$</span>
+                    <input type="number" step="0.01" min="0" id="editCustModalTaxServicesFee" placeholder="0.00" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px 7px 24px; font-size: 0.85rem; color: #fff;">
+                </div>
             </div>
 
             <div id="editCustModalJointFields" style="grid-column: 1 / -1; display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 14px; margin-top: 4px;">
