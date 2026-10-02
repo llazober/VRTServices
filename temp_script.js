@@ -2691,8 +2691,107 @@
                     moveBtn.style.display = 'none';
                 }
             }
+            const taxTrackBtn = document.getElementById('storageBatchTaxTrackBtn');
+            if (taxTrackBtn) {
+                if (chks.length > 0) {
+                    taxTrackBtn.style.display = 'inline-block';
+                    taxTrackBtn.innerHTML = `📑 Add to Tax Tracker (${chks.length})`;
+                } else {
+                    taxTrackBtn.style.display = 'none';
+                }
+            }
             if (selectAllChk && allChks.length > 0) {
                 selectAllChk.checked = (chks.length === allChks.length);
+            }
+        }
+        async function addSelectedToTaxTracker() {
+            const chks = Array.from(document.querySelectorAll('.storage-item-select-chk:checked'));
+            if (!chks.length) {
+                alert('Please select at least one file.');
+                return;
+            }
+            
+            let taxYear = (typeof _taxDocCurrentYear !== 'undefined' && _taxDocCurrentYear) ? _taxDocCurrentYear : new Date().getFullYear();
+            const yearMatch = currentStoragePrefix.match(/Tax Year (\d{4})/i);
+            if (yearMatch) {
+                taxYear = parseInt(yearMatch[1]);
+            }
+
+            if (!confirm(`Add ${chks.length} file(s) to the Tax Document Tracker for Tax Year ${taxYear}? (Duplicates will be skipped)`)) return;
+
+            let existingLabels = new Set();
+            try {
+                const fetchRes = await fetch(`/api/tax-requirements/${currentStorageCustomerId}?tax_year=${taxYear}`);
+                const fetchData = await fetchRes.json();
+                const existingReqs = fetchData.requirements || [];
+                existingReqs.forEach(req => {
+                    if (req.doc_label) existingLabels.add(req.doc_label.toLowerCase());
+                });
+            } catch (err) {
+                console.error('Error fetching existing requirements for duplicate check:', err);
+            }
+
+            let addedCount = 0;
+            let skippedCount = 0;
+
+            for (const chk of chks) {
+                const originalName = chk.getAttribute('data-name');
+                if (!originalName) continue;
+                
+                let sanitizedName = originalName.replace(/[_\s]?\d{4}(?=\.\w+$)/, '');
+                
+                if (existingLabels.has(sanitizedName.toLowerCase())) {
+                    skippedCount++;
+                    continue; 
+                }
+                
+                let docType = "OTHER";
+                const upperName = sanitizedName.toUpperCase();
+                const typeMatch = upperName.match(/^(W-2|1099-[A-Z]+|1099|1098-[A-Z]+|1098|1095-[A-Z]+|1040|K-1)/);
+                if (typeMatch) docType = typeMatch[1];
+
+                try {
+                    const createRes = await fetch('/api/tax-requirements', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customer_id: currentStorageCustomerId,
+                            tax_year: taxYear,
+                            doc_type: docType,
+                            doc_label: sanitizedName,
+                            is_required: true
+                        })
+                    });
+                    const createData = await createRes.json();
+                    
+                    if (createRes.ok && createData.requirement && createData.requirement.id) {
+                        await fetch('/api/tax-requirements/' + createData.requirement.id, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ manual_status: 'Received' })
+                        });
+                        addedCount++;
+                    }
+                } catch (err) {
+                    console.error('Error adding to tax tracker:', err);
+                }
+            }
+            
+            if (typeof showToast === 'function') {
+                let msg = `Added ${addedCount} file(s) to Tax Tracker!`;
+                if (skippedCount > 0) msg += ` (Skipped ${skippedCount} duplicate${skippedCount > 1 ? 's' : ''})`;
+                showToast(msg, 'success');
+            }
+            
+            const selectAllChk = document.getElementById('storageSelectAllChk');
+            if (selectAllChk) selectAllChk.checked = false;
+            chks.forEach(c => c.checked = false);
+            updateStorageBatchSelectionState();
+            
+            if (typeof currentChecklistCustomerId !== 'undefined' && currentChecklistCustomerId === currentStorageCustomerId) {
+                if (typeof loadTaxDocTracking === 'function') {
+                    await loadTaxDocTracking(currentChecklistCustomerId);
+                }
             }
         }
 
@@ -5171,6 +5270,7 @@
                 <button onclick="createStorageFolder()" style="padding: 7px 14px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Create a new subfolder in the current directory">📁 New Folder</button>
                 <button id="storageMergePdfBtn" onclick="mergeSelectedStorageImagesToPdf()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Merge checked image files into 1 PDF document">📑 Merge Selected (0) -> PDF</button>
                 <button id="storageBatchMoveBtn" onclick="moveSelectedStorageFiles()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Move selected files to another directory">🚚 Move Selected (0)</button>
+                <button id="storageBatchTaxTrackBtn" onclick="addSelectedToTaxTracker()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #ef4444, #f87171); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Add selected files to Tax Document Tracker">📑 Add to Tax Tracker (0)</button>
                 <button id="storageBatchConvertBtn" onclick="batchConvertInboxToPdf()" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Convert all non-PDF files in this directory to PDF">📄 Convert Inbox to PDF</button>
                 <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
