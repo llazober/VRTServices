@@ -1715,6 +1715,15 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
             actual_month_label = now.strftime("%B %Y")
             current_year_str = str(now.year)
 
+            # Previous month calculation for Bookkeeping Steps (e.g. 2026-09 for 2026-10)
+            first_day_curr_month = now.replace(day=1)
+            prev_month_dt = first_day_curr_month - datetime.timedelta(days=1)
+            prev_month_str = prev_month_dt.strftime("%Y-%m")
+            prev_month_label = prev_month_dt.strftime("%B %Y")
+
+            # Previous tax year calculation for Tax Workflow Steps (e.g. 2025 for 2026)
+            prev_year_str = str(now.year - 1)
+
             for cust in cust_matches:
                 cid = cust["id"]
                 c_num = cust.get("custumer_number") or f"CUST-{cid}"
@@ -1722,18 +1731,33 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
                 c_type = (cust.get("customer_type") or "Business").strip()
                 status = cust.get("status") or "Active"
 
-                # Priority: Fetch checklist for Actual Month / Current Period
+                # 1. Fetch Bookkeeping checklist for Previous Month (e.g. 2026-09)
                 cur.execute("""
                     SELECT * FROM customer_task_checklist
-                    WHERE customer_id = %s
-                    ORDER BY 
-                      CASE WHEN period = %s THEN 1
-                           WHEN period = %s THEN 2
-                           ELSE 3
-                      END, period DESC
-                    LIMIT 1;
-                """, (cid, actual_month_str, current_year_str))
-                actual_chk = cur.fetchone()
+                    WHERE customer_id = %s AND period = %s;
+                """, (cid, prev_month_str))
+                bk_chk = cur.fetchone()
+                if not bk_chk:
+                    cur.execute("""
+                        SELECT * FROM customer_task_checklist
+                        WHERE customer_id = %s AND period LIKE '____-__'
+                        ORDER BY period DESC LIMIT 1;
+                    """, (cid,))
+                    bk_chk = cur.fetchone()
+
+                # 2. Fetch Tax Workflow checklist for Previous Tax Year (e.g. 2025)
+                cur.execute("""
+                    SELECT * FROM customer_task_checklist
+                    WHERE customer_id = %s AND period = %s;
+                """, (cid, prev_year_str))
+                tax_chk = cur.fetchone()
+                if not tax_chk:
+                    cur.execute("""
+                        SELECT * FROM customer_task_checklist
+                        WHERE customer_id = %s AND period NOT LIKE '____-__'
+                        ORDER BY period DESC LIMIT 1;
+                    """, (cid,))
+                    tax_chk = cur.fetchone()
 
                 cur.execute("""
                     SELECT category, title, due_date, status
@@ -1747,39 +1771,54 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
                 events = cur.fetchall() or []
 
                 block_lines = [
-                    f"=== LIVE DATABASE CUSTOMER STATUS (ACTUAL MONTH: {actual_month_label}): {legal} ({c_num}) ===",
+                    f"=== LIVE DATABASE CUSTOMER STATUS: {legal} ({c_num}) ===",
                     f"- Account Type: {c_type}",
                     f"- Account Status: {status}"
                 ]
 
-                if actual_chk:
-                    chk_period = actual_chk.get("period", actual_month_str)
-                    block_lines.append(f"\n--- Task Checklist for Actual Period [{chk_period} ({actual_month_label})] ---")
-                    
-                    is_ind = c_type.lower() in ("individual", "joint account")
-                    if not is_ind:
-                        bk_stmt = "[x] Completed" if actual_chk.get("bank_statement_received") else "[ ] Pending"
-                        chk_imgs = "[x] Completed" if actual_chk.get("check_images_received") else "[ ] Pending"
-                        ai_ext = "[x] Completed" if actual_chk.get("extraction_ai_categorization_done") else "[ ] Pending"
-                        acc_rev = "[x] Completed" if actual_chk.get("accountant_reviewed") else "[ ] Pending"
-                        block_lines.append(f"  [Bookkeeping Steps] Bank Stmt: {bk_stmt} | Check Imgs: {chk_imgs} | AI Extracted: {ai_ext} | Accountant Review: {acc_rev}")
-                        if actual_chk.get("notes"):
-                            block_lines.append(f"  [Bookkeeping Notes]: {actual_chk.get('notes')}")
+                # Bookkeeping Steps for Previous Month
+                is_ind = c_type.lower() in ("individual", "joint account")
+                if not is_ind:
+                    if bk_chk:
+                        bk_p = bk_chk.get("period") or prev_month_str
+                        bk_stmt = "[x] Completed" if bk_chk.get("bank_statement_received") else "[ ] Pending"
+                        chk_imgs = "[x] Completed" if bk_chk.get("check_images_received") else "[ ] Pending"
+                        ai_ext = "[x] Completed" if bk_chk.get("extraction_ai_categorization_done") else "[ ] Pending"
+                        acc_rev = "[x] Completed" if bk_chk.get("accountant_reviewed") else "[ ] Pending"
+                        block_lines.append(f"\n--- Bookkeeping Steps for Previous Month [{bk_p} ({prev_month_label})] ---")
+                        block_lines.append(f"  - Bank Statement: {bk_stmt}")
+                        block_lines.append(f"  - Check Images: {chk_imgs}")
+                        block_lines.append(f"  - AI Extracted: {ai_ext}")
+                        block_lines.append(f"  - Accountant Review: {acc_rev}")
+                        if bk_chk.get("notes"):
+                            block_lines.append(f"  [Bookkeeping Notes]: {bk_chk.get('notes')}")
+                    else:
+                        block_lines.append(f"\n- Bookkeeping Steps (Previous Month {prev_month_label}): No checklist recorded for previous month yet.")
 
-                    t_req = "[x] Completed" if actual_chk.get("tax_docs_requested") else "[ ] Pending"
-                    t_rec = "[x] Completed" if actual_chk.get("tax_docs_received") else "[ ] Pending"
-                    t_org = "[x] Completed" if actual_chk.get("tax_organizer") else "[ ] Pending"
-                    t_prep = "[x] Completed" if actual_chk.get("tax_preparation") else "[ ] Pending"
-                    t_rev = "[x] Completed" if actual_chk.get("tax_review") else "[ ] Pending"
-                    t_sig = "[x] Completed" if actual_chk.get("tax_client_signature") else "[ ] Pending"
-                    t_efile = "[x] Completed" if actual_chk.get("tax_efile") else "[ ] Pending"
-                    t_acc = "[x] Completed" if actual_chk.get("tax_accepted") else "[ ] Pending"
-                    
-                    block_lines.append(f"  [Tax Workflow Steps] Docs Requested: {t_req} | Docs Received: {t_rec} | Tax Organizer: {t_org} | Tax Prep: {t_prep} | Tax Review: {t_rev} | Client Signature: {t_sig} | E-File: {t_efile} | IRS/State Accepted: {t_acc}")
-                    if actual_chk.get("tax_notes"):
-                        block_lines.append(f"  [Tax Notes]: {actual_chk.get('tax_notes')}")
+                # Tax Workflow Steps for Previous Tax Year
+                if tax_chk:
+                    tax_p = tax_chk.get("period") or prev_year_str
+                    t_req = "[x] Completed" if tax_chk.get("tax_docs_requested") else "[ ] Pending"
+                    t_rec = "[x] Completed" if tax_chk.get("tax_docs_received") else "[ ] Pending"
+                    t_org = "[x] Completed" if tax_chk.get("tax_organizer") else "[ ] Pending"
+                    t_prep = "[x] Completed" if tax_chk.get("tax_preparation") else "[ ] Pending"
+                    t_rev = "[x] Completed" if tax_chk.get("tax_review") else "[ ] Pending"
+                    t_sig = "[x] Completed" if tax_chk.get("tax_client_signature") else "[ ] Pending"
+                    t_efile = "[x] Completed" if tax_chk.get("tax_efile") else "[ ] Pending"
+                    t_acc = "[x] Completed" if tax_chk.get("tax_accepted") else "[ ] Pending"
+                    block_lines.append(f"\n--- Tax Workflow Steps for Previous Tax Year [Tax Year {tax_p}] ---")
+                    block_lines.append(f"  - Docs Requested: {t_req}")
+                    block_lines.append(f"  - Docs Received: {t_rec}")
+                    block_lines.append(f"  - Tax Organizer: {t_org}")
+                    block_lines.append(f"  - Tax Prep: {t_prep}")
+                    block_lines.append(f"  - Tax Review: {t_rev}")
+                    block_lines.append(f"  - Client Signature: {t_sig}")
+                    block_lines.append(f"  - E-File: {t_efile}")
+                    block_lines.append(f"  - IRS/State Accepted: {t_acc}")
+                    if tax_chk.get("tax_notes"):
+                        block_lines.append(f"  [Tax Notes]: {tax_chk.get('tax_notes')}")
                 else:
-                    block_lines.append(f"\n- Task Checklist [{actual_month_label}]: No checklist started for this actual month yet.")
+                    block_lines.append(f"\n- Tax Workflow Steps (Tax Year {prev_year_str}): No checklist recorded for previous tax year yet.")
 
                 if events:
                     block_lines.append(f"\n--- Active Deadlines ({actual_month_label}) ---")
@@ -1792,10 +1831,10 @@ def get_live_customer_rag_context(query: str) -> tuple[str, list[dict]]:
                 context_blocks.append(block_text)
                 citations.append({
                     "source_id": f"Live DB Customer {c_num}",
-                    "title": f"Actual Month Checklist & Status ({actual_month_label}): {legal} ({c_num})",
-                    "category": "Live Customer Actual Month Checklist",
+                    "title": f"Customer Checklist Status (Bookkeeping: {prev_month_label}, Tax: Year {prev_year_str}): {legal} ({c_num})",
+                    "category": "Live Customer Checklist",
                     "chunk_index": 0,
-                    "filename": f"Customer_{c_num}_ActualMonth",
+                    "filename": f"Customer_{c_num}_Checklist",
                     "score": 1.0,
                     "snippet": block_text[:250] + "..."
                 })
@@ -1906,8 +1945,8 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
                         "Rules:\n"
                         "1. Cite sources using document sources or [Live DB Customer CUST-XXXX], matching the provided sources.\n"
                         "2. Provide clear, professional, well-structured markdown answers.\n"
-                        "3. When answering about a customer's checklist or compliance status, focus exclusively on the Actual Month (current period) status, clearly listing completed vs pending steps for the current month/period, without listing historical past months unless specifically requested.\n"
-                        "4. If the context does not contain enough information, synthesize a helpful response while clearly noting what was retrieved."
+                        "3. MANDATORY RULE: Always report Bookkeeping Steps for the PREVIOUS MONTH of the actual current month (e.g., September 2026 when actual month is October 2026), and Tax Workflow Steps for the PREVIOUS YEAR of the actual current year (e.g., Tax Year 2025 when actual year is 2026).\n"
+                        "4. Clearly list completed vs pending status for Bookkeeping Steps (Previous Month) and Tax Workflow Steps (Previous Tax Year)."
                     )
                 },
                 {
