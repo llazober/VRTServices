@@ -11023,6 +11023,15 @@ async def add_invoice_attachment(invoice_id: str, request: Request):
             if not row:
                 raise HTTPException(status_code=404, detail="Invoice not found.")
 
+            # Check if file is already attached to this invoice to prevent duplicate attachments
+            cur.execute("""
+                SELECT id FROM customer_invoice_attachments 
+                WHERE invoice_id = %s AND (file_path = %s OR file_name = %s);
+            """, (row["id"], file_path, file_name))
+            existing = cur.fetchone()
+            if existing:
+                return {"status": "success", "attachment_id": existing["id"], "file_name": file_name, "message": "Already attached"}
+
             cur.execute("""
                 INSERT INTO customer_invoice_attachments (invoice_id, file_path, file_name)
                 VALUES (%s, %s, %s)

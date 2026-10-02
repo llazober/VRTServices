@@ -8045,7 +8045,7 @@ function filterBillingTable(resetPages = true) {
                     modeBanner.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                             <div>
-                                📎 Attachment Mode Active for <strong>Invoice ${invLabel}</strong> — Select checkbox next to any file(s) below and click '📎 Attach Selected File(s)' or click '📎 Attach to Invoice' next to individual files.
+                                📎 Attachment Mode Active for <strong>Invoice ${invLabel}</strong> — Select checkbox next to any file(s) below and click '📎 Attach Selected File(s)'.
                             </div>
                             <button type="button" id="storageBatchAttachInvoiceBtn" onclick="attachSelectedStorageFilesToInvoice()" style="display: none; padding: 6px 14px; background: #34d399; color: #000; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 12px rgba(52, 211, 153, 0.4);">
                                 📎 Attach Selected File(s)
@@ -8273,8 +8273,6 @@ function filterBillingTable(resetPages = true) {
 
                         if (existingAtt) {
                             attachBtnHtml = `<button class="storage-detach-invoice-btn" data-att-id="${existingAtt.id}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.25); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; border-radius: 6px; font-size: 0.7rem; font-weight: 800; cursor: pointer; margin-right: 6px;" title="Detach file from invoice #${activeAttachInvoiceNumber || ''}">🗑️ Detach</button>`;
-                        } else {
-                            attachBtnHtml = `<button class="storage-attach-invoice-btn" data-key="${attrKey}" data-name="${attrName}" style="padding: 4px 10px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.45); color: #34d399; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 6px;" title="Attach file to invoice #${activeAttachInvoiceNumber || ''}">📎 Attach to Invoice</button>`;
                         }
                     }
 
@@ -8303,16 +8301,6 @@ function filterBillingTable(resetPages = true) {
             }
 
             tbody.innerHTML = rowsHtml;
-
-            // Delegated event handler: navigate on row/button click using data-prefix
-            tbody.querySelectorAll('.storage-attach-invoice-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const key = btn.getAttribute('data-key');
-                    const name = btn.getAttribute('data-name');
-                    attachFileFromStorageModal(e, activeAttachInvoiceId, key, name);
-                });
-            });
             tbody.querySelectorAll('.storage-nav-row').forEach(row => {
                 row.addEventListener('click', (e) => {
                     if (e.target.closest('.storage-open-btn') || e.target.closest('.storage-delete-folder-btn')) return;
@@ -8387,14 +8375,7 @@ function filterBillingTable(resetPages = true) {
                     detachFileFromStorageModal(activeAttachInvoiceId, attId, name);
                 });
             });
-            tbody.querySelectorAll('.storage-attach-invoice-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const key = btn.getAttribute('data-key');
-                    const name = btn.getAttribute('data-name');
-                    attachSingleFileFromStorageModal(key, name);
-                });
-            });
+
             tbody.querySelectorAll('.storage-delete-file-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
