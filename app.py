@@ -7499,7 +7499,7 @@ async def upload_customer_storage_file(
             original_filename=filename
         )
 
-        return {"message": "File uploaded successfully", "key": final_key, "pdf_converted": bool(pdf_fk)}
+        return {"message": "File uploaded successfully", "key": final_key, "pdf_converted": pdf_converted}
     except HTTPException as he:
         raise he
     except Exception as e:
