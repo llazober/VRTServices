@@ -14551,15 +14551,32 @@ async def copy_tax_requirements_from_year(request: Request):
                     "message": f"Tax Year {from_year} has no requirements defined."
                 }
 
-            # 2. Clear target year existing requirements so we get an exact 1:1 copy
+            # 2. Fetch target year existing requirements so we don't duplicate
             cur.execute("""
-                DELETE FROM tax_return_requirements
+                SELECT doc_type, doc_label, source_description
+                FROM tax_return_requirements
                 WHERE customer_id = %s AND tax_year = %s;
             """, (customer_id, to_year))
+            target_reqs = cur.fetchall()
 
-            # 3. Copy every single record 1:1
+            def is_duplicate(sr):
+                for tr in target_reqs:
+                    if tr["doc_type"] == sr["doc_type"]:
+                        if sr.get("source_description") and tr.get("source_description"):
+                            if sr["source_description"].lower() == tr["source_description"].lower():
+                                return True
+                        elif not sr.get("source_description") and not tr.get("source_description"):
+                            sd = sr.get("doc_label") or ""
+                            td = tr.get("doc_label") or ""
+                            if sd.lower() == td.lower():
+                                return True
+                return False
+
+            # 3. Copy records that don't already exist
             copied_count = 0
             for sr in source_reqs:
+                if is_duplicate(sr):
+                    continue
                 cur.execute("""
                     INSERT INTO tax_return_requirements
                         (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
@@ -14669,15 +14686,32 @@ async def bulk_copy_tax_requirements_from_year(request: Request):
                     _cconn.close()
                     continue
 
-                # Delete existing target year requirements for exact 1:1 copy
+                # Fetch existing target year requirements so we don't duplicate
                 _ccur.execute("""
-                    DELETE FROM tax_return_requirements
+                    SELECT doc_type, doc_label, source_description
+                    FROM tax_return_requirements
                     WHERE customer_id = %s AND tax_year = %s;
                 """, (cid, to_year))
+                target_reqs = _ccur.fetchall()
 
-                # Insert source requirements 1:1
+                def is_duplicate(sr):
+                    for tr in target_reqs:
+                        if tr["doc_type"] == sr["doc_type"]:
+                            if sr.get("source_description") and tr.get("source_description"):
+                                if sr["source_description"].lower() == tr["source_description"].lower():
+                                    return True
+                            elif not sr.get("source_description") and not tr.get("source_description"):
+                                sd = sr.get("doc_label") or ""
+                                td = tr.get("doc_label") or ""
+                                if sd.lower() == td.lower():
+                                    return True
+                    return False
+
+                # Insert records that don't already exist
                 cust_copied = 0
                 for sr in source_reqs:
+                    if is_duplicate(sr):
+                        continue
                     _ccur.execute("""
                         INSERT INTO tax_return_requirements
                             (customer_id, tax_year, doc_type, doc_label, source_description, notes, is_required)
