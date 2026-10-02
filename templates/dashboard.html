@@ -5158,11 +5158,13 @@
         async function initBillingModule() {
             console.log("[BILLING MODULE] Initializing Billing Dashboard...");
 
-            // Default date inputs to today (Eastern Time)
+            // Default date inputs: Start date = beginning of current year (Eastern Time), End date = today (Eastern Time)
             const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // returns YYYY-MM-DD
+            const currentYear = todayET.split('-')[0];
+            const startOfYearET = `${currentYear}-01-01`;
             const startInput = document.getElementById('billingStartDateInput');
             const endInput = document.getElementById('billingEndDateInput');
-            if (startInput && !startInput.value) startInput.value = todayET;
+            if (startInput && !startInput.value) startInput.value = startOfYearET;
             if (endInput && !endInput.value) endInput.value = todayET;
 
             switchBillingSubTab('invoices');
@@ -5628,9 +5630,13 @@ function filterBillingTable(resetPages = true) {
             const endInput = document.getElementById('billingEndDateInput');
             const searchInput = document.getElementById('billingSearchInput');
 
+            const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            const currentYear = todayET.split('-')[0];
+            const startOfYearET = `${currentYear}-01-01`;
+
             if (statusSelect) statusSelect.value = 'ALL';
-            if (startInput) startInput.value = '';
-            if (endInput) endInput.value = '';
+            if (startInput) startInput.value = startOfYearET;
+            if (endInput) endInput.value = todayET;
             if (searchInput) searchInput.value = '';
 
             filterBillingTable(true);
