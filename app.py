@@ -1257,9 +1257,11 @@ def init_tax_team_table():
                 CREATE TABLE IF NOT EXISTS "TaxTeam" (
                     "id"        BIGSERIAL PRIMARY KEY,
                     "name"      VARCHAR(200) UNIQUE NOT NULL,
+                    "email"     VARCHAR(255),
                     "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                ALTER TABLE "TaxTeam" ADD COLUMN IF NOT EXISTS "email" VARCHAR(255);
             """)
             conn.commit()
             try:
@@ -4124,7 +4126,7 @@ async def get_tax_team(request: Request):
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT id, name, "createdAt" as created_at FROM "TaxTeam" ORDER BY name ASC;')
+            cur.execute('SELECT id, name, email, "createdAt" as created_at FROM "TaxTeam" ORDER BY name ASC;')
             rows = cur.fetchall() or []
             return {"team": [dict(r) for r in rows]}
     except Exception as e:
@@ -4141,13 +4143,14 @@ async def create_tax_team_member(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
     name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip() or None
     if not name:
         raise HTTPException(status_code=400, detail="Tax Prep Name is required")
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('INSERT INTO "TaxTeam" ("name") VALUES (%s) RETURNING id, name, "createdAt" as created_at;', (name,))
+            cur.execute('INSERT INTO "TaxTeam" ("name", "email") VALUES (%s, %s) RETURNING id, name, email, "createdAt" as created_at;', (name, email))
             new_row = dict(cur.fetchone())
             conn.commit()
             return new_row
@@ -4165,6 +4168,7 @@ async def update_tax_team_member(team_id: int, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
     name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip() or None
     if not name:
         raise HTTPException(status_code=400, detail="Tax Prep Name is required")
     conn = None
@@ -4175,7 +4179,7 @@ async def update_tax_team_member(team_id: int, request: Request):
             old_row = cur.fetchone()
             old_name = old_row["name"] if old_row else None
 
-            cur.execute('UPDATE "TaxTeam" SET "name" = %s, "updatedAt" = CURRENT_TIMESTAMP WHERE id = %s RETURNING id, name;', (name, team_id))
+            cur.execute('UPDATE "TaxTeam" SET "name" = %s, "email" = %s, "updatedAt" = CURRENT_TIMESTAMP WHERE id = %s RETURNING id, name, email;', (name, email, team_id))
             updated_row = cur.fetchone()
             if not updated_row:
                 raise HTTPException(status_code=404, detail="Tax Team member not found")

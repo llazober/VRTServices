@@ -12029,19 +12029,22 @@ function filterBillingTable(resetPages = true) {
             const tbody = document.getElementById('taxTeamTableBody');
             if (!tbody) return;
             if (currentTaxTeamList.length === 0) {
-                tbody.innerHTML = '<tr><td colSpan="3" style="padding: 24px; text-align: center; color: #64748b;">No Tax Prep Team members added yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colSpan="4" style="padding: 24px; text-align: center; color: #64748b;">No Tax Prep Team members added yet.</td></tr>';
                 return;
             }
-            tbody.innerHTML = currentTaxTeamList.map(m => `
+            tbody.innerHTML = currentTaxTeamList.map(m => {
+                const emailStr = m.email ? m.email.replace(/'/g, "\\'") : '';
+                return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 10px 18px; font-family: monospace; color: #facc15; font-weight: 700;">#${m.id}</td>
                     <td style="padding: 10px 18px; font-weight: 700; color: #fff;">👤 ${m.name}</td>
+                    <td style="padding: 10px 18px; color: #38bdf8; font-size: 0.84rem;">${m.email ? '✉️ ' + m.email : '<span style="color: #64748b;">—</span>'}</td>
                     <td style="padding: 10px 18px; text-align: right;">
-                        <button type="button" onclick="editTaxTeamMember(event, ${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 6px;">✏️ EDIT</button>
+                        <button type="button" onclick="editTaxTeamMember(event, ${m.id}, '${m.name.replace(/'/g, "\\'")}', '${emailStr}')" style="padding: 4px 10px; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 6px;">✏️ EDIT</button>
                         <button type="button" onclick="deleteTaxTeamMember(event, ${m.id}, '${m.name.replace(/'/g, "\\'")}')" style="padding: 4px 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">🗑️ DEL</button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         function populateCustomerTaxPrepDropdowns() {
@@ -12079,29 +12082,34 @@ function filterBillingTable(resetPages = true) {
         function resetTaxTeamForm() {
             const idEl = document.getElementById('taxTeamFormId');
             const nameEl = document.getElementById('taxTeamFormName');
+            const emailEl = document.getElementById('taxTeamFormEmail');
             const cancelBtn = document.getElementById('taxTeamCancelEditBtn');
             const subBtn = document.getElementById('taxTeamSubmitBtn');
             if (idEl) idEl.value = '';
             if (nameEl) nameEl.value = '';
+            if (emailEl) emailEl.value = '';
             if (cancelBtn) cancelBtn.style.display = 'none';
             if (subBtn) subBtn.textContent = 'Add Member';
         }
 
-        function editTaxTeamMember(arg1, arg2, arg3) {
-            let event = null, id = arg1, name = arg2;
+        function editTaxTeamMember(arg1, arg2, arg3, arg4) {
+            let event = null, id = arg1, name = arg2, email = arg3;
             if (arg1 && arg1.preventDefault) {
                 event = arg1;
                 event.preventDefault();
                 event.stopPropagation();
                 id = arg2;
                 name = arg3;
+                email = arg4;
             }
             const idEl = document.getElementById('taxTeamFormId');
             const nameEl = document.getElementById('taxTeamFormName');
+            const emailEl = document.getElementById('taxTeamFormEmail');
             const cancelBtn = document.getElementById('taxTeamCancelEditBtn');
             const subBtn = document.getElementById('taxTeamSubmitBtn');
             if (idEl) idEl.value = id;
-            if (nameEl) nameEl.value = name;
+            if (nameEl) nameEl.value = name || '';
+            if (emailEl) emailEl.value = email || '';
             if (cancelBtn) cancelBtn.style.display = 'inline-block';
             if (subBtn) subBtn.textContent = 'Update Member';
             if (nameEl) {
@@ -12114,6 +12122,7 @@ function filterBillingTable(resetPages = true) {
             e.preventDefault();
             const id = document.getElementById('taxTeamFormId')?.value;
             const name = (document.getElementById('taxTeamFormName')?.value || '').trim();
+            const email = (document.getElementById('taxTeamFormEmail')?.value || '').trim();
             if (!name) return alert('Please enter member name.');
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/tax-team/${id}` : '/api/tax-team';
@@ -12121,7 +12130,7 @@ function filterBillingTable(resetPages = true) {
                 const res = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name })
+                    body: JSON.stringify({ name: name, email: email })
                 });
                 if (res.ok) {
                     resetTaxTeamForm();
@@ -13474,9 +13483,13 @@ function filterBillingTable(resetPages = true) {
                 <!-- Form to Add/Edit Member -->
                 <form id="taxTeamForm" onsubmit="saveTaxTeamMember(event)" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 14px; padding: 16px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
                     <input type="hidden" id="taxTeamFormId">
-                    <div style="flex: 1; min-width: 220px;">
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax Prep Team Member Name *</label>
+                    <div style="flex: 1; min-width: 180px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Tax Prep Member Name *</label>
                         <input type="text" id="taxTeamFormName" required placeholder="e.g. Mary, John, Sarah..." style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 9px 14px; font-size: 0.9rem; color: #fff; outline: none;">
+                    </div>
+                    <div style="flex: 1; min-width: 220px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Email Address</label>
+                        <input type="email" id="taxTeamFormEmail" placeholder="e.g. mary@vrtservices.com" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 9px 14px; font-size: 0.9rem; color: #fff; outline: none;">
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="button" id="taxTeamCancelEditBtn" onclick="resetTaxTeamForm()" style="display: none; padding: 9px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; font-weight: 700; border-radius: 10px; font-size: 0.82rem; cursor: pointer;">Cancel</button>
@@ -13491,11 +13504,12 @@ function filterBillingTable(resetPages = true) {
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: #94a3b8; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">
                                 <th style="padding: 12px 18px;">ID</th>
                                 <th style="padding: 12px 18px;">Tax Prep Name</th>
+                                <th style="padding: 12px 18px;">Email</th>
                                 <th style="padding: 12px 18px; text-align: right;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="taxTeamTableBody">
-                            <tr><td colSpan="3" style="padding: 24px; text-align: center; color: #94a3b8;">Loading Tax Prep Team members...</td></tr>
+                            <tr><td colSpan="4" style="padding: 24px; text-align: center; color: #94a3b8;">Loading Tax Prep Team members...</td></tr>
                         </tbody>
                     </table>
                 </div>
