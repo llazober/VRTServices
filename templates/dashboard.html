@@ -1317,11 +1317,11 @@
                         </div>
                         <div id="billingStartDateGroup" style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Start Date:</label>
-                            <input type="date" id="billingStartDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
+                            <input type="date" id="billingStartDateInput" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
                         <div id="billingEndDateGroup" style="display: flex; align-items: center; gap: 6px;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">End Date:</label>
-                            <input type="date" id="billingEndDateInput" oninput="filterBillingTable(true)" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
+                            <input type="date" id="billingEndDateInput" onchange="filterBillingTable(true)" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 6px 10px; font-size: 0.82rem; color: #fff; outline: none;">
                         </div>
                         <input type="text" id="billingSearchInput" onkeyup="filterBillingTable()" placeholder="Search invoice # or client..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 7px 14px; font-size: 0.85rem; color: #fff; outline: none; width: 190px;">
                         <button type="button" onclick="resetBillingFilters()" style="padding: 7px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer;" title="Reset all filters">Clear Filters</button>
@@ -5561,18 +5561,19 @@
                         (inv.email || '').toLowerCase().includes(query);
                     if (!matchesQuery) return false;
 
-                    // 2. Issue Date Range Filter
+                    // 2. Issue Date Range Filter (always applied, independent of status)
                     const issueDateNorm = normalizeDateToYYYYMMDD(inv.issue_date);
-                    if (startDateVal && issueDateNorm < startDateVal) return false;
-                    if (endDateVal && issueDateNorm > endDateVal) return false;
+                    if (startDateVal && issueDateNorm && issueDateNorm < startDateVal) return false;
+                    if (endDateVal && issueDateNorm && issueDateNorm > endDateVal) return false;
 
                     // 3. Status Filter
+                    if (selectedStatus === 'ALL') return true;
+
                     const total = parseFloat(inv.total_amount || 0);
                     const paid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? total : 0));
                     const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
                     const st = (inv.status || '').toUpperCase();
 
-                    if (selectedStatus === 'ALL') return true;
                     if (selectedStatus === 'PARTIAL') {
                         return st === 'PARTIAL' || st === 'PARTIALLY_PAID' || (paid > 0 && bal > 0 && st !== 'PAID');
                     }
