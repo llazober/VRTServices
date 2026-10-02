@@ -5217,6 +5217,122 @@
             }
         }
 
+        function makeCustomerSelectSearchable(selectId, placeholderText = "🔍 Type customer name, last name, or CUST #...") {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            if (select.getAttribute('data-combobox-initialized')) {
+                refreshSearchableCombobox(selectId);
+                return;
+            }
+
+            // Create Wrapper
+            const wrapper = document.createElement('div');
+            wrapper.id = 'wrapper_' + selectId;
+            wrapper.className = 'searchable-combobox-wrapper';
+            wrapper.style.cssText = 'position: relative; width: 100%;';
+            select.parentNode.insertBefore(wrapper, select);
+
+            // Create Input Field
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'searchInput_' + selectId;
+            input.className = 'searchable-combobox-input';
+            input.placeholder = placeholderText;
+            input.autocomplete = 'off';
+            input.style.cssText = 'width: 100%; background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #fff; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+            // Create Floating Results List
+            const dropdown = document.createElement('div');
+            dropdown.id = 'dropdownList_' + selectId;
+            dropdown.className = 'searchable-combobox-dropdown';
+            dropdown.style.cssText = 'display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #0f172a; border: 1px solid var(--border-color); border-radius: 12px; z-index: 10000; box-shadow: 0 15px 35px rgba(0,0,0,0.85); padding: 4px;';
+
+            wrapper.appendChild(input);
+            wrapper.appendChild(select);
+            wrapper.appendChild(dropdown);
+
+            select.style.display = 'none';
+            select.setAttribute('data-combobox-initialized', 'true');
+
+            function renderResults(filterQuery = '') {
+                const query = filterQuery.toLowerCase().trim();
+                const options = Array.from(select.options).filter(opt => opt.value !== '');
+
+                const filtered = options.filter(opt => {
+                    const text = opt.textContent.toLowerCase();
+                    return !query || text.includes(query);
+                });
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div style="padding: 10px 14px; color: #94a3b8; font-size: 0.82rem; text-align: center;">No matching clients found</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(opt => {
+                        const isSelected = String(opt.value) === String(select.value);
+                        const bg = isSelected ? 'rgba(56, 189, 248, 0.2)' : 'transparent';
+                        const color = isSelected ? '#38bdf8' : '#f1f5f9';
+                        return `<div class="combobox-option-item" data-value="${opt.value}" style="padding: 9px 12px; border-radius: 8px; cursor: pointer; color: ${color}; background: ${bg}; font-size: 0.86rem; transition: background 0.15s; margin-bottom: 2px;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='${bg}'">
+                            ${opt.textContent}
+                        </div>`;
+                    }).join('');
+
+                    dropdown.querySelectorAll('.combobox-option-item').forEach(item => {
+                        item.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const val = item.getAttribute('data-value');
+                            select.value = val;
+                            const selectedOpt = Array.from(select.options).find(o => String(o.value) === String(val));
+                            input.value = selectedOpt ? selectedOpt.textContent : '';
+                            dropdown.style.display = 'none';
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                    });
+                }
+                dropdown.style.display = 'block';
+            }
+
+            input.addEventListener('focus', () => {
+                input.style.borderColor = '#38bdf8';
+                input.style.boxShadow = '0 0 10px rgba(56, 189, 248, 0.2)';
+                renderResults(input.value);
+            });
+
+            input.addEventListener('blur', () => {
+                input.style.borderColor = 'var(--border-color)';
+                input.style.boxShadow = 'none';
+            });
+
+            input.addEventListener('input', () => {
+                renderResults(input.value);
+                if (input.value.trim() === '') {
+                    select.value = '';
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!wrapper.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+
+            refreshSearchableCombobox(selectId);
+        }
+
+        function refreshSearchableCombobox(selectId) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const input = document.getElementById('searchInput_' + selectId);
+            if (!input) return;
+
+            const selectedOpt = Array.from(select.options).find(o => String(o.value) === String(select.value));
+            if (selectedOpt && selectedOpt.value) {
+                input.value = selectedOpt.textContent;
+            } else {
+                input.value = '';
+            }
+        }
+
         async function populateBillingCustomerDropdowns(selectedCustomerId = null) {
             try {
                 const res = await fetch('/api/customers?exclude_system=true');
@@ -5240,12 +5356,16 @@
                     
                     const schedSelect = document.getElementById('scheduleCustomerSelect');
                     const invSelect = document.getElementById('invoiceCustomerSelect');
-                    if (schedSelect) schedSelect.innerHTML = optionsHtml;
+                    if (schedSelect) {
+                        schedSelect.innerHTML = optionsHtml;
+                        makeCustomerSelectSearchable('scheduleCustomerSelect');
+                    }
                     if (invSelect) {
                         invSelect.innerHTML = optionsHtml;
                         if (selectedCustomerId) {
                             invSelect.value = String(selectedCustomerId);
                         }
+                        makeCustomerSelectSearchable('invoiceCustomerSelect');
                         updateInvoiceAmountFromCustomerSelect();
                     }
                 }
@@ -12560,6 +12680,8 @@ function filterBillingTable(resetPages = true) {
                     `<option value="${c.id}" ${preselectedCid && String(preselectedCid) === String(c.id) ? 'selected' : ''}>${c.legal_name} (${c.custumer_number || 'No ID'}) [${c.customer_type || 'Business'}]</option>`
                 ).join('');
 
+                makeCustomerSelectSearchable('presetComplianceCustomerSelect');
+
                 modal.style.display = 'flex';
             } catch (err) {
                 console.error('Error opening preset compliance modal:', err);
@@ -12925,6 +13047,7 @@ function filterBillingTable(resetPages = true) {
                         if (preselectCustomerId) {
                             select.value = preselectCustomerId;
                         }
+                        makeCustomerSelectSearchable('esignCustomerSelect');
                     }
                 }
             } catch (err) {
