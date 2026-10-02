@@ -10620,7 +10620,7 @@ async def get_billing_overview(request: Request):
                 SELECT 
                     COALESCE(SUM(total_amount), 0) AS total_billed,
                     COALESCE(SUM(COALESCE(amount_paid, CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END)), 0) AS total_collected,
-                    COALESCE(SUM(CASE WHEN status NOT IN ('PAID', 'CANCELLED') THEN COALESCE(balance_due, total_amount) ELSE 0 END), 0) AS total_outstanding,
+                    COALESCE(SUM(CASE WHEN status NOT IN ('PAID', 'CANCELLED') THEN GREATEST(0, total_amount - COALESCE(amount_paid, 0)) ELSE 0 END), 0) AS total_outstanding,
                     COALESCE(SUM(CASE WHEN status = 'SENT' AND (due_date >= CURRENT_DATE OR due_date IS NULL) THEN total_amount ELSE 0 END), 0) AS total_sent,
                     COALESCE(SUM(CASE WHEN status IN ('PARTIAL', 'PARTIALLY_PAID') OR (amount_paid > 0 AND amount_paid < total_amount AND status != 'PAID') THEN total_amount ELSE 0 END), 0) AS total_partial,
                     COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS total_paid,
@@ -10640,10 +10640,10 @@ async def get_billing_overview(request: Request):
             cur.execute("""
                 SELECT 
                     COALESCE(SUM(billing_amount), 0) AS mrr,
-                    COUNT(*) AS active_subscribers,
+                    COUNT(DISTINCT customer_id) AS active_subscribers,
                     COUNT(*) AS active_schedules
                 FROM customer_billing_schedules 
-                WHERE status = 'Active';
+                WHERE LOWER(status) = 'active';
             """)
             sched_row = cur.fetchone()
             if sched_row:
@@ -10689,56 +10689,6 @@ async def list_billing_schedules(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn: conn.close()
-
-@app.get("/api/billing/overview")
-async def get_billing_overview(request: Request):
-    """Returns billing KPI summary stats: MRR, Active Subscribers, Total Collected, Outstanding Balance."""
-    check_billing_admin_access(request)
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            # 1. MRR & Active Subscribers
-            cur.execute("""
-                SELECT COALESCE(SUM(billing_amount), 0), COUNT(DISTINCT customer_id)
-                FROM customer_billing_schedules
-                WHERE status = 'Active' OR LOWER(status) = 'active';
-            """)
-            sched_row = cur.fetchone()
-            mrr = float(sched_row[0] or 0.0) if sched_row else 0.0
-            active_subscribers = int(sched_row[1] or 0) if sched_row else 0
-
-            # 2. Total Collected & Total Outstanding from invoices
-            cur.execute("""
-                SELECT 
-                    COALESCE(SUM(amount_paid), 0) AS total_collected,
-                    COALESCE(SUM(total_amount - amount_paid), 0) AS total_outstanding
-                FROM customer_invoices
-                WHERE status != 'CANCELLED';
-            """)
-            inv_row = cur.fetchone()
-            total_collected = float(inv_row[0] or 0.0) if inv_row else 0.0
-            total_outstanding = max(0.0, float(inv_row[1] or 0.0)) if inv_row else 0.0
-
-            return {
-                "status": "success",
-                "mrr": mrr,
-                "active_subscribers": active_subscribers,
-                "total_collected": total_collected,
-                "total_outstanding": total_outstanding
-            }
-    except Exception as e:
-        logger.error(f"[BILLING OVERVIEW ERROR]: {e}")
-        return {
-            "status": "error",
-            "mrr": 0.0,
-            "active_subscribers": 0,
-            "total_collected": 0.0,
-            "total_outstanding": 0.0
-        }
-    finally:
-        if conn:
-            conn.close()
 
 @app.post("/api/billing/schedules")
 async def create_billing_schedule(request: Request):
