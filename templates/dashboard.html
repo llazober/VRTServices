@@ -3749,7 +3749,7 @@
             <form onsubmit="submitCreateInvoice(event)" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Select Client / Customer *</label>
-                    <select id="invoiceCustomerSelect" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
+                    <select id="invoiceCustomerSelect" required onchange="updateInvoiceAmountFromCustomerSelect()" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: #fff; outline: none;">
                         <option value="">Loading customers...</option>
                     </select>
                 </div>
@@ -5222,6 +5222,8 @@
                         const type = (c.customer_type || '').trim().toLowerCase();
                         return num !== 'CUST-0000' && num !== 'CUT-0000' && num !== 'CUST-000' && type !== 'system';
                     });
+                    window.billingCustomersCache = customers;
+
                     const optionsHtml = '<option value="">-- Select Client / Customer --</option>' +
                         customers.map(c => {
                             const name = c.legal_name || c.display_name || ('Customer #' + c.id);
@@ -5238,10 +5240,29 @@
                         if (selectedCustomerId) {
                             invSelect.value = String(selectedCustomerId);
                         }
+                        updateInvoiceAmountFromCustomerSelect();
                     }
                 }
             } catch (err) {
                 console.error("[BILLING CUSTOMER DROPDOWN ERROR]:", err);
+            }
+        }
+
+        function updateInvoiceAmountFromCustomerSelect() {
+            const invSelect = document.getElementById('invoiceCustomerSelect');
+            const amtInput = document.getElementById('invoiceAmountInput');
+            if (!invSelect || !amtInput) return;
+            const custId = invSelect.value;
+            if (!custId) {
+                amtInput.value = '';
+                return;
+            }
+            const custs = window.billingCustomersCache || currentCustomerRecords || [];
+            const cust = custs.find(c => String(c.id) === String(custId));
+            if (cust && cust.tax_services_fee !== undefined && cust.tax_services_fee !== null && parseFloat(cust.tax_services_fee) > 0) {
+                amtInput.value = parseFloat(cust.tax_services_fee).toFixed(2);
+            } else {
+                amtInput.value = '';
             }
         }
 
