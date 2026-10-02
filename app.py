@@ -10690,6 +10690,56 @@ async def list_billing_schedules(request: Request):
     finally:
         if conn: conn.close()
 
+@app.get("/api/billing/overview")
+async def get_billing_overview(request: Request):
+    """Returns billing KPI summary stats: MRR, Active Subscribers, Total Collected, Outstanding Balance."""
+    check_billing_admin_access(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            # 1. MRR & Active Subscribers
+            cur.execute("""
+                SELECT COALESCE(SUM(billing_amount), 0), COUNT(DISTINCT customer_id)
+                FROM customer_billing_schedules
+                WHERE status = 'Active' OR LOWER(status) = 'active';
+            """)
+            sched_row = cur.fetchone()
+            mrr = float(sched_row[0] or 0.0) if sched_row else 0.0
+            active_subscribers = int(sched_row[1] or 0) if sched_row else 0
+
+            # 2. Total Collected & Total Outstanding from invoices
+            cur.execute("""
+                SELECT 
+                    COALESCE(SUM(amount_paid), 0) AS total_collected,
+                    COALESCE(SUM(total_amount - amount_paid), 0) AS total_outstanding
+                FROM customer_invoices
+                WHERE status != 'CANCELLED';
+            """)
+            inv_row = cur.fetchone()
+            total_collected = float(inv_row[0] or 0.0) if inv_row else 0.0
+            total_outstanding = max(0.0, float(inv_row[1] or 0.0)) if inv_row else 0.0
+
+            return {
+                "status": "success",
+                "mrr": mrr,
+                "active_subscribers": active_subscribers,
+                "total_collected": total_collected,
+                "total_outstanding": total_outstanding
+            }
+    except Exception as e:
+        logger.error(f"[BILLING OVERVIEW ERROR]: {e}")
+        return {
+            "status": "error",
+            "mrr": 0.0,
+            "active_subscribers": 0,
+            "total_collected": 0.0,
+            "total_outstanding": 0.0
+        }
+    finally:
+        if conn:
+            conn.close()
+
 @app.post("/api/billing/schedules")
 async def create_billing_schedule(request: Request):
     """Create a recurring monthly billing schedule for a customer."""
