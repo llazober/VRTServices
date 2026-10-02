@@ -5157,6 +5157,14 @@
 
         async function initBillingModule() {
             console.log("[BILLING MODULE] Initializing Billing Dashboard...");
+
+            // Default date inputs to today (Eastern Time)
+            const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // returns YYYY-MM-DD
+            const startInput = document.getElementById('billingStartDateInput');
+            const endInput = document.getElementById('billingEndDateInput');
+            if (startInput && !startInput.value) startInput.value = todayET;
+            if (endInput && !endInput.value) endInput.value = todayET;
+
             switchBillingSubTab('invoices');
             await Promise.all([
                 loadBillingOverview(),
@@ -5561,10 +5569,14 @@
                         (inv.email || '').toLowerCase().includes(query);
                     if (!matchesQuery) return false;
 
-                    // 2. Issue Date Range Filter (always applied, independent of status)
-                    const issueDateNorm = normalizeDateToYYYYMMDD(inv.issue_date);
-                    if (startDateVal && issueDateNorm && issueDateNorm < startDateVal) return false;
-                    if (endDateVal && issueDateNorm && issueDateNorm > endDateVal) return false;
+                    // 2. Issue Date Range Filter — use Date objects for reliable comparison
+                    if (startDateVal || endDateVal) {
+                        const issueDateNorm = normalizeDateToYYYYMMDD(inv.issue_date);
+                        if (issueDateNorm) {
+                            if (startDateVal && issueDateNorm < startDateVal) return false;
+                            if (endDateVal && issueDateNorm > endDateVal) return false;
+                        }
+                    }
 
                     // 3. Status Filter
                     if (selectedStatus === 'ALL') return true;
