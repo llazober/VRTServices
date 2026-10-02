@@ -5543,7 +5543,33 @@
             }
         }
 
-        function filterBillingTable(resetPages = true) {
+                function getEffectiveInvoiceStatus(inv) {
+            if (!inv) return 'DRAFT';
+            const st = (inv.status || '').toUpperCase();
+            if (st === 'CANCELLED') return 'CANCELLED';
+
+            const total = parseFloat(inv.total_amount || 0);
+            const paid = parseFloat(inv.amount_paid || (st === 'PAID' ? total : 0));
+            const bal = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, total - paid);
+
+            if (st === 'PAID' || (bal <= 0 && paid > 0 && total > 0)) {
+                return 'PAID';
+            }
+            if (st === 'PARTIALLY_PAID' || st === 'PARTIAL' || (paid > 0 && bal > 0)) {
+                return 'PARTIAL';
+            }
+
+            const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            if (st === 'OVERDUE' || (st === 'SENT' && inv.due_date && inv.due_date < todayStr)) {
+                return 'OVERDUE';
+            }
+            if (st === 'SENT') {
+                return 'SENT';
+            }
+            return st || 'DRAFT';
+        }
+
+function filterBillingTable(resetPages = true) {
             if (resetPages) {
                 billingInvoicesCurrentPage = 1;
                 billingSchedulesCurrentPage = 1;
@@ -5576,22 +5602,12 @@
                         if (endDateVal && issueDate > endDateVal) return false;
                     }
 
-                    // 3. Status Filter - strict explicit matching per status
-                    if (selectedStatus === 'ALL') return true;
-
-                    const invStatus = (inv.status || '').toUpperCase();
-                    const total = parseFloat(inv.total_amount) || 0;
-                    const paid  = parseFloat(inv.amount_paid)  || 0;
-                    const bal   = Math.max(0, total - paid);
-
-                    if (selectedStatus === 'DRAFT')     return invStatus === 'DRAFT';
-                    if (selectedStatus === 'CANCELLED') return invStatus === 'CANCELLED';
-                    if (selectedStatus === 'PAID')      return invStatus === 'PAID' || (paid > 0 && bal <= 0);
-                    if (selectedStatus === 'PARTIAL')   return invStatus === 'PARTIAL' || invStatus === 'PARTIALLY_PAID' || (paid > 0 && bal > 0 && invStatus !== 'PAID');
-                    if (selectedStatus === 'SENT')      return invStatus === 'SENT' && (!inv.due_date || inv.due_date >= todayStr);
-                    if (selectedStatus === 'OVERDUE')   return invStatus === 'OVERDUE' || (invStatus === 'SENT' && inv.due_date && inv.due_date < todayStr);
-
-                    return invStatus === selectedStatus;
+                    // 3. Status Filter - strict matching on effective status
+                    if (selectedStatus !== 'ALL') {
+                        const effStatus = getEffectiveInvoiceStatus(inv);
+                        if (effStatus !== selectedStatus) return false;
+                    }
+                    return true;
                 });
 
                 renderSingleInvoiceSummaryCard(filtered, selectedStatus, startDateVal, endDateVal);
@@ -5662,20 +5678,19 @@
                 const amtPaid = parseFloat(inv.amount_paid || (inv.status === 'PAID' ? totalAmt : 0));
                 const balDue = inv.balance_due !== undefined ? parseFloat(inv.balance_due) : Math.max(0, totalAmt - amtPaid);
 
+                const effStatus = getEffectiveInvoiceStatus(inv);
                 let badgeStyle = "background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);";
-                let statusLabel = inv.status;
+                let statusLabel = effStatus;
 
-                if (inv.status === 'PAID' || (balDue <= 0 && amtPaid > 0)) {
+                if (effStatus === 'PAID') {
                     badgeStyle = "background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);";
-                    statusLabel = 'PAID';
-                } else if (inv.status === 'PARTIALLY_PAID' || inv.status === 'PARTIAL' || (amtPaid > 0 && balDue > 0)) {
+                } else if (effStatus === 'PARTIAL') {
                     badgeStyle = "background: rgba(245, 158, 11, 0.18); color: #facc15; border: 1px solid rgba(245, 158, 11, 0.45);";
-                    statusLabel = 'PARTIAL';
-                } else if (inv.status === 'SENT') {
+                } else if (effStatus === 'SENT') {
                     badgeStyle = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);";
-                } else if (inv.status === 'OVERDUE') {
+                } else if (effStatus === 'OVERDUE') {
                     badgeStyle = "background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);";
-                } else if (inv.status === 'CANCELLED') {
+                } else if (effStatus === 'CANCELLED') {
                     badgeStyle = "background: rgba(100, 116, 139, 0.2); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3);";
                 }
 
@@ -5846,29 +5861,7 @@
             document.querySelectorAll('body > .schedule-action-dropdown-menu').forEach(m => m.remove());
         }
 
-        function filterBillingTable(resetPages = true) {
-            if (resetPages) {
-                billingInvoicesCurrentPage = 1;
-                billingSchedulesCurrentPage = 1;
-            }
-            const input = document.getElementById('billingSearchInput');
-            const query = (input ? input.value : '').toLowerCase().trim();
-            if (billingActiveSubTab === 'invoices') {
-                const filtered = billingAllInvoices.filter(inv => 
-                    (inv.invoice_number || '').toLowerCase().includes(query) ||
-                    (inv.legal_name || '').toLowerCase().includes(query) ||
-                    (inv.description || '').toLowerCase().includes(query)
-                );
-                renderBillingInvoicesTable(filtered);
-            } else {
-                const filtered = billingAllSchedules.filter(s => 
-                    (s.legal_name || '').toLowerCase().includes(query) ||
-                    (s.custumer_number || '').toLowerCase().includes(query) ||
-                    (s.description || '').toLowerCase().includes(query)
-                );
-                renderBillingSchedulesTable(filtered);
-            }
-        }
+
 
         // --- Modals Control Functions ---
         function openCreateScheduleModal() {
