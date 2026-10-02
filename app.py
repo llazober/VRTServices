@@ -14515,25 +14515,35 @@ async def copy_tax_requirements_from_year(request: Request):
                 FROM tax_return_requirements
                 WHERE customer_id = %s AND tax_year = %s;
             """, (customer_id, to_year))
-            target_reqs = cur.fetchall()
+            target_reqs = [dict(tr) for tr in cur.fetchall()]
 
-            def is_duplicate(sr):
-                for tr in target_reqs:
+            def match_and_consume(sr):
+                # 1. Try exact match by source_description or doc_label
+                for i, tr in enumerate(target_reqs):
                     if tr["doc_type"] == sr["doc_type"]:
                         if sr.get("source_description") and tr.get("source_description"):
                             if sr["source_description"].lower() == tr["source_description"].lower():
+                                target_reqs.pop(i)
                                 return True
                         elif not sr.get("source_description") and not tr.get("source_description"):
                             sd = sr.get("doc_label") or ""
                             td = tr.get("doc_label") or ""
                             if sd.lower() == td.lower():
+                                target_reqs.pop(i)
                                 return True
+                
+                # 2. If no exact match, fallback to just matching by doc_type count
+                for i, tr in enumerate(target_reqs):
+                    if tr["doc_type"] == sr["doc_type"]:
+                        target_reqs.pop(i)
+                        return True
+                        
                 return False
 
             # 3. Copy records that don't already exist
             copied_count = 0
             for sr in source_reqs:
-                if is_duplicate(sr):
+                if match_and_consume(sr):
                     continue
                 cur.execute("""
                     INSERT INTO tax_return_requirements
@@ -14650,25 +14660,35 @@ async def bulk_copy_tax_requirements_from_year(request: Request):
                     FROM tax_return_requirements
                     WHERE customer_id = %s AND tax_year = %s;
                 """, (cid, to_year))
-                target_reqs = _ccur.fetchall()
+                target_reqs = [dict(tr) for tr in _ccur.fetchall()]
 
-                def is_duplicate(sr):
-                    for tr in target_reqs:
+                def match_and_consume(sr):
+                    # 1. Try exact match by source_description or doc_label
+                    for i, tr in enumerate(target_reqs):
                         if tr["doc_type"] == sr["doc_type"]:
                             if sr.get("source_description") and tr.get("source_description"):
                                 if sr["source_description"].lower() == tr["source_description"].lower():
+                                    target_reqs.pop(i)
                                     return True
                             elif not sr.get("source_description") and not tr.get("source_description"):
                                 sd = sr.get("doc_label") or ""
                                 td = tr.get("doc_label") or ""
                                 if sd.lower() == td.lower():
+                                    target_reqs.pop(i)
                                     return True
+                    
+                    # 2. If no exact match, fallback to just matching by doc_type count
+                    for i, tr in enumerate(target_reqs):
+                        if tr["doc_type"] == sr["doc_type"]:
+                            target_reqs.pop(i)
+                            return True
+                            
                     return False
 
                 # Insert records that don't already exist
                 cust_copied = 0
                 for sr in source_reqs:
-                    if is_duplicate(sr):
+                    if match_and_consume(sr):
                         continue
                     _ccur.execute("""
                         INSERT INTO tax_return_requirements
