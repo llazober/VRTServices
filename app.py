@@ -8288,48 +8288,6 @@ async def api_convert_file_to_pdf(request: Request):
     }
 
 
-@app.post("/api/storage/batch-convert-inbox")
-async def api_batch_convert_inbox(request: Request):
-    """Batch converts all non-PDF files in a folder prefix (e.g. Inbox/) to PDF."""
-    username = get_current_username(request)
-    if not username:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    data = await request.json()
-    prefix = (data.get("prefix") or "").strip()
-    if not prefix:
-        raise HTTPException(status_code=400, detail="Prefix parameter is required")
-
-    if not prefix.endswith("/"):
-        prefix += "/"
-
-    client, err = get_s3_client()
-    if not client:
-        raise HTTPException(status_code=400, detail=f"S3 client not configured: {err}")
-
-    bucket = os.environ.get("DO_SPACES_BUCKET") or DO_SPACES_BUCKET
-    res = client.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
-    contents = res.get("Contents", [])
-
-    converted_count = 0
-    converted_keys = []
-    for item in contents:
-        k = item["Key"]
-        filename = os.path.basename(k)
-        ext = os.path.splitext(filename)[1].lower()
-        if ext and ext != ".pdf" and not k.lower().endswith("/"):
-            pdf_k, raw_k = process_inbox_file_pdf_conversion(client, bucket, k)
-            if pdf_k:
-                converted_count += 1
-                converted_keys.append(pdf_k)
-
-    return {
-        "success": True,
-        "converted_count": converted_count,
-        "converted_keys": converted_keys,
-        "message": f"Converted {converted_count} file(s) to PDF in folder '{prefix}'"
-    }
-
 
 @app.post("/api/storage/merge-to-pdf")
 async def api_merge_images_to_pdf(request: Request):

@@ -8841,26 +8841,6 @@ function filterBillingTable(resetPages = true) {
             }
         }
 
-        async function batchConvertInboxToPdf() {
-            if (!currentStoragePrefix) return;
-            const folderName = currentStoragePrefix.split('/').filter(Boolean).pop() || 'folder';
-            if (!confirm(`Convert all non-PDF files in '${folderName}' to PDF?\n\nRaw original files will be moved into a 'Raw_Originals' subfolder.`)) return;
-
-            try {
-                if (typeof showToast === 'function') showToast(`Converting files in '${folderName}' to PDF...`, 'info');
-                const res = await fetch('/api/storage/batch-convert-inbox', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prefix: currentStoragePrefix })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Batch conversion failed');
-                if (typeof showToast === 'function') showToast(data.message || 'Batch PDF conversion complete!', 'success');
-                refreshCurrentStorageFolder();
-            } catch (err) {
-                alert('Batch PDF Conversion Error: ' + err.message);
-            }
-        }
 
         async function mergeSelectedStorageImagesToPdf() {
             const checkedBoxes = Array.from(document.querySelectorAll('.storage-item-select-chk:checked'));
@@ -11593,7 +11573,6 @@ function filterBillingTable(resetPages = true) {
                 <button id="storageMergePdfBtn" onclick="mergeSelectedStorageImagesToPdf()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Merge checked image files into 1 PDF document">📑 Merge Selected (0) -> PDF</button>
                 <button id="storageBatchMoveBtn" onclick="moveSelectedStorageFiles()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Move selected files to another directory">🚚 Move Selected (0)</button>
                 <button id="storageBatchTaxTrackBtn" onclick="addSelectedToTaxTracker()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #ef4444, #f87171); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Add selected files to Tax Document Tracker">📑 Add to Tax Tracker (0)</button>
-                <button id="storageBatchConvertBtn" onclick="batchConvertInboxToPdf()" style="padding: 7px 14px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Convert all non-PDF files in this directory to PDF">📄 Convert Inbox to PDF</button>
                 <button onclick="reinitStorageFromModal()" style="padding: 7px 14px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">⚡ Re-Init Folders</button>
                 <button onclick="refreshCurrentStorageFolder()" style="padding: 7px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">🔄 Refresh</button>
                 <button id="storageSendEmailBtn" onclick="openSendCustomerEmailModal(event, currentStorageCustomerId)" style="padding: 7px 14px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Send Email Message to Customer">📧 Send Email</button>
