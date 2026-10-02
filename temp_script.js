@@ -2717,7 +2717,7 @@
                 taxYear = parseInt(yearMatch[1]);
             }
 
-            if (!confirm(`Add ${chks.length} file(s) to the Tax Document Tracker for Tax Year ${taxYear}? (Duplicates will be skipped)`)) return;
+            if (!await showCustomConfirm(`Add ${chks.length} file(s) to the Tax Document Tracker for Tax Year ${taxYear}? (Duplicates will be skipped)`)) return;
 
             let existingReqs = [];
             try {
@@ -2774,6 +2774,9 @@
                         })
                     });
                     const createData = await createRes.json();
+                    if (!createRes.ok) {
+                        throw new Error(createData.detail || 'Failed to add requirement to tracker.');
+                    }
                     
                     if (createRes.ok && createData.requirement && createData.requirement.id) {
                         await fetch('/api/tax-requirements/' + createData.requirement.id, {
@@ -2785,6 +2788,7 @@
                     }
                 } catch (err) {
                     console.error('Error adding to tax tracker:', err);
+                    alert(`Error adding ${originalName}: ${err.message}`);
                 }
             }
             
