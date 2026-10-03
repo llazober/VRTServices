@@ -10965,6 +10965,9 @@ function filterBillingTable(resetPages = true) {
                 setCheckstepState('step_tax_efile', steps.tax_efile);
                 setCheckstepState('step_tax_accepted', steps.tax_accepted);
 
+                const topPrepCb = document.getElementById('top_step_tax_preparation');
+                if (topPrepCb) topPrepCb.checked = !!steps.tax_preparation;
+
                 const taxNotesInput = document.getElementById('checklistTaxNotesInput');
                 if (taxNotesInput) taxNotesInput.value = data.tax_notes || '';
             } else {
@@ -10981,6 +10984,9 @@ function filterBillingTable(resetPages = true) {
                 const notesInput = document.getElementById('checklistNotesInput');
                 if (notesInput) notesInput.value = data.notes || '';
             }
+
+            const assignedUserIdSelect = document.getElementById('checklistModalAssignedUserId');
+            if (assignedUserIdSelect) assignedUserIdSelect.value = data.assigned_user_id || '';
         }
 
         function populateChecklistPeriodDropdown(data) {
@@ -11041,6 +11047,28 @@ function filterBillingTable(resetPages = true) {
                 } else {
                     card.style.background = 'rgba(255, 255, 255, 0.02)';
                     card.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }
+            }
+        }
+
+        async function assignTaxPrepFromChecklist(userId) {
+            if (!currentChecklistCustomerId) return;
+            try {
+                const res = await fetch(`/api/customers/${currentChecklistCustomerId}/assign-tax-prep`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assigned_user_id: userId })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to assign tax prep');
+                
+                // Keep the UI synced
+                if (typeof searchCustomers === 'function') searchCustomers(false);
+            } catch (err) {
+                alert(err.message);
+                // Revert the dropdown on error
+                if (typeof loadCustomerChecklist === 'function') {
+                    loadCustomerChecklist(currentChecklistCustomerId, currentChecklistPeriod);
                 }
             }
         }
@@ -11957,6 +11985,19 @@ function filterBillingTable(resetPages = true) {
 
             <!-- Tax Section -->
             <div id="checklistTaxSection" style="display: none; flex-direction: column; gap: 12px;">
+                <div style="background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 12px; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #bae6fd;">Tax Prep Name:</label>
+                        <select id="checklistModalAssignedUserId" onchange="assignTaxPrepFromChecklist(this.value)" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 8px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer; min-width: 140px;">
+                            <option value="">-- Unassigned --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="top_step_tax_preparation" onchange="toggleChecklistStep('tax_preparation', this.checked)" style="width: 16px; height: 16px; accent-color: #38bdf8; cursor: pointer;">
+                        <label for="top_step_tax_preparation" style="font-size: 0.8rem; font-weight: 700; color: #bae6fd; cursor: pointer;">Preparation</label>
+                    </div>
+                </div>
+                
                 <!-- Tax Step 1 -->
                 <div id="step_tax_docs_requested_card" style="padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 14px;">
@@ -12516,7 +12557,7 @@ function filterBillingTable(resetPages = true) {
         }
 
         function populateCustomerTaxPrepDropdowns() {
-            const ids = ['customerPageFormAssignedUserId', 'customerFormAssignedUserId', 'editCustModalAssignedUserId'];
+            const ids = ['customerPageFormAssignedUserId', 'customerFormAssignedUserId', 'editCustModalAssignedUserId', 'checklistModalAssignedUserId'];
             ids.forEach(id => {
                 const select = document.getElementById(id);
                 if (!select) return;

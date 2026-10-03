@@ -8634,6 +8634,7 @@ async def get_customer_checklist(customer_id: str, period: str = None, workflow_
             "customer_id": real_cust_id,
             "legal_name": cust.get("legal_name"),
             "customer_type": cust.get("customer_type"),
+            "assigned_user_id": cust.get("assigned_user_id") or "",
             "period": effective_period,
             "is_in_process": effective_period == in_process_slug,
             "in_process_period": in_process_slug,
@@ -8729,6 +8730,12 @@ async def toggle_customer_checklist_step(customer_id: str, request: Request):
                         SET accountant_reviewed = %s, updated_at = CURRENT_TIMESTAMP
                         WHERE customer_id = %s;
                     """, (val, real_cust_id))
+                elif step_key == "tax_preparation":
+                    cur.execute(f"""
+                        UPDATE customer_task_checklist
+                        SET {col_name} = %s, tax_organizer = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE customer_id = %s AND (period = %s OR period = %s OR period = 'in_process');
+                    """, (val, val, real_cust_id, period, old_in_process_slug))
                 else:
                     cur.execute(f"""
                         UPDATE customer_task_checklist
@@ -8762,6 +8769,49 @@ async def toggle_customer_checklist_step(customer_id: str, request: Request):
         raise he
     except Exception as e:
         print(f"Error toggling customer checklist step: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/customers/{customer_id}/assign-tax-prep")
+async def assign_customer_tax_prep(customer_id: str, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+    assigned_user_id = (data.get("assigned_user_id") or "").strip() or None
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cid_str = str(customer_id).strip()
+            if cid_str.isdigit():
+                cur.execute("SELECT id FROM customer WHERE id = %s OR custumer_number = %s;", (int(cid_str), cid_str))
+            else:
+                cur.execute("SELECT id FROM customer WHERE custumer_number = %s OR display_name = %s OR legal_name = %s;", (cid_str, cid_str, cid_str))
+            cust_row = cur.fetchone()
+            if not cust_row:
+                raise HTTPException(status_code=404, detail="Customer not found")
+            real_cust_id = cust_row[0]
+
+            cur.execute("""
+                UPDATE customer
+                SET assigned_user_id = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (assigned_user_id, real_cust_id))
+
+            cur.execute("""
+                UPDATE compliance_calendar_events
+                SET assigned_tax_prep = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE customer_id = %s;
+            """, (assigned_user_id, real_cust_id))
+
+            conn.commit()
+            return {"success": True, "assigned_user_id": assigned_user_id}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
