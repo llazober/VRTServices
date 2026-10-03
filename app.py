@@ -15844,24 +15844,25 @@ async def websocket_chat_endpoint(websocket: WebSocket, username: str):
 
 @app.get("/api/chat/users")
 async def get_chat_users(request: Request):
-    conn = None
     conn_dlz = None
     try:
-        conn = get_db_connection()
-        conn_dlz = get_db_connection("datalazo")
+        username = get_current_username(request)
+        if not username:
+            return {"users": []}
+            
+        user = get_client_user(username)
+        if not user or not user.get('clientId'):
+            return {"users": []}
+            
+        client_id = user['clientId']
         
         users = set()
+        conn_dlz = get_db_connection("datalazo")
         
-        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            cur.execute("SELECT username FROM active_sessions")
-            for row in cur.fetchall():
-                if row['username']:
-                    users.add(row['username'])
-        
-        # Pull all CRM users so they are available for chat even if offline
+        # Pull ONLY CRM users belonging to the same tenant/clientId
         if conn_dlz:
             with conn_dlz.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur_dlz:
-                cur_dlz.execute('SELECT username FROM "ClientUser"')
+                cur_dlz.execute('SELECT username FROM "ClientUser" WHERE "clientId" = %s', (client_id,))
                 for row in cur_dlz.fetchall():
                     if row['username']:
                         users.add(row['username'])
@@ -15871,8 +15872,6 @@ async def get_chat_users(request: Request):
         print(f"Error fetching chat users: {e}")
         return {"users": []}
     finally:
-        if conn:
-            conn.close()
         if conn_dlz:
             conn_dlz.close()
 
