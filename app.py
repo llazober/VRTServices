@@ -15533,6 +15533,163 @@ async def send_tax_requirements_email(request: Request):
             conn.close()
 
 
+@app.get("/api/tax-preparation-workflow")
+async def get_tax_preparation_workflow(request: Request, tax_year: str = None):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not tax_year:
+        import datetime
+        tax_year = str(datetime.datetime.now().year - 1)
+        
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    c.id as customer_id,
+                    c.custumer_number,
+                    c.legal_name,
+                    c.assigned_user_id as assigned_tax_prep,
+                    chk.tax_docs_requested,
+                    chk.tax_docs_received,
+                    chk.tax_organizer,
+                    chk.tax_preparation,
+                    chk.tax_review,
+                    chk.tax_client_signature,
+                    chk.tax_efile,
+                    chk.tax_accepted,
+                    chk.updated_at
+                FROM customer c
+                LEFT JOIN customer_task_checklist chk 
+                    ON c.id = chk.customer_id AND chk.period = %s
+                WHERE LOWER(COALESCE(c.status, 'active')) = 'active'
+                  AND COALESCE(c.custumer_number, '') != 'CUST-0000'
+                ORDER BY c.legal_name ASC;
+            """, (tax_year,))
+            rows = cur.fetchall() or []
+            
+            # Format rows
+            results = []
+            for r in rows:
+                row = dict(r)
+                if row.get("updated_at"):
+                    row["updated_at"] = row["updated_at"].isoformat()
+                
+                # Convert bools properly
+                for k in ["tax_docs_requested", "tax_docs_received", "tax_organizer", "tax_preparation", "tax_review", "tax_client_signature", "tax_efile", "tax_accepted"]:
+                    row[k] = bool(row.get(k))
+                    
+                results.append(row)
+            return {"success": True, "data": results}
+    except Exception as e:
+        print(f"Error getting tax prep workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/tax-preparation-workflow/{customer_id}/toggle-step")
+async def tax_prep_workflow_toggle(customer_id: int, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    data = await request.json()
+    tax_year = (data.get("tax_year") or "").strip()
+    action = data.get("action")
+    
+    if not tax_year or not action:
+        raise HTTPException(status_code=400, detail="tax_year and action are required")
+        
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Ensure row exists
+            cur.execute("""
+                INSERT INTO customer_task_checklist (customer_id, period)
+                VALUES (%s, %s)
+                ON CONFLICT (customer_id, period) DO NOTHING;
+            """, (customer_id, tax_year))
+            
+            if action == "complete_in_progress":
+                cur.execute("""
+                    UPDATE customer_task_checklist 
+                    SET tax_review = TRUE, updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = %s AND period = %s
+                """, (customer_id, tax_year))
+            elif action == "revert_in_progress":
+                cur.execute("""
+                    UPDATE customer_task_checklist 
+                    SET tax_review = FALSE, updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = %s AND period = %s
+                """, (customer_id, tax_year))
+            elif action == "complete_review":
+                cur.execute("""
+                    UPDATE customer_task_checklist 
+                    SET tax_client_signature = TRUE, tax_efile = TRUE, tax_accepted = TRUE, updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = %s AND period = %s
+                """, (customer_id, tax_year))
+                
+                # Update Datatable Corporate Tax event to Completed
+                cur.execute("""
+                    SELECT id FROM compliance_calendar_events 
+                    WHERE customer_id = %s 
+                      AND LOWER(category) LIKE '%%corporate tax%%'
+                      AND status != 'Completed'
+                    ORDER BY due_date ASC LIMIT 1;
+                """, (customer_id,))
+                evt = cur.fetchone()
+                if evt:
+                    event_id = evt["id"]
+                    from app import update_compliance_event_status
+                    # We can't await it easily since we are in a sub-request, but we can do it directly in DB
+                    cur.execute("""
+                        UPDATE compliance_calendar_events
+                        SET status = 'Completed', completed_at = CURRENT_TIMESTAMP, completed_by = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s RETURNING category, due_date;
+                    """, (username, event_id))
+                    comp_row = cur.fetchone()
+                    if comp_row:
+                        try:
+                            # Insert into to_invoice
+                            cur.execute("SELECT legal_name, display_name FROM customer WHERE id = %s;", (customer_id,))
+                            c_rec = cur.fetchone()
+                            l_name = "Unknown Client"
+                            if c_rec:
+                                l_name = c_rec.get("legal_name") or c_rec.get("display_name") or l_name
+                                
+                            cur.execute("""
+                                INSERT INTO to_invoice (
+                                    compliance_event_id, customer_id, legal_name, category, due_date, date_completed, status
+                                )
+                                SELECT %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 'PENDING'
+                                WHERE NOT EXISTS (
+                                    SELECT 1 FROM to_invoice WHERE compliance_event_id = %s AND status = 'PENDING'
+                                );
+                            """, (event_id, customer_id, l_name, comp_row["category"] or "Corporate Tax", comp_row["due_date"], event_id))
+                        except Exception as to_inv_err:
+                            print(f"Failed to insert to_invoice on tax review complete: {to_inv_err}")
+                            
+            elif action == "revert_review":
+                cur.execute("""
+                    UPDATE customer_task_checklist 
+                    SET tax_client_signature = FALSE, tax_efile = FALSE, tax_accepted = FALSE, updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = %s AND period = %s
+                """, (customer_id, tax_year))
+                
+            conn.commit()
+            return {"success": True}
+    except Exception as e:
+        print(f"Error in tax_prep_workflow_toggle: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True, reload_includes=["*.py", "*.html", "*.js"])

@@ -903,6 +903,16 @@
             </a>
             {% endif %}
 
+            <button class="nav-item" onclick="openTaxPreparationCenter()" title="Tax Preparation Center">
+                <div class="icon-box" style="color: #f43f5e;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                    </svg>
+                </div>
+                <span class="nav-text" style="font-weight: 800;">Tax Preparation</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff;">PRO</span>
+            </button>
+
             <a href="/compliance" class="nav-item {% if active_tab == 'compliance' %}active{% endif %}" title="Compliance & Tax Calendar">
                 <div class="icon-box" style="color: #f59e0b;">
                     <svg viewBox="0 0 24 24">
@@ -14159,6 +14169,218 @@ function filterBillingTable(resetPages = true) {
                 }
             } catch(e) {
                 alert('Error regenerating backup codes: ' + e);
+            }
+        }
+    </script>
+
+    <!-- Tax Preparation Center Modal -->
+    <div id="taxPrepCenterModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #121624; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; width: 100%; max-width: 1200px; height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9); overflow: hidden;">
+            <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+                <div>
+                    <h3 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">📊 Tax Preparation Center</h3>
+                    <p style="font-size: 0.8rem; color: #94a3b8; margin: 4px 0 0 0;">Manage In-Progress and Under-Review Tax Returns</p>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #bae6fd;">Tax Year:</label>
+                        <select id="taxPrepCenterYearSelect" onchange="loadTaxPrepCenter()" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 0.85rem; outline: none; cursor: pointer;">
+                        </select>
+                    </div>
+                    <button onclick="closeTaxPreparationCenter()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 10px;">✕</button>
+                </div>
+            </div>
+
+            <div style="padding: 0; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.2); display: flex;">
+                <button id="taxPrepTab1" onclick="switchTaxPrepTab('progress')" style="flex: 1; padding: 14px; background: transparent; border: none; border-bottom: 3px solid #f43f5e; color: #fff; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;">
+                    📑 Tax Preparation In Progress
+                </button>
+                <button id="taxPrepTab2" onclick="switchTaxPrepTab('review')" style="flex: 1; padding: 14px; background: transparent; border: none; border-bottom: 3px solid transparent; color: #94a3b8; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;">
+                    ✅ Tax Preparation for Review
+                </button>
+            </div>
+            
+            <div style="padding: 12px 24px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end;">
+                <select id="taxPrepCenterStatusFilter" onchange="renderTaxPrepCenter()" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer;">
+                    <option value="Pending">Show Pending (Action Required)</option>
+                    <option value="Completed">Show Completed</option>
+                    <option value="All">Show All</option>
+                </select>
+            </div>
+
+            <div style="flex: 1; overflow-y: auto; padding: 20px 24px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <th style="padding: 12px; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Customer #</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Legal Name</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Assigned Tax Prep</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Last Updated</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taxPrepCenterTbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTaxPrepData = [];
+        let currentTaxPrepTab = 'progress';
+
+        function openTaxPreparationCenter() {
+            const modal = document.getElementById('taxPrepCenterModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            
+            // Setup years if empty
+            const yearSelect = document.getElementById('taxPrepCenterYearSelect');
+            if (yearSelect && yearSelect.options.length === 0) {
+                const currentYear = new Date().getFullYear();
+                const defaultYear = currentYear - 1;
+                for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+                    const opt = document.createElement('option');
+                    opt.value = y;
+                    opt.text = `Tax Year ${y}`;
+                    if (y === defaultYear) opt.selected = true;
+                    yearSelect.appendChild(opt);
+                }
+            }
+            
+            loadTaxPrepCenter();
+        }
+
+        function closeTaxPreparationCenter() {
+            const modal = document.getElementById('taxPrepCenterModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function switchTaxPrepTab(tab) {
+            currentTaxPrepTab = tab;
+            const tab1 = document.getElementById('taxPrepTab1');
+            const tab2 = document.getElementById('taxPrepTab2');
+            
+            if (tab === 'progress') {
+                tab1.style.borderBottomColor = '#f43f5e';
+                tab1.style.color = '#fff';
+                tab2.style.borderBottomColor = 'transparent';
+                tab2.style.color = '#94a3b8';
+            } else {
+                tab2.style.borderBottomColor = '#10b981';
+                tab2.style.color = '#fff';
+                tab1.style.borderBottomColor = 'transparent';
+                tab1.style.color = '#94a3b8';
+            }
+            
+            renderTaxPrepCenter();
+        }
+
+        async function loadTaxPrepCenter() {
+            const year = document.getElementById('taxPrepCenterYearSelect').value;
+            const tbody = document.getElementById('taxPrepCenterTbody');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #94a3b8;">Loading data...</td></tr>`;
+            
+            try {
+                const res = await fetch(`/api/tax-preparation-workflow?tax_year=${year}`);
+                const resData = await res.json();
+                if (!res.ok) throw new Error(resData.detail || 'Error loading tax prep data');
+                currentTaxPrepData = resData.data || [];
+                renderTaxPrepCenter();
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #f87171;">${err.message}</td></tr>`;
+            }
+        }
+
+        function renderTaxPrepCenter() {
+            const tbody = document.getElementById('taxPrepCenterTbody');
+            if (!tbody) return;
+            
+            const filterStatus = document.getElementById('taxPrepCenterStatusFilter').value;
+            let rowsHtml = '';
+            let filteredCount = 0;
+            
+            currentTaxPrepData.forEach(r => {
+                let show = false;
+                let isCompleted = false;
+                
+                if (currentTaxPrepTab === 'progress') {
+                    // Filter: Preparation = True
+                    if (r.tax_preparation) {
+                        isCompleted = r.tax_review === true;
+                        
+                        if (filterStatus === 'All') show = true;
+                        else if (filterStatus === 'Pending' && !isCompleted) show = true;
+                        else if (filterStatus === 'Completed' && isCompleted) show = true;
+                    }
+                } else if (currentTaxPrepTab === 'review') {
+                    // Filter: Review = True
+                    if (r.tax_review) {
+                        isCompleted = (r.tax_client_signature && r.tax_efile && r.tax_accepted);
+                        
+                        if (filterStatus === 'All') show = true;
+                        else if (filterStatus === 'Pending' && !isCompleted) show = true;
+                        else if (filterStatus === 'Completed' && isCompleted) show = true;
+                    }
+                }
+                
+                if (show) {
+                    filteredCount++;
+                    const updatedStr = r.updated_at ? new Date(r.updated_at).toLocaleString() : 'N/A';
+                    
+                    let actionBtn = '';
+                    if (currentTaxPrepTab === 'progress') {
+                        if (isCompleted) {
+                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'revert_in_progress')" style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">✅ COMPLETED</button>`;
+                        } else {
+                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_in_progress')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>`;
+                        }
+                    } else {
+                        if (isCompleted) {
+                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'revert_review')" style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">✅ COMPLETED</button>`;
+                        } else {
+                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_review')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>`;
+                        }
+                    }
+                    
+                    rowsHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 14px 12px; font-family: monospace; color: #94a3b8;">${r.custumer_number || ''}</td>
+                            <td style="padding: 14px 12px; font-weight: 700; color: #fff;">${r.legal_name || ''}</td>
+                            <td style="padding: 14px 12px; color: #c084fc; font-weight: 700; font-family: monospace;">${r.assigned_tax_prep || '-'}</td>
+                            <td style="padding: 14px 12px; color: #94a3b8; font-size: 0.8rem;">${updatedStr}</td>
+                            <td style="padding: 14px 12px; text-align: right;">
+                                <button onclick="openCustomerStorageModal(${r.customer_id})" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 8px;">📁 FOLDER</button>
+                                ${actionBtn}
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            if (filteredCount === 0) {
+                rowsHtml = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #94a3b8;">No records found for the current filter.</td></tr>`;
+            }
+            
+            tbody.innerHTML = rowsHtml;
+        }
+
+        async function toggleTaxPrepAction(customerId, action) {
+            const year = document.getElementById('taxPrepCenterYearSelect').value;
+            try {
+                const res = await fetch(`/api/tax-preparation-workflow/${customerId}/toggle-step`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tax_year: year, action: action })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Error toggling action');
+                
+                await loadTaxPrepCenter(); // Refresh list to get updated statuses
+            } catch (err) {
+                alert(err.message);
             }
         }
     </script>
