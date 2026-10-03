@@ -8472,14 +8472,22 @@ def format_period_label(period_str, workflow_mode="bookkeeping"):
 def get_in_process_period(cur=None, customer_id=None, workflow_mode="bookkeeping"):
     import datetime
     now = datetime.datetime.now()
-    first_of_current = now.replace(day=1)
-    prev_month_date = first_of_current - datetime.timedelta(days=1)
-    
-    prev_slug = prev_month_date.strftime("%Y-%m")
-    prev_label = format_period_label(prev_slug, workflow_mode)
-    
-    current_slug = now.strftime("%Y-%m")
-    current_label = format_period_label(current_slug, workflow_mode)
+    if workflow_mode == "tax":
+        # Tax workflows operate on a yearly basis (previous year)
+        prev_year = now.year - 1
+        curr_year = now.year
+        prev_slug = str(prev_year)
+        prev_label = f"Tax Year {prev_year}"
+        current_slug = str(curr_year)
+        current_label = f"Tax Year {curr_year}"
+    else:
+        # Bookkeeping workflows operate on a monthly basis (previous month)
+        first_of_current = now.replace(day=1)
+        prev_month_date = first_of_current - datetime.timedelta(days=1)
+        prev_slug = prev_month_date.strftime("%Y-%m")
+        prev_label = format_period_label(prev_slug, workflow_mode)
+        current_slug = now.strftime("%Y-%m")
+        current_label = format_period_label(current_slug, workflow_mode)
 
     if cur and customer_id:
         cur.execute("""
@@ -13884,7 +13892,7 @@ def recalculate_tax_docs_status(customer_id: int, tax_year: int):
                 missing = total_required - total_received
                 notes_text = f"{total_received}/{total_required} documents received; {missing} still missing. Tax year {tax_year}."
 
-            period = f"{tax_year}-01"  # Use January of the tax_year as the period key
+            period = str(tax_year)  # Use tax_year as the period key for tax workflow
             
             if all_complete:
                 cur.execute("""
@@ -14807,7 +14815,7 @@ async def get_tax_docs_status(customer_id: int, request: Request, tax_year: int 
                 SELECT tax_docs_status, tax_docs_all_complete, tax_notes, tax_req_email_sent_at
                 FROM customer_task_checklist
                 WHERE customer_id = %s AND period = %s;
-            """, (customer_id, f"{tax_year}-01"))
+            """, (customer_id, str(tax_year)))
             chk = dict(cur.fetchone() or {})
 
 
@@ -15370,7 +15378,7 @@ async def send_tax_requirements_email(request: Request):
                 try:
                     _uc = get_db_connection()
                     with _uc.cursor() as _ucur:
-                        period = f"{tax_year}-01"
+                        period = str(tax_year)
                         _ucur.execute("""
                             INSERT INTO customer_task_checklist
                                 (customer_id, period, tax_docs_requested, tax_req_email_sent_at, updated_at)

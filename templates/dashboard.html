@@ -11251,7 +11251,7 @@ function filterBillingTable(resetPages = true) {
 
                 // Refresh the workflow checklist to sync the Step 1 and Step 2 checkboxes
                 if (typeof loadCustomerChecklist === 'function') {
-                    loadCustomerChecklist(customerId, _taxDocCurrentYear + '-01');
+                    loadCustomerChecklist(customerId, _taxDocCurrentYear.toString());
                 }
             } catch (err) {
                 console.error('[TAX DOC TRACKING] Load error:', err);
