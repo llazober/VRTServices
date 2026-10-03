@@ -14331,12 +14331,12 @@ function filterBillingTable(resetPages = true) {
             
             currentTaxPrepData.forEach(r => {
                 // Apply Assignee filter first
-                if (filterAssignee !== 'All') {
-                    if (filterAssignee === 'Unassigned' && r.assigned_tax_prep) {
-                        return; // skip if we want unassigned but it has a preparer
-                    } else if (filterAssignee !== 'Unassigned' && r.assigned_tax_prep !== filterAssignee) {
-                        return; // skip if it doesn't match the selected preparer
-                    }
+                if (filterAssignee === 'All') {
+                    if (!r.assigned_tax_prep) return; // exclude unassigned from "All Preparers"
+                } else if (filterAssignee === 'Unassigned') {
+                    if (r.assigned_tax_prep) return; // skip if it has a preparer
+                } else {
+                    if (r.assigned_tax_prep !== filterAssignee) return; // skip if it doesn't match the selected preparer
                 }
                 
                 let show = false;
