@@ -14174,7 +14174,7 @@ function filterBillingTable(resetPages = true) {
     </script>
 
     <!-- Tax Preparation Center Modal -->
-    <div id="taxPrepCenterModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2147483647; align-items: center; justify-content: center; padding: 20px;">
+    <div id="taxPrepCenterModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2147483646; align-items: center; justify-content: center; padding: 20px;">
         <div style="background: #121624; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; width: 100%; max-width: 1200px; height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9); overflow: hidden;">
             <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
                 <div>
@@ -14297,6 +14297,7 @@ function filterBillingTable(resetPages = true) {
                 if (assigneeFilter) {
                     const currentSelection = assigneeFilter.value;
                     assigneeFilter.innerHTML = '<option value="All">All Preparers</option>';
+                    assigneeFilter.innerHTML += '<option value="Unassigned">Unassigned (No Preparer)</option>';
                     const uniqueAssignees = [...new Set(currentTaxPrepData.map(r => r.assigned_tax_prep).filter(a => a))].sort();
                     uniqueAssignees.forEach(a => {
                         const opt = document.createElement('option');
@@ -14304,7 +14305,9 @@ function filterBillingTable(resetPages = true) {
                         opt.text = a;
                         assigneeFilter.appendChild(opt);
                     });
-                    if (uniqueAssignees.includes(currentSelection)) {
+                    
+                    const validOptions = ['All', 'Unassigned', ...uniqueAssignees];
+                    if (validOptions.includes(currentSelection)) {
                         assigneeFilter.value = currentSelection;
                     }
                 }
@@ -14328,8 +14331,12 @@ function filterBillingTable(resetPages = true) {
             
             currentTaxPrepData.forEach(r => {
                 // Apply Assignee filter first
-                if (filterAssignee !== 'All' && r.assigned_tax_prep !== filterAssignee) {
-                    return; // skip
+                if (filterAssignee !== 'All') {
+                    if (filterAssignee === 'Unassigned' && r.assigned_tax_prep) {
+                        return; // skip if we want unassigned but it has a preparer
+                    } else if (filterAssignee !== 'Unassigned' && r.assigned_tax_prep !== filterAssignee) {
+                        return; // skip if it doesn't match the selected preparer
+                    }
                 }
                 
                 let show = false;
