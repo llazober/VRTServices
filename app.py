@@ -15844,20 +15844,37 @@ async def websocket_chat_endpoint(websocket: WebSocket, username: str):
 
 @app.get("/api/chat/users")
 async def get_chat_users(request: Request):
-    conn = get_db_connection()
+    conn = None
+    conn_dlz = None
     try:
+        conn = get_db_connection()
+        conn_dlz = get_db_connection("datalazo")
+        
+        users = set()
+        
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT username FROM active_sessions")
-            online_users = [row['username'] for row in cur.fetchall()]
-            
-            # Also get all system users so we can chat with offline people
-            # Fallback to CRM Users
-            # Wait, there's no explicit auth user table shown, maybe we just use active_sessions for MVP
-        return {"users": online_users}
+            for row in cur.fetchall():
+                if row['username']:
+                    users.add(row['username'])
+        
+        # Pull all CRM users so they are available for chat even if offline
+        if conn_dlz:
+            with conn_dlz.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur_dlz:
+                cur_dlz.execute('SELECT username FROM "ClientUser"')
+                for row in cur_dlz.fetchall():
+                    if row['username']:
+                        users.add(row['username'])
+                        
+        return {"users": sorted(list(users))}
     except Exception as e:
+        print(f"Error fetching chat users: {e}")
         return {"users": []}
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+        if conn_dlz:
+            conn_dlz.close()
 
 @app.get("/api/chat/history/{contact}")
 async def get_chat_history(contact: str, request: Request):

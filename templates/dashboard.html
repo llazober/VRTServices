@@ -14822,7 +14822,7 @@ function filterBillingTable(resetPages = true) {
 
     async function loadChatUsers() {
         try {
-            const res = await fetch('/api/chat/users');
+            const res = await fetch('/api/chat/users?t=' + Date.now());
             const data = await res.json();
             const sidebar = document.getElementById('chatSidebar');
             // Keep GLOBAL, clear rest
