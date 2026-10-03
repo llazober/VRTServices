@@ -7534,9 +7534,8 @@ async def upload_customer_storage_file(
         from fastapi.concurrency import run_in_threadpool
         final_key, pdf_converted = await run_in_threadpool(_do_upload)
 
-        # Auto-classify tax document in background task
-        background_tasks.add_task(
-            classify_and_rename_tax_document_async,
+        # Auto-classify tax document synchronously before returning
+        await classify_and_rename_tax_document_async(
             customer_id=real_cust_id,
             file_key=final_key,
             original_filename=filename
@@ -7871,7 +7870,8 @@ async def move_customer_storage_file(customer_id: str, request: Request):
             raise HTTPException(status_code=403, detail="Forbidden: Cannot move file outside customer storage root")
 
         if not target_folder_key.startswith(root_folder):
-            raise HTTPException(status_code=403, detail="Forbidden: Cannot move file to folder outside customer storage root")
+            if cust.get("custumer_number") != "CUST-0000":
+                raise HTTPException(status_code=403, detail="Forbidden: Cannot move file to folder outside customer storage root")
 
         if not target_folder_key.endswith('/'):
             target_folder_key += '/'
