@@ -11345,6 +11345,13 @@ function filterBillingTable(resetPages = true) {
                     });
                     const pData = await pRes.json();
                     if (!pRes.ok) throw new Error(pData.detail || pData.message || 'Failed to generate preview');
+                    if (!pData.html_body) {
+                        let msg = pData.message || 'Could not generate preview.';
+                        if (pData.errors && pData.errors.length > 0) {
+                            msg += '\n\n' + pData.errors.join('\n');
+                        }
+                        throw new Error(msg);
+                    }
                     
                     showEmailPreviewModal(pData.subject, pData.html_body, () => {
                         sendTaxRequirementsEmail(true);
