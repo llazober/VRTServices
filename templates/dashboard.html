@@ -14244,6 +14244,8 @@ function filterBillingTable(resetPages = true) {
     </div>
 
     <script>
+        const isTaxPrepAdminUser = ('{{ user_role }}' === 'ADMIN' || '{{ user_role }}' === 'SUPER_ADMIN');
+
         // Auto-open Tax Preparation Center if user is Tax_Prep
         {% if user_role == 'TAX_PREP' %}
         document.addEventListener('DOMContentLoaded', () => {
@@ -14387,11 +14389,13 @@ function filterBillingTable(resetPages = true) {
                     const updatedStr = r.updated_at ? new Date(r.updated_at).toLocaleString() : 'N/A';
                     
                     let actionBtn = '';
+                    const pendingBtnLocked = `<button style="padding: 6px 12px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); color: rgba(250, 204, 21, 0.5); border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: not-allowed;" title="Only ADMIN can complete this task">⏳ PENDING</button>`;
+                    
                     if (currentTaxPrepTab === 'progress') {
                         if (isCompleted) {
                             actionBtn = `<button style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: default;">✅ COMPLETED</button>`;
                         } else {
-                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_in_progress')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>`;
+                            actionBtn = isTaxPrepAdminUser ? `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_in_progress')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>` : pendingBtnLocked;
                         }
                     } else {
                         if (isCompleted) {
@@ -14400,9 +14404,10 @@ function filterBillingTable(resetPages = true) {
                                 <button style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: default;">✅ COMPLETED</button>
                             `;
                         } else {
+                            const pendingBtn = isTaxPrepAdminUser ? `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_review')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>` : pendingBtnLocked;
                             actionBtn = `
                                 <button onclick="toggleTaxPrepAction(${r.customer_id}, 'revert_in_progress')" style="padding: 6px 12px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #f43f5e; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 8px;">⏪ BACK</button>
-                                <button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_review')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>
+                                ${pendingBtn}
                             `;
                         }
                     }
