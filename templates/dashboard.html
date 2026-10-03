@@ -14367,13 +14367,13 @@ function filterBillingTable(resetPages = true) {
                     let actionBtn = '';
                     if (currentTaxPrepTab === 'progress') {
                         if (isCompleted) {
-                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'revert_in_progress')" style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">✅ COMPLETED</button>`;
+                            actionBtn = `<button style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: default;">✅ COMPLETED</button>`;
                         } else {
                             actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_in_progress')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>`;
                         }
                     } else {
                         if (isCompleted) {
-                            actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'revert_review')" style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">✅ COMPLETED</button>`;
+                            actionBtn = `<button style="padding: 6px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: default;">✅ COMPLETED</button>`;
                         } else {
                             actionBtn = `<button onclick="toggleTaxPrepAction(${r.customer_id}, 'complete_review')" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #facc15; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">⏳ PENDING</button>`;
                         }
@@ -14402,6 +14402,15 @@ function filterBillingTable(resetPages = true) {
         }
 
         async function toggleTaxPrepAction(customerId, action) {
+            let msg = "Are you sure you want to Complete this task?";
+            if (action === 'complete_review') {
+                msg += "\n\nThis will create an Invoice in the Billing Module.";
+            }
+            
+            if (!confirm(msg)) {
+                return;
+            }
+
             const year = document.getElementById('taxPrepCenterYearSelect').value;
             try {
                 const res = await fetch(`/api/tax-preparation-workflow/${customerId}/toggle-step`, {
