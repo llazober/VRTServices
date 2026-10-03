@@ -11341,7 +11341,7 @@ function filterBillingTable(resetPages = true) {
                     const pRes = await fetch('/api/tax-requirements/send-email', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear, preview: true })
+                        body: JSON.stringify({ target: "specific", customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear, preview: true })
                     });
                     const pData = await pRes.json();
                     if (!pRes.ok) throw new Error(pData.detail || pData.message || 'Failed to generate preview');
@@ -11366,7 +11366,7 @@ function filterBillingTable(resetPages = true) {
                 const res = await fetch('/api/tax-requirements/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear })
+                    body: JSON.stringify({ target: "specific", customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || data.message || 'Send failed');
