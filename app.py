@@ -26,7 +26,7 @@ import psycopg2
 import email.utils
 import re
 from psycopg2.extras import RealDictCursor
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie, Query
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -862,6 +862,29 @@ def delete_customer_parent_mapping(cur, parent_name: str, legal_name: str, displ
         WHERE (LOWER("clientName") = LOWER(%s) OR (LOWER("clientName") = LOWER(%s) AND %s != ''))
           AND (%s = '' OR LOWER("parentName") = LOWER(%s) OR "parentName" IS NULL OR "parentName" = '');
     ''', (l_name, d_name, d_name, p_name, p_name))
+
+
+def init_internal_chat_table():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS internal_chat_messages (
+                    id BIGSERIAL PRIMARY KEY,
+                    sender VARCHAR(150) NOT NULL,
+                    receiver VARCHAR(150) NOT NULL,
+                    message_body TEXT NOT NULL,
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            ''')
+            conn.commit()
+    except Exception as e:
+        print(f"Error init chat table: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def init_customer_table():
     conn = None
@@ -2001,6 +2024,7 @@ def ask_gpt4o_mini_rag(query: str, category: str = None, top_k: int = 5) -> dict
     }
 
 try:
+    init_internal_chat_table()
     init_customer_table()
     ensure_catchall_customer()
     init_checklist_table()
@@ -15737,3 +15761,131 @@ def process_portal_upload_background_safely(customer_id: int, bucket: str, file_
                 print(f'[TAX ON RENAME CLASSIFY ERR] {_cl_err}')
     except Exception as e:
         print(f'[BACKGROUND TASK FATAL ERR] {e}')
+
+
+# ==========================================
+# INTERNAL CHAT (WEBSOCKETS & API)
+# ==========================================
+class ChatConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, username: str):
+        await websocket.accept()
+        self.active_connections[username] = websocket
+        # Broadcast online status
+        await self.broadcast({"type": "status", "user": username, "status": "online"}, sender="system")
+
+    def disconnect(self, username: str):
+        if username in self.active_connections:
+            del self.active_connections[username]
+
+    async def send_personal_message(self, message: dict, username: str):
+        if username in self.active_connections:
+            await self.active_connections[username].send_json(message)
+
+    async def broadcast(self, message: dict, sender: str = None):
+        for user, connection in list(self.active_connections.items()):
+            if user != sender:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
+chat_manager = ChatConnectionManager()
+
+@app.websocket("/ws/chat/{username}")
+async def websocket_chat_endpoint(websocket: WebSocket, username: str):
+    await chat_manager.connect(websocket, username)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            receiver = data.get("receiver")
+            content = data.get("content")
+            if not receiver or not content:
+                continue
+                
+            conn = get_db_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute('''
+                        INSERT INTO internal_chat_messages (sender, receiver, message_body)
+                        VALUES (%s, %s, %s)
+                        RETURNING id, created_at
+                    ''', (username, receiver, content))
+                    row = cur.fetchone()
+                    msg_id = row[0]
+                    created_at = row[1]
+                conn.commit()
+            except Exception as e:
+                print(f"WS DB Error: {e}")
+                continue
+            finally:
+                conn.close()
+
+            msg = {
+                "type": "message",
+                "id": msg_id,
+                "sender": username,
+                "receiver": receiver,
+                "content": content,
+                "created_at": str(created_at)
+            }
+            
+            if receiver == "GLOBAL":
+                await chat_manager.broadcast(msg, sender=username)
+            else:
+                await chat_manager.send_personal_message(msg, receiver)
+                
+    except WebSocketDisconnect:
+        chat_manager.disconnect(username)
+
+@app.get("/api/chat/users")
+async def get_chat_users(request: Request):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute("SELECT username FROM active_sessions")
+            online_users = [row['username'] for row in cur.fetchall()]
+            
+            # Also get all system users so we can chat with offline people
+            # Fallback to CRM Users
+            # Wait, there's no explicit auth user table shown, maybe we just use active_sessions for MVP
+        return {"users": online_users}
+    except Exception as e:
+        return {"users": []}
+    finally:
+        conn.close()
+
+@app.get("/api/chat/history/{contact}")
+async def get_chat_history(contact: str, request: Request):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401)
+        
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            if contact == "GLOBAL":
+                cur.execute('''
+                    SELECT * FROM internal_chat_messages
+                    WHERE receiver = 'GLOBAL'
+                    ORDER BY created_at ASC
+                    LIMIT 200
+                ''')
+            else:
+                cur.execute('''
+                    SELECT * FROM internal_chat_messages
+                    WHERE (sender = %s AND receiver = %s) OR (sender = %s AND receiver = %s)
+                    ORDER BY created_at ASC
+                    LIMIT 200
+                ''', (username, contact, contact, username))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                r['created_at'] = str(r['created_at'])
+            return rows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+

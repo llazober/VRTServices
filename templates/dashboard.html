@@ -14465,6 +14465,432 @@ function filterBillingTable(resetPages = true) {
             }
         }
     </script>
+
+<!-- ==========================================
+     INTERNAL CHAT WIDGET
+=========================================== -->
+<style>
+    /* Chat Widget Styles */
+    .chat-widget-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #a855f7, #7e22ce);
+        box-shadow: 0 10px 25px rgba(168, 85, 247, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 9999;
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .chat-widget-btn:hover {
+        transform: scale(1.1);
+    }
+    .chat-widget-btn svg {
+        fill: #fff;
+        width: 28px;
+        height: 28px;
+    }
+    .chat-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 800;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #0f121d;
+        display: none;
+    }
+
+    .chat-window {
+        position: fixed;
+        bottom: 110px;
+        right: 30px;
+        width: 400px;
+        height: 600px;
+        background: rgba(20, 23, 34, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+        z-index: 9998;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+        transform-origin: bottom right;
+        animation: chatPop 0.3s ease-out forwards;
+    }
+
+    @keyframes chatPop {
+        0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .chat-header {
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .chat-header-title {
+        color: #fff;
+        font-weight: 800;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .chat-body {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .chat-sidebar {
+        width: 140px;
+        background: rgba(0, 0, 0, 0.2);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+        overflow-y: auto;
+    }
+
+    .chat-contact {
+        padding: 12px 10px;
+        cursor: pointer;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        font-weight: 700;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        transition: all 0.2s;
+        word-break: break-all;
+    }
+    .chat-contact:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+    }
+    .chat-contact.active {
+        background: rgba(168, 85, 247, 0.15);
+        color: #c084fc;
+        border-left: 3px solid #c084fc;
+    }
+
+    .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+    }
+
+    .chat-messages {
+        flex: 1;
+        padding: 16px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .msg-bubble {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 0.88rem;
+        line-height: 1.4;
+        position: relative;
+        word-wrap: break-word;
+    }
+    .msg-bubble.received {
+        align-self: flex-start;
+        background: rgba(255, 255, 255, 0.08);
+        color: #e2e8f0;
+        border-bottom-left-radius: 4px;
+    }
+    .msg-bubble.sent {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #a855f7, #7e22ce);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+    .msg-meta {
+        font-size: 0.65rem;
+        color: #64748b;
+        margin-top: 4px;
+        text-align: right;
+    }
+    .msg-bubble.sent .msg-meta {
+        color: rgba(255, 255, 255, 0.6);
+    }
+    .msg-sender-name {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #38bdf8;
+        margin-bottom: 4px;
+    }
+
+    .chat-input-area {
+        padding: 14px;
+        background: rgba(0, 0, 0, 0.2);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        gap: 8px;
+    }
+    .chat-input {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 8px 16px;
+        color: #fff;
+        font-size: 0.85rem;
+        outline: none;
+    }
+    .chat-input:focus {
+        border-color: #a855f7;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    .chat-send-btn {
+        background: #a855f7;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #fff;
+        transition: transform 0.2s;
+    }
+    .chat-send-btn:hover {
+        transform: scale(1.1);
+    }
+</style>
+
+<div class="chat-widget-btn" id="chatWidgetBtn" onclick="toggleChatWindow()">
+    <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+    <div class="chat-badge" id="chatGlobalBadge">0</div>
+</div>
+
+<div class="chat-window" id="chatWindow">
+    <div class="chat-header">
+        <div class="chat-header-title">
+            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+            Internal Chat
+        </div>
+        <button onclick="toggleChatWindow()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">✖</button>
+    </div>
+    
+    <div class="chat-body">
+        <div class="chat-sidebar" id="chatSidebar">
+            <div class="chat-contact active" id="contact-GLOBAL" onclick="selectContact('GLOBAL')">
+                🌍 Global Team
+            </div>
+            <!-- Dynamic users will load here -->
+        </div>
+        
+        <div class="chat-main">
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages -->
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInputMsg" class="chat-input" placeholder="Type a message..." onkeypress="handleChatEnter(event)">
+                <button class="chat-send-btn" onclick="sendChatMessage()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let chatWs = null;
+    let currentChatContact = 'GLOBAL';
+    const myChatUsername = '{{ user_email or username }}';
+    let unreadCount = 0;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        initChatWebSocket();
+        loadChatUsers();
+        loadChatHistory('GLOBAL');
+    });
+
+    function toggleChatWindow() {
+        const win = document.getElementById('chatWindow');
+        if (win.style.display === 'none' || win.style.display === '') {
+            win.style.display = 'flex';
+            unreadCount = 0;
+            updateChatBadge();
+            scrollToBottom();
+        } else {
+            win.style.display = 'none';
+        }
+    }
+
+    function initChatWebSocket() {
+        if (!myChatUsername) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        chatWs = new WebSocket(`${protocol}//${window.location.host}/ws/chat/${encodeURIComponent(myChatUsername)}`);
+        
+        chatWs.onopen = () => { console.log("Chat WS Connected"); };
+        chatWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'message') {
+                handleIncomingMessage(data);
+            }
+        };
+        chatWs.onclose = () => {
+            console.log("Chat WS Disconnected. Reconnecting in 5s...");
+            setTimeout(initChatWebSocket, 5000);
+        };
+    }
+
+    function handleIncomingMessage(msg) {
+        // If message belongs to current active tab
+        const isGlobal = msg.receiver === 'GLOBAL';
+        const isRelevant = isGlobal ? currentChatContact === 'GLOBAL' : (msg.sender === currentChatContact || msg.receiver === currentChatContact);
+        
+        if (isRelevant) {
+            appendMessageToUI(msg);
+        }
+        
+        // Notification
+        if (msg.sender !== myChatUsername) {
+            const win = document.getElementById('chatWindow');
+            if (win.style.display !== 'flex' || !isRelevant) {
+                unreadCount++;
+                updateChatBadge();
+                playChatSound();
+            }
+        }
+    }
+
+    function updateChatBadge() {
+        const b = document.getElementById('chatGlobalBadge');
+        if (unreadCount > 0) {
+            b.innerText = unreadCount;
+            b.style.display = 'flex';
+        } else {
+            b.style.display = 'none';
+        }
+    }
+
+    function playChatSound() {
+        try {
+            const audio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'); // dummy sound
+            // In a real app we load a tiny mp3 or use browser beep
+            audio.play().catch(e => {});
+        } catch(e) {}
+    }
+
+    async function loadChatUsers() {
+        try {
+            const res = await fetch('/api/chat/users');
+            const data = await res.json();
+            const sidebar = document.getElementById('chatSidebar');
+            // Keep GLOBAL, clear rest
+            sidebar.innerHTML = `<div class="chat-contact active" id="contact-GLOBAL" onclick="selectContact('GLOBAL')">🌍 Global Team</div>`;
+            
+            data.users.forEach(u => {
+                if (u !== myChatUsername) {
+                    sidebar.innerHTML += `<div class="chat-contact" id="contact-${u}" onclick="selectContact('${u}')">👤 ${u.split('@')[0]}</div>`;
+                }
+            });
+            // Re-highlight
+            selectContact(currentChatContact, false);
+        } catch(e) { console.error("Error loading users", e); }
+    }
+
+    async function loadChatHistory(contact) {
+        try {
+            const res = await fetch(`/api/chat/history/${encodeURIComponent(contact)}`);
+            const messages = await res.json();
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = '';
+            messages.forEach(msg => {
+                appendMessageToUI(msg);
+            });
+        } catch(e) { console.error("Error loading history", e); }
+    }
+
+    function selectContact(contact, reload = true) {
+        currentChatContact = contact;
+        document.querySelectorAll('.chat-contact').forEach(el => el.classList.remove('active'));
+        const el = document.getElementById(`contact-${contact}`);
+        if (el) el.classList.add('active');
+        
+        if (reload) {
+            document.getElementById('chatMessages').innerHTML = '<div style="color:#94a3b8; text-align:center; margin-top:20px;">Loading...</div>';
+            loadChatHistory(contact);
+        }
+    }
+
+    function appendMessageToUI(msg) {
+        const container = document.getElementById('chatMessages');
+        const isMe = msg.sender === myChatUsername;
+        const time = new Date(msg.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        const senderNameHtml = (!isMe && msg.receiver === 'GLOBAL') ? `<div class="msg-sender-name">${msg.sender.split('@')[0]}</div>` : '';
+        
+        const html = `
+            <div class="msg-bubble ${isMe ? 'sent' : 'received'}">
+                ${senderNameHtml}
+                <div>${escapeHtml(msg.content || msg.message_body)}</div>
+                <div class="msg-meta">${time}</div>
+            </div>
+        `;
+        // Remove loading text if exists
+        if (container.innerHTML.includes('Loading...')) container.innerHTML = '';
+        container.innerHTML += html;
+        scrollToBottom();
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chatInputMsg');
+        const text = input.value.trim();
+        if (!text) return;
+        
+        if (chatWs && chatWs.readyState === WebSocket.OPEN) {
+            chatWs.send(JSON.stringify({
+                receiver: currentChatContact,
+                content: text
+            }));
+            input.value = '';
+        } else {
+            alert("Chat disconnected. Reconnecting...");
+            initChatWebSocket();
+        }
+    }
+
+    function handleChatEnter(e) {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    }
+
+    function escapeHtml(unsafe) {
+        return (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function scrollToBottom() {
+        const container = document.getElementById('chatMessages');
+        container.scrollTop = container.scrollHeight;
+    }
+</script>
+
 </body>
 
 </html>
