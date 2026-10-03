@@ -14356,7 +14356,16 @@ async def update_tax_requirement(req_id: int, request: Request):
                     WHERE id = %s RETURNING *;
                 """, (req_id,))
                 row = cur.fetchone()
-                cur.execute("DELETE FROM tax_return_received_docs WHERE requirement_id = %s;", (req_id,))
+                if row:
+                    cur.execute("UPDATE tax_return_received_docs SET status = 'Unmatched', requirement_id = NULL WHERE requirement_id = %s;", (req_id,))
+                    cur.execute("""
+                        UPDATE tax_return_received_docs
+                        SET status = 'Unmatched'
+                        WHERE customer_id = %s AND tax_year = %s
+                          AND requirement_id IS NULL
+                          AND status = 'Matched'
+                          AND UPPER(REPLACE(REPLACE(doc_type_detected, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(%s, '-', ''), ' ', ''));
+                    """, (row['customer_id'], row['tax_year'], row['doc_type']))
             else:
                 cur.execute("""
                     UPDATE tax_return_requirements SET
