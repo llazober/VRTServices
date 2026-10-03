@@ -15833,9 +15833,11 @@ async def websocket_chat_endpoint(websocket: WebSocket, username: str):
             }
             
             if receiver == "GLOBAL":
-                await chat_manager.broadcast(msg, sender=username)
+                await chat_manager.broadcast(msg)
             else:
                 await chat_manager.send_personal_message(msg, receiver)
+                if receiver != username:
+                    await chat_manager.send_personal_message(msg, username)
                 
     except WebSocketDisconnect:
         chat_manager.disconnect(username)
