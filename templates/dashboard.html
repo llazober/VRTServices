@@ -9066,16 +9066,10 @@ function filterBillingTable(resetPages = true) {
             if (customerGroupEl && customerSelectEl) {
                 if (isCust0000) {
                     customerGroupEl.style.display = 'block';
-                    let custOptions = `<option value="${currentStorageCustomerId}">CUST-0000 (Current)</option>`;
-                    if (typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords)) {
-                        currentCustomerRecords.forEach(c => {
-                            if (c.id != currentStorageCustomerId && c.custumer_number !== 'CUST-0000' && c.custumer_number !== 'CUT-0000') {
-                                custOptions += `<option value="${c.id}">${c.legal_name} (${c.custumer_number || c.customer_number || 'CUST-' + c.id})</option>`;
-                            }
-                        });
-                    }
-                    customerSelectEl.innerHTML = custOptions;
-                    customerSelectEl.value = currentStorageCustomerId;
+                    window._moveFileTargetCustomerSearchData = currentCustomerRecords || [];
+                    const searchInput = document.getElementById('moveFileTargetCustomerSearch');
+                    if (searchInput) searchInput.value = '';
+                    filterMoveTargetCustomers();
                 } else {
                     customerGroupEl.style.display = 'none';
                     customerSelectEl.innerHTML = `<option value="${currentStorageCustomerId}"></option>`;
@@ -9141,6 +9135,47 @@ function filterBillingTable(resetPages = true) {
             pendingMoveSourceKey = null;
             pendingMoveFileName = null;
             pendingBatchMoveKeys = null;
+        }
+
+        let _moveSearchDebounceTimeout = null;
+        function filterMoveTargetCustomers() {
+            const input = document.getElementById('moveFileTargetCustomerSearch');
+            const selectEl = document.getElementById('moveFileTargetCustomerSelect');
+            if (!input || !selectEl) return;
+            
+            const filterText = input.value.toLowerCase();
+            let custOptions = `<option value="${currentStorageCustomerId}">CUST-0000 (Current)</option>`;
+            
+            const records = window._moveFileTargetCustomerSearchData || [];
+            records.forEach(c => {
+                if (c.id == currentStorageCustomerId || c.custumer_number === 'CUST-0000' || c.custumer_number === 'CUT-0000') return;
+                
+                const label = `${c.legal_name} (${c.custumer_number || c.customer_number || 'CUST-' + c.id})`;
+                if (!filterText || label.toLowerCase().includes(filterText)) {
+                    custOptions += `<option value="${c.id}">${label}</option>`;
+                }
+            });
+            
+            const prevValue = selectEl.value;
+            selectEl.innerHTML = custOptions;
+            
+            // If the user's previous selection is still in the list, keep it selected
+            let found = false;
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].value === prevValue) {
+                    selectEl.value = prevValue;
+                    found = true;
+                    break;
+                }
+            }
+            // If not found and we have options, select the first one and fetch its folders
+            if (!found && selectEl.options.length > 0) {
+                selectEl.value = selectEl.options[0].value;
+                if (_moveSearchDebounceTimeout) clearTimeout(_moveSearchDebounceTimeout);
+                _moveSearchDebounceTimeout = setTimeout(() => {
+                    handleMoveTargetCustomerChange(selectEl.value);
+                }, 400);
+            }
         }
 
         function handleMoveFolderSelectChange(val) {
@@ -12079,9 +12114,10 @@ function filterBillingTable(resetPages = true) {
                 <div id="moveFileTargetName" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: #38bdf8; font-weight: 700; word-break: break-word; max-height: 80px; overflow-y: auto;">-</div>
             </div>
 
-            <div id="moveFileTargetCustomerGroup" style="display: none;">
+            <div id="moveFileTargetCustomerGroup" style="display: none; position: relative;">
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Destination Customer:</label>
-                <select id="moveFileTargetCustomerSelect" onchange="handleMoveTargetCustomerChange(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fff; font-weight: 600; outline: none; cursor: pointer; margin-bottom: 6px;">
+                <input type="text" id="moveFileTargetCustomerSearch" placeholder="🔍 Search customer name or ID..." onkeyup="filterMoveTargetCustomers()" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: #fff; outline: none; margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none;">
+                <select id="moveFileTargetCustomerSelect" onchange="handleMoveTargetCustomerChange(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: #fff; font-weight: 600; outline: none; cursor: pointer; margin-bottom: 6px; border-top-left-radius: 0; border-top-right-radius: 0;">
                     <option value="">Loading customers...</option>
                 </select>
             </div>
