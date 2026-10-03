@@ -14761,13 +14761,31 @@ function filterBillingTable(resetPages = true) {
     function handleIncomingMessage(msg) {
         // If message belongs to current active tab
         const isGlobal = msg.receiver === 'GLOBAL';
-        const isRelevant = isGlobal ? currentChatContact === 'GLOBAL' : (msg.sender === currentChatContact || msg.receiver === currentChatContact);
+        const contactId = isGlobal ? 'GLOBAL' : (msg.sender === myChatUsername ? msg.receiver : msg.sender);
+        const isRelevant = contactId === currentChatContact;
         
         if (isRelevant) {
             appendMessageToUI(msg);
+        } else if (msg.sender !== myChatUsername) {
+            // Update individual contact badge
+            const badge = document.getElementById(`badge-${contactId}`);
+            if (badge) {
+                let cnt = parseInt(badge.innerText) || 0;
+                badge.innerText = cnt + 1;
+                badge.style.display = 'inline-block';
+            } else if (contactId !== 'GLOBAL') {
+                // If user not in sidebar, add them
+                const sidebar = document.getElementById('chatSidebar');
+                sidebar.innerHTML += `<div class="chat-contact" id="contact-${contactId}" onclick="selectContact('${contactId}')">
+                    <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                        <span>👤 ${contactId.split('@')[0]}</span>
+                        <span id="badge-${contactId}" style="background:#ef4444; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.65rem; display:inline-block;">1</span>
+                    </span>
+                </div>`;
+            }
         }
         
-        // Notification
+        // Global Notification Badge
         if (msg.sender !== myChatUsername) {
             const win = document.getElementById('chatWindow');
             if (win.style.display !== 'flex' || !isRelevant) {
@@ -14802,11 +14820,21 @@ function filterBillingTable(resetPages = true) {
             const data = await res.json();
             const sidebar = document.getElementById('chatSidebar');
             // Keep GLOBAL, clear rest
-            sidebar.innerHTML = `<div class="chat-contact active" id="contact-GLOBAL" onclick="selectContact('GLOBAL')">🌍 Global Team</div>`;
+            sidebar.innerHTML = `<div class="chat-contact active" id="contact-GLOBAL" onclick="selectContact('GLOBAL')">
+                <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <span>🌍 Global Team</span>
+                    <span id="badge-GLOBAL" style="background:#ef4444; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.65rem; display:none;">0</span>
+                </span>
+            </div>`;
             
             data.users.forEach(u => {
                 if (u !== myChatUsername) {
-                    sidebar.innerHTML += `<div class="chat-contact" id="contact-${u}" onclick="selectContact('${u}')">👤 ${u.split('@')[0]}</div>`;
+                    sidebar.innerHTML += `<div class="chat-contact" id="contact-${u}" onclick="selectContact('${u}')">
+                        <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span>👤 ${u.split('@')[0]}</span>
+                            <span id="badge-${u}" style="background:#ef4444; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.65rem; display:none;">0</span>
+                        </span>
+                    </div>`;
                 }
             });
             // Re-highlight
@@ -14831,6 +14859,16 @@ function filterBillingTable(resetPages = true) {
         document.querySelectorAll('.chat-contact').forEach(el => el.classList.remove('active'));
         const el = document.getElementById(`contact-${contact}`);
         if (el) el.classList.add('active');
+        
+        // Clear badge
+        const badge = document.getElementById(`badge-${contact}`);
+        if (badge) {
+            let cnt = parseInt(badge.innerText) || 0;
+            unreadCount = Math.max(0, unreadCount - cnt);
+            badge.innerText = '0';
+            badge.style.display = 'none';
+            updateChatBadge();
+        }
         
         if (reload) {
             document.getElementById('chatMessages').innerHTML = '<div style="color:#94a3b8; text-align:center; margin-top:20px;">Loading...</div>';
