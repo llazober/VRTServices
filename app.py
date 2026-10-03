@@ -13885,15 +13885,32 @@ def recalculate_tax_docs_status(customer_id: int, tax_year: int):
                 notes_text = f"{total_received}/{total_required} documents received; {missing} still missing. Tax year {tax_year}."
 
             period = f"{tax_year}-01"  # Use January of the tax_year as the period key
-            cur.execute("""
-                INSERT INTO customer_task_checklist (customer_id, period, tax_docs_status, tax_docs_all_complete, tax_notes, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (customer_id, period) DO UPDATE SET
-                    tax_docs_status = EXCLUDED.tax_docs_status,
-                    tax_docs_all_complete = EXCLUDED.tax_docs_all_complete,
-                    tax_notes = EXCLUDED.tax_notes,
-                    updated_at = CURRENT_TIMESTAMP;
-            """, (customer_id, period, new_status, all_complete, notes_text))
+            
+            if all_complete:
+                cur.execute("""
+                    INSERT INTO customer_task_checklist 
+                        (customer_id, period, tax_docs_status, tax_docs_all_complete, tax_notes, tax_docs_requested, tax_docs_received, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, TRUE, CURRENT_TIMESTAMP)
+                    ON CONFLICT (customer_id, period) DO UPDATE SET
+                        tax_docs_status = EXCLUDED.tax_docs_status,
+                        tax_docs_all_complete = EXCLUDED.tax_docs_all_complete,
+                        tax_notes = EXCLUDED.tax_notes,
+                        tax_docs_requested = TRUE,
+                        tax_docs_received = TRUE,
+                        updated_at = CURRENT_TIMESTAMP;
+                """, (customer_id, period, new_status, all_complete, notes_text))
+            else:
+                cur.execute("""
+                    INSERT INTO customer_task_checklist 
+                        (customer_id, period, tax_docs_status, tax_docs_all_complete, tax_notes, tax_docs_received, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, FALSE, CURRENT_TIMESTAMP)
+                    ON CONFLICT (customer_id, period) DO UPDATE SET
+                        tax_docs_status = EXCLUDED.tax_docs_status,
+                        tax_docs_all_complete = EXCLUDED.tax_docs_all_complete,
+                        tax_notes = EXCLUDED.tax_notes,
+                        tax_docs_received = FALSE,
+                        updated_at = CURRENT_TIMESTAMP;
+                """, (customer_id, period, new_status, all_complete, notes_text))
             conn.commit()
             print(f"[TAX STATUS] Customer {customer_id} / {tax_year}: {new_status} ({total_received}/{total_required} docs).")
     except Exception as e:
