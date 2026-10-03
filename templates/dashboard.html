@@ -14759,40 +14759,45 @@ function filterBillingTable(resetPages = true) {
     }
 
     function handleIncomingMessage(msg) {
-        // If message belongs to current active tab
-        const isGlobal = msg.receiver === 'GLOBAL';
-        const contactId = isGlobal ? 'GLOBAL' : (msg.sender === myChatUsername ? msg.receiver : msg.sender);
-        const isRelevant = contactId === currentChatContact;
-        
-        if (isRelevant) {
-            appendMessageToUI(msg);
-        } else if (msg.sender !== myChatUsername) {
-            // Update individual contact badge
-            const badge = document.getElementById(`badge-${contactId}`);
-            if (badge) {
-                let cnt = parseInt(badge.innerText) || 0;
-                badge.innerText = cnt + 1;
-                badge.style.display = 'inline-block';
-            } else if (contactId !== 'GLOBAL') {
-                // If user not in sidebar, add them
-                const sidebar = document.getElementById('chatSidebar');
-                sidebar.innerHTML += `<div class="chat-contact" id="contact-${contactId}" onclick="selectContact('${contactId}')">
-                    <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                        <span>👤 ${contactId.split('@')[0]}</span>
-                        <span id="badge-${contactId}" style="background:#ef4444; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.65rem; display:inline-block;">1</span>
-                    </span>
-                </div>`;
+        try {
+            // If message belongs to current active tab
+            const isGlobal = msg.receiver === 'GLOBAL';
+            const contactId = isGlobal ? 'GLOBAL' : (msg.sender === myChatUsername ? msg.receiver : msg.sender);
+            const isRelevant = String(contactId) === String(currentChatContact);
+            
+            if (isRelevant) {
+                appendMessageToUI(msg);
+            } else if (msg.sender !== myChatUsername) {
+                // Update individual contact badge
+                const badge = document.getElementById(`badge-${contactId}`);
+                if (badge) {
+                    let cnt = parseInt(badge.innerText) || 0;
+                    badge.innerText = cnt + 1;
+                    badge.style.display = 'inline-block';
+                } else if (contactId !== 'GLOBAL') {
+                    // If user not in sidebar, add them safely
+                    const sidebar = document.getElementById('chatSidebar');
+                    const newContactHtml = `<div class="chat-contact" id="contact-${contactId}" onclick="selectContact('${contactId}')">
+                        <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span>👤 ${contactId.split('@')[0]}</span>
+                            <span id="badge-${contactId}" style="background:#ef4444; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.65rem; display:inline-block;">1</span>
+                        </span>
+                    </div>`;
+                    sidebar.insertAdjacentHTML('beforeend', newContactHtml);
+                }
             }
-        }
-        
-        // Global Notification Badge
-        if (msg.sender !== myChatUsername) {
-            const win = document.getElementById('chatWindow');
-            if (win.style.display !== 'flex' || !isRelevant) {
-                unreadCount++;
-                updateChatBadge();
-                playChatSound();
+            
+            // Global Notification Badge
+            if (msg.sender !== myChatUsername) {
+                const win = document.getElementById('chatWindow');
+                if (win.style.display !== 'flex' || !isRelevant) {
+                    unreadCount++;
+                    updateChatBadge();
+                    playChatSound();
+                }
             }
+        } catch(e) {
+            console.error("Error handling incoming message", e);
         }
     }
 
@@ -14877,23 +14882,45 @@ function filterBillingTable(resetPages = true) {
     }
 
     function appendMessageToUI(msg) {
-        const container = document.getElementById('chatMessages');
-        const isMe = msg.sender === myChatUsername;
-        const time = new Date(msg.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        const senderNameHtml = (!isMe && msg.receiver === 'GLOBAL') ? `<div class="msg-sender-name">${msg.sender.split('@')[0]}</div>` : '';
-        
-        const html = `
-            <div class="msg-bubble ${isMe ? 'sent' : 'received'}">
-                ${senderNameHtml}
-                <div>${escapeHtml(msg.content || msg.message_body)}</div>
-                <div class="msg-meta">${time}</div>
-            </div>
-        `;
-        // Remove loading text if exists
-        if (container.innerHTML.includes('Loading...')) container.innerHTML = '';
-        container.innerHTML += html;
-        scrollToBottom();
+        try {
+            const container = document.getElementById('chatMessages');
+            const isMe = msg.sender === myChatUsername;
+            
+            let timeStr = '';
+            try {
+                let dStr = msg.created_at || '';
+                // Fix for Safari parsing issue with space instead of T
+                if (dStr.includes(' ') && !dStr.includes('T')) {
+                    dStr = dStr.replace(' ', 'T');
+                }
+                const dateObj = dStr ? new Date(dStr) : new Date();
+                timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } catch(e) {
+                timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+            
+            const senderNameHtml = (!isMe && msg.receiver === 'GLOBAL') ? `<div class="msg-sender-name">${msg.sender.split('@')[0]}</div>` : '';
+            
+            const contentSafe = escapeHtml(msg.content || msg.message_body || '');
+            
+            const html = `
+                <div class="msg-bubble ${isMe ? 'sent' : 'received'}">
+                    ${senderNameHtml}
+                    <div>${contentSafe}</div>
+                    <div class="msg-meta">${timeStr}</div>
+                </div>
+            `;
+            
+            // Remove loading text if exists
+            if (container.innerHTML.includes('Loading...')) {
+                container.innerHTML = '';
+            }
+            
+            container.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        } catch(e) {
+            console.error("Error appending message to UI", e);
+        }
     }
 
     function sendChatMessage() {
