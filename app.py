@@ -15278,6 +15278,14 @@ async def send_tax_requirements_email(request: Request):
                     f"Account Ref: {cust_ref}\n{parent_name}"
                 )
 
+            if data.get("preview"):
+                return {
+                    "success": True,
+                    "subject": subject,
+                    "html_body": html_body,
+                    "text_body": text_body
+                }
+
             email_sent_ok = False
             if resend_key:
                 try:

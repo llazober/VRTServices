@@ -11273,22 +11273,94 @@ function filterBillingTable(resetPages = true) {
             }).join('');
         }
 
-        async function sendTaxRequirementsEmail() {
+        function showEmailPreviewModal(subject, htmlBody, onConfirm) {
+            let modal = document.getElementById('emailPreviewModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'emailPreviewModal';
+                modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:2147483649;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(5px);';
+                
+                modal.innerHTML = `
+                    <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:16px; width:100%; max-width:700px; height:90vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+                        <div style="padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); border-radius:16px 16px 0 0; flex-shrink:0;">
+                            <h2 style="margin:0; font-size:1.1rem; color:#f8fafc; display:flex; align-items:center; gap:8px;">👁️ Email Preview</h2>
+                            <button id="epCloseBtn" style="background:none; border:none; color:#94a3b8; font-size:1.5rem; cursor:pointer; padding:0; line-height:1;">&times;</button>
+                        </div>
+                        
+                        <div style="padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0;">
+                            <div style="font-size:0.8rem; color:#94a3b8; text-transform:uppercase; font-weight:700; margin-bottom:4px;">Subject</div>
+                            <div id="epSubject" style="font-size:1rem; color:#fff; font-weight:600; background:rgba(255,255,255,0.03); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.05); user-select:text;"></div>
+                        </div>
+
+                        <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; padding:0; min-height:0;">
+                            <div style="padding:12px 24px; font-size:0.8rem; color:#94a3b8; text-transform:uppercase; font-weight:700; background:rgba(0,0,0,0.1); flex-shrink:0;">Message Body</div>
+                            <div style="flex:1; overflow:hidden; background:#fff; margin:0 24px 16px 24px; border-radius:8px; border:1px solid #cbd5e1; display:flex; flex-direction:column;">
+                                <iframe id="epIframe" style="flex:1; width:100%; border:none; background:#fff; border-radius:8px;"></iframe>
+                            </div>
+                        </div>
+
+                        <div style="padding:16px 24px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.2); border-radius:0 0 16px 16px; display:flex; justify-content:flex-end; gap:12px; flex-shrink:0;">
+                            <button id="epCancelBtn" style="padding:10px 20px; background:rgba(255,255,255,0.05); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); border-radius:8px; font-size:0.9rem; font-weight:600; cursor:pointer;">Cancel</button>
+                            <button id="epSendBtn" style="padding:10px 20px; background:linear-gradient(135deg, #059669, #10b981); color:#fff; border:none; border-radius:8px; font-size:0.9rem; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(16, 185, 129, 0.3);">🚀 Confirm & Send Email</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                document.getElementById('epCloseBtn').onclick = () => { modal.style.display = 'none'; };
+                document.getElementById('epCancelBtn').onclick = () => { modal.style.display = 'none'; };
+            }
+
+            document.getElementById('epSubject').textContent = subject;
+            
+            const iframe = document.getElementById('epIframe');
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(htmlBody);
+            doc.close();
+            const links = doc.getElementsByTagName('a');
+            for (let i = 0; i < links.length; i++) {
+                links[i].setAttribute('target', '_blank');
+            }
+
+            document.getElementById('epSendBtn').onclick = () => {
+                modal.style.display = 'none';
+                if (onConfirm) onConfirm();
+            };
+
+            modal.style.display = 'flex';
+        }
+
+        async function sendTaxRequirementsEmail(skipPreview = false) {
             if (!currentChecklistCustomerId) return;
-            let confirmSend = true;
-            if (typeof showCustomConfirm === 'function') {
-                confirmSend = await showCustomConfirm(
-                    `Are you sure you want to send the tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`,
-                    'Send Tax Requirements Email',
-                    '📧 Yes, Send Email',
-                    'Cancel'
-                );
-            } else if (!confirm(`Send tax document requirements email to this customer for tax year ${_taxDocCurrentYear}?`)) {
+            const btn = document.getElementById('btnSendTaxEmail');
+            
+            if (!skipPreview) {
+                if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating Preview…'; }
+                try {
+                    const pRes = await fetch('/api/tax-requirements/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ customer_id: currentChecklistCustomerId, tax_year: _taxDocCurrentYear, preview: true })
+                    });
+                    const pData = await pRes.json();
+                    if (!pRes.ok) throw new Error(pData.detail || pData.message || 'Failed to generate preview');
+                    
+                    showEmailPreviewModal(pData.subject, pData.html_body, () => {
+                        sendTaxRequirementsEmail(true);
+                    });
+                } catch (err) {
+                    if (typeof showCustomAlert === 'function') {
+                        showCustomAlert('Preview Error', err.message, 'error');
+                    } else {
+                        alert(`❌ Preview Error: ${err.message}`);
+                    }
+                } finally {
+                    if (btn) { btn.disabled = false; btn.innerHTML = '📧 Send Requirements Email'; }
+                }
                 return;
             }
-            if (!confirmSend) return;
 
-            const btn = document.getElementById('btnSendTaxEmail');
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
             try {
                 const res = await fetch('/api/tax-requirements/send-email', {
