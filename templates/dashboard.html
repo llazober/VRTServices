@@ -14407,8 +14407,11 @@ function filterBillingTable(resetPages = true) {
                 msg += "\n\nThis will create an Invoice in the Billing Module.";
             }
             
-            if (!confirm(msg)) {
-                return;
+            if (typeof showCustomConfirm === 'function') {
+                const confirmed = await showCustomConfirm(msg, 'Please Confirm', 'Confirm', 'Cancel');
+                if (!confirmed) return;
+            } else {
+                if (!confirm(msg)) return;
             }
 
             const year = document.getElementById('taxPrepCenterYearSelect').value;
