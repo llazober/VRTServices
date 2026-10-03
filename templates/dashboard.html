@@ -3105,6 +3105,14 @@
                 populateUtilitiesYearSelects();
             </script>
             {% else %}
+            
+            {% if user_role == 'TAX_PREP' %}
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 65vh; text-align: center;">
+                <h2 style="color: #fff; margin-bottom: 12px; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px;">Tax Preparation Workspace</h2>
+                <p style="color: #94a3b8; margin-bottom: 32px; font-size: 1.1rem;">Your tasks and files are securely managed inside the Tax Preparation Center.</p>
+                <button onclick="openTaxPreparationCenter()" style="padding: 16px 36px; background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; font-weight: 800; border: none; border-radius: 12px; cursor: pointer; font-size: 1.1rem; box-shadow: 0 10px 25px rgba(244, 63, 94, 0.4); transition: all 0.2s;" onmouseover="this.style.transform='scale(1.03) translateY(-2px)'" onmouseout="this.style.transform='scale(1) translateY(0)'">🚀 Open Tax Preparation Center</button>
+            </div>
+            {% else %}
             <!-- Hero Banner -->
             <div class="welcome-banner">
                 <div class="banner-text">
@@ -3219,6 +3227,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
             {% endif %}
 
         </div>
