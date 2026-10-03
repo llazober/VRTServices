@@ -851,6 +851,7 @@
         <div class="nav-section">
             <div class="nav-label">Main Navigation</div>
 
+            {% if user_role != 'Tax_Prep' %}
             <a href="/" class="nav-item" title="Go to Home Portal">
                 <div class="icon-box" style="color: #38bdf8;">
                     <svg viewBox="0 0 24 24">
@@ -902,6 +903,7 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #4ade80, #22c55e); color: #000;">MRR</span>
             </a>
             {% endif %}
+            {% endif %}
 
             <button class="nav-item" onclick="openTaxPreparationCenter()" title="Tax Preparation Center">
                 <div class="icon-box" style="color: #f43f5e;">
@@ -913,6 +915,7 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff;">PRO</span>
             </button>
 
+            {% if user_role != 'Tax_Prep' %}
             <a href="/compliance" class="nav-item {% if active_tab == 'compliance' %}active{% endif %}" title="Compliance & Tax Calendar">
                 <div class="icon-box" style="color: #f59e0b;">
                     <svg viewBox="0 0 24 24">
@@ -950,6 +953,7 @@
                 <span class="nav-text" style="font-weight: 800;">Utilities</span>
                 <span class="nav-badge" style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff;">TOOLS</span>
             </a>
+            {% endif %}
 
             <button class="nav-item" onclick="openSupportModal()" title="Support Request">
                 <div class="icon-box" style="color: #00f2fe;">
@@ -14231,6 +14235,15 @@ function filterBillingTable(resetPages = true) {
     </div>
 
     <script>
+        // Auto-open Tax Preparation Center if user is Tax_Prep
+        {% if user_role == 'Tax_Prep' %}
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                openTaxPreparationCenter();
+            }, 500);
+        });
+        {% endif %}
+
         let currentTaxPrepData = [];
         let currentTaxPrepTab = 'progress';
 
