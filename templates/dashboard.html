@@ -14200,7 +14200,10 @@ function filterBillingTable(resetPages = true) {
                 </button>
             </div>
             
-            <div style="padding: 12px 24px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end;">
+            <div style="padding: 12px 24px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; gap: 12px;">
+                <select id="taxPrepCenterAssigneeFilter" onchange="renderTaxPrepCenter()" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer;">
+                    <option value="All">All Preparers</option>
+                </select>
                 <select id="taxPrepCenterStatusFilter" onchange="renderTaxPrepCenter()" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer;">
                     <option value="Pending">Show Pending (Action Required)</option>
                     <option value="Completed">Show Completed</option>
@@ -14288,6 +14291,24 @@ function filterBillingTable(resetPages = true) {
                 const resData = await res.json();
                 if (!res.ok) throw new Error(resData.detail || 'Error loading tax prep data');
                 currentTaxPrepData = resData.data || [];
+                
+                // Populate Assignee Dropdown
+                const assigneeFilter = document.getElementById('taxPrepCenterAssigneeFilter');
+                if (assigneeFilter) {
+                    const currentSelection = assigneeFilter.value;
+                    assigneeFilter.innerHTML = '<option value="All">All Preparers</option>';
+                    const uniqueAssignees = [...new Set(currentTaxPrepData.map(r => r.assigned_tax_prep).filter(a => a))].sort();
+                    uniqueAssignees.forEach(a => {
+                        const opt = document.createElement('option');
+                        opt.value = a;
+                        opt.text = a;
+                        assigneeFilter.appendChild(opt);
+                    });
+                    if (uniqueAssignees.includes(currentSelection)) {
+                        assigneeFilter.value = currentSelection;
+                    }
+                }
+                
                 renderTaxPrepCenter();
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #f87171;">${err.message}</td></tr>`;
@@ -14299,10 +14320,18 @@ function filterBillingTable(resetPages = true) {
             if (!tbody) return;
             
             const filterStatus = document.getElementById('taxPrepCenterStatusFilter').value;
+            const assigneeFilterEl = document.getElementById('taxPrepCenterAssigneeFilter');
+            const filterAssignee = assigneeFilterEl ? assigneeFilterEl.value : 'All';
+            
             let rowsHtml = '';
             let filteredCount = 0;
             
             currentTaxPrepData.forEach(r => {
+                // Apply Assignee filter first
+                if (filterAssignee !== 'All' && r.assigned_tax_prep !== filterAssignee) {
+                    return; // skip
+                }
+                
                 let show = false;
                 let isCompleted = false;
                 
@@ -14352,7 +14381,7 @@ function filterBillingTable(resetPages = true) {
                             <td style="padding: 14px 12px; color: #c084fc; font-weight: 700; font-family: monospace;">${r.assigned_tax_prep || '-'}</td>
                             <td style="padding: 14px 12px; color: #94a3b8; font-size: 0.8rem;">${updatedStr}</td>
                             <td style="padding: 14px 12px; text-align: right;">
-                                <button onclick="openCustomerStorageModal(${r.customer_id})" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 8px;">📁 FOLDER</button>
+                                <button onclick="openCustomerStorageModal(event, ${r.customer_id})" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; margin-right: 8px;">📁 FOLDER</button>
                                 ${actionBtn}
                             </td>
                         </tr>
