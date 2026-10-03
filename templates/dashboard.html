@@ -851,7 +851,7 @@
         <div class="nav-section">
             <div class="nav-label">Main Navigation</div>
 
-            {% if user_role != 'Tax_Prep' %}
+            {% if user_role != 'TAX_PREP' %}
             <a href="/" class="nav-item" title="Go to Home Portal">
                 <div class="icon-box" style="color: #38bdf8;">
                     <svg viewBox="0 0 24 24">
@@ -915,7 +915,7 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff;">PRO</span>
             </button>
 
-            {% if user_role != 'Tax_Prep' %}
+            {% if user_role != 'TAX_PREP' %}
             <a href="/compliance" class="nav-item {% if active_tab == 'compliance' %}active{% endif %}" title="Compliance & Tax Calendar">
                 <div class="icon-box" style="color: #f59e0b;">
                     <svg viewBox="0 0 24 24">
@@ -14236,7 +14236,7 @@ function filterBillingTable(resetPages = true) {
 
     <script>
         // Auto-open Tax Preparation Center if user is Tax_Prep
-        {% if user_role == 'Tax_Prep' %}
+        {% if user_role == 'TAX_PREP' %}
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 openTaxPreparationCenter();
