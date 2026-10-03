@@ -14297,7 +14297,6 @@ function filterBillingTable(resetPages = true) {
                 if (assigneeFilter) {
                     const currentSelection = assigneeFilter.value;
                     assigneeFilter.innerHTML = '<option value="All">All Preparers</option>';
-                    assigneeFilter.innerHTML += '<option value="Unassigned">Unassigned (No Preparer)</option>';
                     const uniqueAssignees = [...new Set(currentTaxPrepData.map(r => r.assigned_tax_prep).filter(a => a))].sort();
                     uniqueAssignees.forEach(a => {
                         const opt = document.createElement('option');
@@ -14306,7 +14305,7 @@ function filterBillingTable(resetPages = true) {
                         assigneeFilter.appendChild(opt);
                     });
                     
-                    const validOptions = ['All', 'Unassigned', ...uniqueAssignees];
+                    const validOptions = ['All', ...uniqueAssignees];
                     if (validOptions.includes(currentSelection)) {
                         assigneeFilter.value = currentSelection;
                     }
@@ -14330,13 +14329,12 @@ function filterBillingTable(resetPages = true) {
             let filteredCount = 0;
             
             currentTaxPrepData.forEach(r => {
+                // Completely ignore unassigned records
+                if (!r.assigned_tax_prep) return;
+                
                 // Apply Assignee filter first
-                if (filterAssignee === 'All') {
-                    if (!r.assigned_tax_prep) return; // exclude unassigned from "All Preparers"
-                } else if (filterAssignee === 'Unassigned') {
-                    if (r.assigned_tax_prep) return; // skip if it has a preparer
-                } else {
-                    if (r.assigned_tax_prep !== filterAssignee) return; // skip if it doesn't match the selected preparer
+                if (filterAssignee !== 'All') {
+                    if (r.assigned_tax_prep !== filterAssignee) return;
                 }
                 
                 let show = false;
