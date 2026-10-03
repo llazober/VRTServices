@@ -14999,8 +14999,13 @@ async def send_tax_requirements_email(request: Request):
                 "sent_count": 0,
                 "skipped_count": 0,
                 "failed_count": 0,
-                "details": []
+                "details": [],
+                "count": 0
             }
+
+        if data.get("count_only"):
+            valid_emails = sum(1 for c in customers if parse_clean_email(c.get("email") or ""))
+            return {"success": True, "count": valid_emails}
 
         resend_key = (
             os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY") or ""

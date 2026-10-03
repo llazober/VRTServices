@@ -2961,15 +2961,54 @@
                         ? `specific client (ID: ${customerId})`
                         : `ALL active clients (${accountType === 'individual' ? 'Individual Only' : accountType === 'business' ? 'All Business Types' : 'All Types'})`;
 
+                    const btn = document.getElementById('btn_bulk_send_email');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '⏳ Calculating Audience Size...';
+                    }
+                    let expectedCount = 0;
+                    try {
+                        const countRes = await fetch('/api/tax-requirements/send-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email_type: emailType,
+                                target: target,
+                                account_type: accountType,
+                                customer_id: customerId,
+                                tax_year: taxYear,
+                                count_only: true
+                            })
+                        });
+                        const countData = await countRes.json();
+                        expectedCount = countData.count || 0;
+                    } catch (e) {
+                        console.error('Count error', e);
+                    } finally {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '🚀 Send Requirement Emails';
+                        }
+                    }
+
+                    if (expectedCount === 0) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert('No Clients Found', `There are 0 valid active clients in the selected target audience (${targetDesc}) with an email address on file.`, 'warning');
+                        } else {
+                            alert('No valid active clients found in the selected target audience.');
+                        }
+                        return;
+                    }
+
                     let confirmSend = true;
                     if (typeof showCustomConfirm === 'function') {
                         confirmSend = await showCustomConfirm(
-                            `Are you sure you want to send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?`,
-                            'Send Requirement Emails',
-                            '🚀 Yes, Send Emails',
+                            `Are you sure you want to send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?<br><br><strong style="color:#38bdf8;">This will attempt to send up to ${expectedCount} email(s).</strong>`,
+                            'Confirm Bulk Dispatch',
+                            `🚀 Yes, Send ${expectedCount} Email(s)`,
                             'Cancel'
                         );
-                    } else if (!confirm(`Send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?`)) {
+                    } else if (!confirm(`Send '${typeName}' emails for Tax Year ${taxYear} to ${targetDesc}?\n\nThis will send up to ${expectedCount} email(s).`)) {
                         return;
                     }
                     if (!confirmSend) return;
