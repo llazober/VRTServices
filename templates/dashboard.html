@@ -2585,7 +2585,7 @@
 
 
                     <!-- CARD 2: Bulk Send Requirement Emails -->
-                    <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px;">
+                    <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px; max-width: 600px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                                 <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; font-size: 1.3rem; display: flex; align-items: center; justify-content: center;">
@@ -2717,7 +2717,20 @@
                     const typeSel = document.getElementById('util_email_type');
                     const customWrapper = document.getElementById('util_custom_email_wrapper');
                     if (!typeSel || !customWrapper) return;
-                    customWrapper.style.display = (typeSel.value === 'custom') ? 'flex' : 'none';
+                    
+                    const val = typeSel.value;
+                    if (val === 'tax_docs_request' || val === 'missing_docs') {
+                        customWrapper.style.display = 'none';
+                    } else {
+                        customWrapper.style.display = 'flex';
+                        if (val !== 'custom' && window.availableEmailTemplates) {
+                            const tmpl = window.availableEmailTemplates.find(t => t.id == val);
+                            if (tmpl) {
+                                document.getElementById('util_custom_email_subject').value = tmpl.subject;
+                                document.getElementById('util_custom_email_body').value = tmpl.body;
+                            }
+                        }
+                    }
                 }
 
                 function toggleUtilEmailTargetControls() {
@@ -2796,7 +2809,7 @@
                     let customSubject = '';
                     let customBody = '';
 
-                    if (emailType === 'custom') {
+                    if (emailType !== 'tax_docs_request' && emailType !== 'missing_docs') {
                         const subjElem = document.getElementById('util_custom_email_subject');
                         const bodyElem = document.getElementById('util_custom_email_body');
                         customSubject = subjElem ? subjElem.value.trim() : '';
@@ -2905,7 +2918,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                email_type: emailType,
+                                email_type: (emailType === 'tax_docs_request' || emailType === 'missing_docs') ? emailType : 'custom',
                                 custom_subject: customSubject,
                                 custom_body: customBody,
                                 target: target,
@@ -9947,19 +9960,39 @@ function filterBillingTable(resetPages = true) {
 
         function renderEmailTemplatesDropdown() {
             const sel = document.getElementById('emailFormTemplateSelect');
-            if (!sel) return;
-            const currentVal = sel.value;
-            sel.innerHTML = '<option value="custom">💬 Custom Message</option>';
-            window.availableEmailTemplates.forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t.id;
-                opt.textContent = t.template_name;
-                sel.appendChild(opt);
-            });
-            if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
-                sel.value = currentVal;
-            } else {
-                sel.value = 'custom';
+            if (sel) {
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="custom">💬 Custom Message</option>';
+                window.availableEmailTemplates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.template_name;
+                    sel.appendChild(opt);
+                });
+                if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
+                    sel.value = currentVal;
+                } else {
+                    sel.value = 'custom';
+                }
+            }
+            
+            const utilSel = document.getElementById('util_email_type');
+            if (utilSel) {
+                const currentUtilVal = utilSel.value;
+                utilSel.innerHTML = `
+                    <option value="tax_docs_request">📩 Tax Documents Request (General Preparation Notice)</option>
+                    <option value="missing_docs">⚠️ Missing Tax Documents (Dynamic Pending Checklist)</option>
+                    <option value="custom">✏️ Custom Email (Custom Subject & Message Body)</option>
+                `;
+                window.availableEmailTemplates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = '📄 ' + t.template_name;
+                    utilSel.appendChild(opt);
+                });
+                if (currentUtilVal && utilSel.querySelector(`option[value="${currentUtilVal}"]`)) {
+                    utilSel.value = currentUtilVal;
+                }
             }
         }
 
