@@ -15759,3 +15759,135 @@ async def get_chat_history(contact: str, request: Request):
     finally:
         conn.close()
 
+
+# ── EMAIL TEMPLATES REST API ──────────────────────────────────────────────────
+
+@app.get("/api/email-templates")
+async def get_email_templates(request: Request):
+    """Get all email templates"""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401)
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('''
+                SELECT id, template_name, subject_template, body_template, is_system, created_at, updated_at 
+                FROM email_templates
+                ORDER BY is_system DESC, id ASC
+            ''')
+            rows = cur.fetchall()
+            for r in rows:
+                r['created_at'] = str(r['created_at']) if r.get('created_at') else None
+                r['updated_at'] = str(r['updated_at']) if r.get('updated_at') else None
+            return rows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.post("/api/email-templates")
+async def create_email_template(request: Request):
+    """Create a new email template"""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401)
+    
+    try:
+        data = await request.json()
+        name = data.get('template_name', '').strip()
+        subject = data.get('subject_template', '').strip()
+        body = data.get('body_template', '').strip()
+        
+        if not name or not subject or not body:
+            raise HTTPException(status_code=400, detail="Name, subject, and body are required")
+            
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute('''
+                    INSERT INTO email_templates (template_name, subject_template, body_template, is_system)
+                    VALUES (%s, %s, %s, false)
+                    RETURNING id
+                ''', (name, subject, body))
+                new_id = cur.fetchone()['id']
+                conn.commit()
+                return {"message": "Template created successfully", "id": new_id}
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/email-templates/{template_id}")
+async def update_email_template(template_id: int, request: Request):
+    """Update an email template"""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401)
+        
+    try:
+        data = await request.json()
+        name = data.get('template_name', '').strip()
+        subject = data.get('subject_template', '').strip()
+        body = data.get('body_template', '').strip()
+        
+        if not name or not subject or not body:
+            raise HTTPException(status_code=400, detail="Name, subject, and body are required")
+            
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute('SELECT is_system FROM email_templates WHERE id = %s', (template_id,))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Template not found")
+                
+                cur.execute('''
+                    UPDATE email_templates 
+                    SET template_name = %s, subject_template = %s, body_template = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (name, subject, body, template_id))
+                conn.commit()
+                return {"message": "Template updated successfully"}
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/email-templates/{template_id}")
+async def delete_email_template(template_id: int, request: Request):
+    """Delete an email template"""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401)
+        
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT is_system FROM email_templates WHERE id = %s', (template_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Template not found")
+            if row['is_system']:
+                raise HTTPException(status_code=400, detail="Cannot delete system templates")
+                
+            cur.execute('DELETE FROM email_templates WHERE id = %s', (template_id,))
+            conn.commit()
+            return {"message": "Template deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()

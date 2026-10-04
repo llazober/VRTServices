@@ -9920,7 +9920,146 @@ function filterBillingTable(resetPages = true) {
             if (msgEl) msgEl.value = '';
         }
 
-        function applyEmailTemplate(type, custData) {
+        
+        window.availableEmailTemplates = [];
+
+        async function fetchEmailTemplates() {
+            try {
+                const res = await fetch('/api/email-templates');
+                if (res.ok) {
+                    window.availableEmailTemplates = await res.json();
+                    renderEmailTemplatesDropdown();
+                    renderEmailTemplatesList();
+                }
+            } catch (e) {
+                console.error("Error fetching templates", e);
+            }
+        }
+
+        function renderEmailTemplatesDropdown() {
+            const sel = document.getElementById('emailFormTemplateSelect');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="custom">💬 Custom Message</option>';
+            window.availableEmailTemplates.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.template_name;
+                sel.appendChild(opt);
+            });
+            if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
+                sel.value = currentVal;
+            } else {
+                sel.value = 'custom';
+            }
+        }
+
+        function renderEmailTemplatesList() {
+            const list = document.getElementById('emailTemplatesList');
+            if (!list) return;
+            list.innerHTML = '';
+            window.availableEmailTemplates.forEach(t => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05);';
+                row.innerHTML = `
+                    <span style="font-size: 0.8rem; color: #fff; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${t.template_name}</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="editEmailTemplate(${t.id}); event.stopPropagation();" style="background: transparent; border: none; color: #38bdf8; cursor: pointer; padding: 2px;">✏️</button>
+                        ${!t.is_system ? `<button onclick="deleteEmailTemplate(${t.id}); event.stopPropagation();" style="background: transparent; border: none; color: #f87171; cursor: pointer; padding: 2px;">🗑️</button>` : `<span style="width: 20px;"></span>`}
+                    </div>
+                `;
+                row.onclick = () => editEmailTemplate(t.id);
+                list.appendChild(row);
+            });
+        }
+
+        function openEmailTemplatesModal() {
+            document.getElementById('emailTemplatesModal').style.display = 'flex';
+            document.getElementById('emailTemplateEditor').style.display = 'none';
+            document.getElementById('emailTemplateSelectPrompt').style.display = 'block';
+            fetchEmailTemplates();
+        }
+
+        function closeEmailTemplatesModal() {
+            document.getElementById('emailTemplatesModal').style.display = 'none';
+        }
+
+        function editEmailTemplate(id) {
+            document.getElementById('emailTemplateSelectPrompt').style.display = 'none';
+            document.getElementById('emailTemplateEditor').style.display = 'flex';
+            
+            if (id === 'new') {
+                document.getElementById('editTemplateId').value = '';
+                document.getElementById('editTemplateName').value = '';
+                document.getElementById('editTemplateSubject').value = '';
+                document.getElementById('editTemplateBody').value = '';
+                document.getElementById('editTemplateName').disabled = false;
+            } else {
+                const t = window.availableEmailTemplates.find(x => x.id == id);
+                if (t) {
+                    document.getElementById('editTemplateId').value = t.id;
+                    document.getElementById('editTemplateName').value = t.template_name;
+                    document.getElementById('editTemplateSubject').value = t.subject_template;
+                    document.getElementById('editTemplateBody').value = t.body_template;
+                }
+            }
+        }
+
+        async function saveEmailTemplate() {
+            const id = document.getElementById('editTemplateId').value;
+            const name = document.getElementById('editTemplateName').value;
+            const subject = document.getElementById('editTemplateSubject').value;
+            const body = document.getElementById('editTemplateBody').value;
+            
+            if (!name || !subject || !body) {
+                alert("Please fill all fields");
+                return;
+            }
+            
+            const payload = { template_name: name, subject_template: subject, body_template: body };
+            const url = id ? `/api/email-templates/${id}` : `/api/email-templates`;
+            const method = id ? 'PUT' : 'POST';
+            
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Failed to save');
+                }
+                alert('Template saved successfully');
+                await fetchEmailTemplates();
+                document.getElementById('emailTemplateEditor').style.display = 'none';
+                document.getElementById('emailTemplateSelectPrompt').style.display = 'block';
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function deleteEmailTemplate(id) {
+            if (!confirm('Are you sure you want to delete this template?')) return;
+            try {
+                const res = await fetch(`/api/email-templates/${id}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Failed to delete');
+                }
+                await fetchEmailTemplates();
+                document.getElementById('emailTemplateEditor').style.display = 'none';
+                document.getElementById('emailTemplateSelectPrompt').style.display = 'block';
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchEmailTemplates();
+        });
+        
+        function applyEmailTemplate(typeId, custData) {
             const subjectEl = document.getElementById('emailFormSubject');
             const msgEl = document.getElementById('emailFormMessage');
             if (!subjectEl || !msgEl) return;
@@ -9928,20 +10067,18 @@ function filterBillingTable(resetPages = true) {
             const cust = custData || currentCustomerRecords.find(c => c.id == currentEmailCustomerId) || {};
             const name = cust.legal_name || cust.display_name || 'Client';
 
-            if (type === 'tax_docs') {
-                subjectEl.value = `Tax Organizer & Document Request for ${name}`;
-                msgEl.value = `Dear ${name},\n\nWe hope this message finds you well.\n\nWe are preparing your upcoming Tax Return. Please provide your tax organizer details along with your W-2s, 1099s, K-1s, and any relevant tax document statements.\n\nYou can reply directly to this email with your PDF/image attachments, or upload them to your client portal.\n\nThank you,\nAccount Management Team`;
-            } else if (type === 'bk_stmt') {
-                subjectEl.value = `Monthly Bank Statement Request - ${name}`;
-                msgEl.value = `Dear ${name},\n\nThis is a reminder regarding your monthly bookkeeping process.\n\nPlease send us your latest bank and credit card statements so our accounting team can extract and categorize your transactions.\n\nSimply reply to this email with your statements attached.\n\nBest regards,\nAccounting Department`;
-            } else if (type === 'sign_8879') {
-                subjectEl.value = `Action Required: Form 8879 E-Signature - ${name}`;
-                msgEl.value = `Dear ${name},\n\nYour Tax Return preparation and review has been completed!\n\nAttached / linked is Form 8879 for your authorization. Please sign and reply to this email with the signed authorization so we can e-file your return with the IRS & State taxing authorities.\n\nThank you,\nTax Preparation Team`;
-            } else {
+            if (typeId === 'custom' || !typeId) {
                 if (!subjectEl.value || !subjectEl.value.toLowerCase().startsWith('re:')) {
                     subjectEl.value = `Information Update - ${name}`;
                 }
                 msgEl.value = '';
+                return;
+            }
+            
+            const t = window.availableEmailTemplates.find(x => x.id == typeId);
+            if (t) {
+                subjectEl.value = (t.subject_template || '').replace(/{client_name}/g, name);
+                msgEl.value = (t.body_template || '').replace(/{client_name}/g, name);
             }
         }
 
@@ -12028,7 +12165,7 @@ function filterBillingTable(resetPages = true) {
 </div>`;
 
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = storageModalHtml + pdfViewerModalHtml + customerChecklistModalHtml;
+            tempDiv.innerHTML = storageModalHtml + pdfViewerModalHtml + customerChecklistModalHtml + emailTemplatesModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
@@ -12037,6 +12174,7 @@ function filterBillingTable(resetPages = true) {
                         if (el.id === 'customerStorageModal') closeCustomerStorageModal();
                         if (el.id === 'pdfViewerModal') closePdfViewerModal();
                         if (el.id === 'customerChecklistModal') closeCustomerChecklistModal();
+                        if (el.id === 'emailTemplatesModal') closeEmailTemplatesModal();
                     }
                 });
             }
@@ -12069,12 +12207,12 @@ function filterBillingTable(resetPages = true) {
             </div>
 
             <div>
-                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Quick Message Template:</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Quick Message Template:</label>
+                    <a href="#" onclick="openEmailTemplatesModal(); return false;" style="font-size: 0.72rem; color: #38bdf8; text-decoration: none; font-weight: 700;">⚙️ Manage</a>
+                </div>
                 <select id="emailFormTemplateSelect" onchange="applyEmailTemplate(this.value)" style="width: 100%; background: #0b1324; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #c084fc; font-weight: 700; outline: none; cursor: pointer;">
                     <option value="custom">💬 Custom Message</option>
-                    <option value="tax_docs">📑 Tax Organizer & Document Request</option>
-                    <option value="bk_stmt">📊 Monthly Bank Statement Request</option>
-                    <option value="sign_8879">✍️ Form 8879 E-Signature Required</option>
                 </select>
             </div>
 
@@ -12181,6 +12319,58 @@ function filterBillingTable(resetPages = true) {
         <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); display: flex; justify-content: flex-end; gap: 10px;">
             <button type="button" onclick="closeMoveFileModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 700; border-radius: 8px; font-size: 0.78rem; cursor: pointer;">Cancel</button>
             <button type="button" id="submitMoveFileBtn" onclick="confirmSubmitMoveFile()" style="padding: 8px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 800; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);">🚚 Move File Now</button>
+        </div>
+    </div>
+</div>`;
+
+            
+            const emailTemplatesModalHtml = `
+<div id="emailTemplatesModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 2147483650; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0b1324; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 20px; max-width: 800px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.8); gap: 16px; color: #fff; max-height: 90vh;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.3rem;">⚙️</span>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #38bdf8; margin: 0;">Email Templates Manager</h3>
+            </div>
+            <button onclick="closeEmailTemplatesModal()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; padding: 4px;">✕</button>
+        </div>
+
+        <div style="padding: 0 20px; display: flex; gap: 20px; flex: 1; min-height: 0; overflow: hidden;">
+            <div style="flex: 1; display: flex; flex-direction: column; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 10px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h4 style="margin: 0; color: #fff; font-size: 0.9rem;">Templates</h4>
+                    <button onclick="editEmailTemplate('new')" style="background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.5); color: #4ade80; border-radius: 6px; padding: 4px 8px; font-size: 0.75rem; cursor: pointer;">+ New</button>
+                </div>
+                <div id="emailTemplatesList" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- templates injected here -->
+                </div>
+            </div>
+            <div style="flex: 2; overflow-y: auto; padding-right: 10px;">
+                <div id="emailTemplateEditor" style="display: none; flex-direction: column; gap: 14px;">
+                    <input type="hidden" id="editTemplateId" value="">
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Template Name *</label>
+                        <input type="text" id="editTemplateName" required style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff; font-weight: 700;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Subject Line *</label>
+                        <input type="text" id="editTemplateSubject" required style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase;">Message Body *</label>
+                        <textarea id="editTemplateBody" rows="8" required style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; color: #fff; resize: vertical; font-family: inherit;"></textarea>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 10px; font-size: 0.75rem; color: #94a3b8;">
+                        <strong>Variables available:</strong> <code>{client_name}</code>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                        <button onclick="saveEmailTemplate()" style="padding: 8px 16px; background: #38bdf8; border: none; color: #000; font-weight: 700; border-radius: 8px; cursor: pointer;">Save Template</button>
+                    </div>
+                </div>
+                <div id="emailTemplateSelectPrompt" style="text-align: center; color: #64748b; padding-top: 50px;">
+                    Select a template to edit, or create a new one.
+                </div>
+            </div>
         </div>
     </div>
 </div>`;
