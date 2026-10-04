@@ -2726,8 +2726,8 @@
                         if (val !== 'custom' && window.availableEmailTemplates) {
                             const tmpl = window.availableEmailTemplates.find(t => t.id == val);
                             if (tmpl) {
-                                document.getElementById('util_custom_email_subject').value = tmpl.subject;
-                                document.getElementById('util_custom_email_body').value = tmpl.body;
+                                document.getElementById('util_custom_email_subject').value = tmpl.subject_template || '';
+                                document.getElementById('util_custom_email_body').value = tmpl.body_template || '';
                             }
                         }
                     }
