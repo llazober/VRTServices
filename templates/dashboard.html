@@ -12174,7 +12174,7 @@ function filterBillingTable(resetPages = true) {
 </div>`;
 
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = storageModalHtml + pdfViewerModalHtml + customerChecklistModalHtml + emailTemplatesModalHtml;
+            tempDiv.innerHTML = storageModalHtml + pdfViewerModalHtml + customerChecklistModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
@@ -12563,7 +12563,7 @@ function filterBillingTable(resetPages = true) {
 </div>`;
 
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml + addTaxReqModalHtml + editCustomerModalHtml;
+            tempDiv.innerHTML = sendEmailModalHtml + commsHistoryModalHtml + moveFileModalHtml + addTaxReqModalHtml + editCustomerModalHtml + emailTemplatesModalHtml;
             while (tempDiv.firstElementChild) {
                 const el = tempDiv.firstElementChild;
                 document.body.appendChild(el);
@@ -12571,6 +12571,7 @@ function filterBillingTable(resetPages = true) {
                     if (e.target === el) {
                         if (el.id === 'addTaxRequirementModal') closeAddTaxRequirementModal();
                         if (el.id === 'editCustomerStandaloneModal') closeEditCustomerStandaloneModal();
+                        if (el.id === 'emailTemplatesModal') closeEmailTemplatesModal();
                     }
                 });
             }
