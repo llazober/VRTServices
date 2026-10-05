@@ -14480,7 +14480,7 @@ function filterBillingTable(resetPages = true) {
                 tab3.style.color = '#fff';
                 mainTable.style.display = 'none';
                 incompleteTable.style.display = 'table';
-                filtersContainer.style.display = 'flex'; // Ensure filters are shown
+                filtersContainer.style.display = 'none';
                 loadIncompleteDocuments();
             }
         }
@@ -14551,18 +14551,9 @@ function filterBillingTable(resetPages = true) {
             const tbody = document.getElementById('incompleteDocsTbody');
             if (!tbody) return;
             
-            const assigneeFilterEl = document.getElementById('taxPrepCenterAssigneeFilter');
-            const filterAssignee = assigneeFilterEl ? assigneeFilterEl.value : 'All';
-            const filterStatus = document.getElementById('taxPrepCenterStatusFilter').value;
-            
             let rowsHtml = '';
             
             currentIncompleteData.forEach(doc => {
-                if (filterAssignee !== 'All' && doc.assigned_tax_prep !== filterAssignee) return;
-                
-                // If filterStatus is "Completed", an incomplete doc logically shouldn't show.
-                if (filterStatus === 'Completed') return;
-                
                 rowsHtml += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                         <td style="padding: 16px 12px; font-weight: 700; color: #bae6fd;">${doc.cust_num || '—'}</td>
@@ -14574,7 +14565,7 @@ function filterBillingTable(resetPages = true) {
             });
             
             if (rowsHtml === '') {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No records found for the current filter.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No records found for the selected tax year.</td></tr>`;
             } else {
                 tbody.innerHTML = rowsHtml;
             }
