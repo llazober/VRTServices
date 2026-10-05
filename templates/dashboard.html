@@ -14354,9 +14354,12 @@ function filterBillingTable(resetPages = true) {
                 <button id="taxPrepTab2" onclick="switchTaxPrepTab('review')" style="flex: 1; padding: 14px; background: transparent; border: none; border-bottom: 3px solid transparent; color: var(--text-muted); font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;">
                     ✅ Tax Preparation for Review
                 </button>
+                <button id="taxPrepTab3" onclick="switchTaxPrepTab('incomplete')" style="flex: 1; padding: 14px; background: transparent; border: none; border-bottom: 3px solid transparent; color: var(--text-muted); font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;">
+                    ⚠️ Incomplete Documents
+                </button>
             </div>
             
-            <div style="padding: 12px 24px; background: rgba(0,0,0,0.3); border-bottom: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px;">
+            <div id="taxPrepFiltersContainer" style="padding: 12px 24px; background: rgba(0,0,0,0.3); border-bottom: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px;">
                 <select id="taxPrepCenterAssigneeFilter" onchange="renderTaxPrepCenter()" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 12px; color: var(--text-main); font-size: 0.8rem; outline: none; cursor: pointer;">
                     <option value="All">All Preparers</option>
                 </select>
@@ -14368,7 +14371,7 @@ function filterBillingTable(resetPages = true) {
             </div>
 
             <div style="flex: 1; overflow-y: auto; padding: 20px 24px;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <table id="taxPrepMainTable" style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
                         <tr style="background: var(--subtle-bg); border-bottom: 1px solid var(--border-color);">
                             <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Customer #</th>
@@ -14379,6 +14382,19 @@ function filterBillingTable(resetPages = true) {
                         </tr>
                     </thead>
                     <tbody id="taxPrepCenterTbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+                <table id="incompleteDocsTable" style="width: 100%; border-collapse: collapse; text-align: left; display: none;">
+                    <thead>
+                        <tr style="background: var(--subtle-bg); border-bottom: 1px solid var(--border-color);">
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Customer #</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Legal Name</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Doc. Type</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Created At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incompleteDocsTbody">
                         <!-- Populated by JS -->
                     </tbody>
                 </table>
@@ -14432,20 +14448,40 @@ function filterBillingTable(resetPages = true) {
             currentTaxPrepTab = tab;
             const tab1 = document.getElementById('taxPrepTab1');
             const tab2 = document.getElementById('taxPrepTab2');
+            const tab3 = document.getElementById('taxPrepTab3');
+            
+            // Reset all
+            [tab1, tab2, tab3].forEach(t => {
+                t.style.borderBottomColor = 'transparent';
+                t.style.color = '#94a3b8';
+            });
+            
+            const mainTable = document.getElementById('taxPrepMainTable');
+            const incompleteTable = document.getElementById('incompleteDocsTable');
+            const filtersContainer = document.getElementById('taxPrepFiltersContainer');
             
             if (tab === 'progress') {
                 tab1.style.borderBottomColor = '#f43f5e';
                 tab1.style.color = '#fff';
-                tab2.style.borderBottomColor = 'transparent';
-                tab2.style.color = '#94a3b8';
-            } else {
+                mainTable.style.display = 'table';
+                incompleteTable.style.display = 'none';
+                filtersContainer.style.display = 'flex';
+                renderTaxPrepCenter();
+            } else if (tab === 'review') {
                 tab2.style.borderBottomColor = '#10b981';
                 tab2.style.color = '#fff';
-                tab1.style.borderBottomColor = 'transparent';
-                tab1.style.color = '#94a3b8';
+                mainTable.style.display = 'table';
+                incompleteTable.style.display = 'none';
+                filtersContainer.style.display = 'flex';
+                renderTaxPrepCenter();
+            } else if (tab === 'incomplete') {
+                tab3.style.borderBottomColor = '#eab308';
+                tab3.style.color = '#fff';
+                mainTable.style.display = 'none';
+                incompleteTable.style.display = 'table';
+                filtersContainer.style.display = 'none';
+                loadIncompleteDocuments();
             }
-            
-            renderTaxPrepCenter();
         }
 
         async function loadTaxPrepCenter() {
@@ -14478,9 +14514,48 @@ function filterBillingTable(resetPages = true) {
                     }
                 }
                 
-                renderTaxPrepCenter();
+                if (currentTaxPrepTab !== 'incomplete') {
+                    renderTaxPrepCenter();
+                }
+                
+                if (currentTaxPrepTab === 'incomplete') {
+                    loadIncompleteDocuments();
+                }
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #f87171;">${err.message}</td></tr>`;
+            }
+        }
+
+        async function loadIncompleteDocuments() {
+            const year = document.getElementById('taxPrepCenterYearSelect').value;
+            const tbody = document.getElementById('incompleteDocsTbody');
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Loading data...</td></tr>`;
+            
+            try {
+                const res = await fetch(`/api/tax-prep/incomplete-documents?tax_year=${year}`);
+                const resData = await res.json();
+                if (!res.ok) throw new Error(resData.detail || 'Error loading incomplete documents');
+                
+                const docs = resData.data || [];
+                if (docs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No incomplete documents found for the selected tax year.</td></tr>`;
+                    return;
+                }
+                
+                let rowsHtml = '';
+                docs.forEach(doc => {
+                    rowsHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 16px 12px; font-weight: 700; color: #bae6fd;">${doc.cust_num || '—'}</td>
+                            <td style="padding: 16px 12px; font-weight: 500; color: var(--text-main);">${doc.legal_name || '—'}</td>
+                            <td style="padding: 16px 12px; color: #f87171; font-weight: 600;">${doc.doc_type || '—'}</td>
+                            <td style="padding: 16px 12px; color: var(--text-muted); font-size: 0.85rem;">${doc.created_at || '—'}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = rowsHtml;
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: #f87171;">${err.message}</td></tr>`;
             }
         }
 

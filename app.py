@@ -15409,6 +15409,53 @@ async def send_tax_requirements_email(request: Request):
             conn.close()
 
 
+@app.get("/api/tax-prep/incomplete-documents")
+async def get_incomplete_documents(request: Request, tax_year: str = None):
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not tax_year:
+        import datetime
+        tax_year = str(datetime.datetime.now().year - 1)
+        
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    c.custumer_number as cust_num, 
+                    c.legal_name, 
+                    trr.doc_type, 
+                    trr.created_at 
+                FROM tax_return_requirements trr
+                JOIN customers c ON trr.customer_id = c.id
+                WHERE trr.tax_year = %s 
+                  AND (trr.manual_status IS NULL OR trr.manual_status = '')
+                ORDER BY trr.created_at DESC;
+            """, (tax_year,))
+            rows = cur.fetchall()
+            
+            for r in rows:
+                if r.get('created_at'):
+                    import pytz
+                    tz = pytz.timezone('America/New_York')
+                    if r['created_at'].tzinfo is None:
+                        # Assuming naive is UTC based on postgres default
+                        dt_utc = pytz.utc.localize(r['created_at'])
+                        r['created_at'] = dt_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        r['created_at'] = r['created_at'].astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+            return {"status": "success", "data": rows}
+    except Exception as e:
+        print(f"[GET INCOMPLETE DOCUMENTS ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/tax-preparation-workflow")
 async def get_tax_preparation_workflow(request: Request, tax_year: str = None):
     username = get_current_username(request)
