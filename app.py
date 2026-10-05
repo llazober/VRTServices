@@ -15463,9 +15463,9 @@ async def get_incomplete_documents(request: Request, tax_year: str = None):
                     import pytz
                     tz = pytz.timezone('America/New_York')
                     if r['created_at'].tzinfo is None:
-                        # Assuming naive is UTC based on postgres default
-                        dt_utc = pytz.utc.localize(r['created_at'])
-                        r['created_at'] = dt_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                        # Naive timestamp is already in Eastern Time because of connection timezone
+                        dt_est = tz.localize(r['created_at'])
+                        r['created_at'] = dt_est.strftime("%Y-%m-%d %H:%M:%S")
                     else:
                         r['created_at'] = r['created_at'].astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
             return {"status": "success", "data": rows}
