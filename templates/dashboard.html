@@ -14578,7 +14578,7 @@ function filterBillingTable(resetPages = true) {
                     const upDate = new Date(doc.created_at);
                     if (!isNaN(upDate)) {
                         const daysWaiting = Math.floor((new Date() - upDate) / (1000 * 60 * 60 * 24));
-                        const dateStr = doc.created_at.replace('T', ' ').substring(0, 19);
+                        const dateStr = typeof formatEasternDateTime === 'function' ? formatEasternDateTime(doc.created_at) : doc.created_at.replace('T', ' ').substring(0, 19);
                         dateDisplay = dateStr + ` <span style="color: #facc15; font-weight: bold; margin-left: 8px;">(${daysWaiting} days)</span>`;
                     } else {
                         dateDisplay = doc.created_at;
