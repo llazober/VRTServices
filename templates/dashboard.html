@@ -8509,6 +8509,18 @@ function filterBillingTable(resetPages = true) {
             updateStorageBatchSelectionState();
         }
 
+        function toggleStorageSelectAll(masterChk) {
+            const isChecked = masterChk.checked;
+            const fileCheckboxes = document.querySelectorAll('.storage-item-select-chk');
+            fileCheckboxes.forEach(chk => {
+                const row = chk.closest('tr');
+                if (row && row.style.display !== 'none') {
+                    chk.checked = isChecked;
+                }
+            });
+            updateStorageBatchSelectionState();
+        }
+
         function updateStorageBatchSelectionState() {
             const chks = document.querySelectorAll('.storage-item-select-chk:checked');
             const mergeBtn = document.getElementById('storageMergePdfBtn');
