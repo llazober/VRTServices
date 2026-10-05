@@ -14415,6 +14415,7 @@ function filterBillingTable(resetPages = true) {
         {% endif %}
 
         let currentTaxPrepData = [];
+        let currentIncompleteData = [];
         let currentTaxPrepTab = 'progress';
 
         function openTaxPreparationCenter() {
@@ -14479,7 +14480,7 @@ function filterBillingTable(resetPages = true) {
                 tab3.style.color = '#fff';
                 mainTable.style.display = 'none';
                 incompleteTable.style.display = 'table';
-                filtersContainer.style.display = 'none';
+                filtersContainer.style.display = 'flex'; // Ensure filters are shown
                 loadIncompleteDocuments();
             }
         }
@@ -14536,30 +14537,55 @@ function filterBillingTable(resetPages = true) {
                 const resData = await res.json();
                 if (!res.ok) throw new Error(resData.detail || 'Error loading incomplete documents');
                 
-                const docs = resData.data || [];
-                if (docs.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No incomplete documents found for the selected tax year.</td></tr>`;
-                    return;
-                }
+                currentIncompleteData = resData.data || [];
                 
-                let rowsHtml = '';
-                docs.forEach(doc => {
-                    rowsHtml += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                            <td style="padding: 16px 12px; font-weight: 700; color: #bae6fd;">${doc.cust_num || '—'}</td>
-                            <td style="padding: 16px 12px; font-weight: 500; color: var(--text-main);">${doc.legal_name || '—'}</td>
-                            <td style="padding: 16px 12px; color: #f87171; font-weight: 600;">${doc.doc_type || '—'}</td>
-                            <td style="padding: 16px 12px; color: var(--text-muted); font-size: 0.85rem;">${doc.created_at || '—'}</td>
-                        </tr>
-                    `;
-                });
-                tbody.innerHTML = rowsHtml;
+                // Keep the assignee filter updated with whoever has incomplete docs? 
+                // Or let the main workflow load it. Usually we just filter against it.
+                renderIncompleteDocuments();
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: #f87171;">${err.message}</td></tr>`;
             }
         }
+        
+        function renderIncompleteDocuments() {
+            const tbody = document.getElementById('incompleteDocsTbody');
+            if (!tbody) return;
+            
+            const assigneeFilterEl = document.getElementById('taxPrepCenterAssigneeFilter');
+            const filterAssignee = assigneeFilterEl ? assigneeFilterEl.value : 'All';
+            const filterStatus = document.getElementById('taxPrepCenterStatusFilter').value;
+            
+            let rowsHtml = '';
+            
+            currentIncompleteData.forEach(doc => {
+                if (filterAssignee !== 'All' && doc.assigned_tax_prep !== filterAssignee) return;
+                
+                // If filterStatus is "Completed", an incomplete doc logically shouldn't show.
+                if (filterStatus === 'Completed') return;
+                
+                rowsHtml += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 16px 12px; font-weight: 700; color: #bae6fd;">${doc.cust_num || '—'}</td>
+                        <td style="padding: 16px 12px; font-weight: 500; color: var(--text-main);">${doc.legal_name || '—'}</td>
+                        <td style="padding: 16px 12px; color: #f87171; font-weight: 600;">${doc.doc_type || '—'}</td>
+                        <td style="padding: 16px 12px; color: var(--text-muted); font-size: 0.85rem;">${doc.created_at || '—'}</td>
+                    </tr>
+                `;
+            });
+            
+            if (rowsHtml === '') {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No records found for the current filter.</td></tr>`;
+            } else {
+                tbody.innerHTML = rowsHtml;
+            }
+        }
 
         function renderTaxPrepCenter() {
+            if (currentTaxPrepTab === 'incomplete') {
+                renderIncompleteDocuments();
+                return;
+            }
+            
             const tbody = document.getElementById('taxPrepCenterTbody');
             if (!tbody) return;
             
