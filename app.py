@@ -15430,7 +15430,7 @@ async def get_incomplete_documents(request: Request, tax_year: str = None):
                     trr.doc_type, 
                     trr.created_at 
                 FROM tax_return_requirements trr
-                JOIN customers c ON trr.customer_id = c.id
+                JOIN customer c ON trr.customer_id = c.id
                 WHERE trr.tax_year = %s 
                   AND (trr.manual_status IS NULL OR trr.manual_status = '')
                 ORDER BY trr.created_at DESC;
