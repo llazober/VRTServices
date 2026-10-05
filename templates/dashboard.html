@@ -14403,7 +14403,8 @@ function filterBillingTable(resetPages = true) {
                             <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Customer #</th>
                             <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Legal Name</th>
                             <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Doc. Type</th>
-                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Created At</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Last Emailed</th>
+                            <th style="padding: 12px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; text-align: right;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="incompleteDocsTbody">
@@ -14559,6 +14560,12 @@ function filterBillingTable(resetPages = true) {
             }
         }
         
+        function openRequirementsEmailForIncomplete(customerId) {
+            currentChecklistCustomerId = customerId;
+            _taxDocCurrentYear = parseInt(document.getElementById('taxPrepCenterYearSelect').value, 10) || new Date().getFullYear();
+            sendTaxRequirementsEmail();
+        }
+
         function renderIncompleteDocuments() {
             const tbody = document.getElementById('incompleteDocsTbody');
             if (!tbody) return;
@@ -14566,18 +14573,36 @@ function filterBillingTable(resetPages = true) {
             let rowsHtml = '';
             
             currentIncompleteData.forEach(doc => {
+                let dateDisplay = '—';
+                if (doc.created_at) {
+                    const upDate = new Date(doc.created_at);
+                    if (!isNaN(upDate)) {
+                        const daysWaiting = Math.floor((new Date() - upDate) / (1000 * 60 * 60 * 24));
+                        const dateStr = doc.created_at.replace('T', ' ').substring(0, 19);
+                        dateDisplay = dateStr + ` <span style="color: #facc15; font-weight: bold; margin-left: 8px;">(${daysWaiting} days)</span>`;
+                    } else {
+                        dateDisplay = doc.created_at;
+                    }
+                }
+
+                let btnHtml = '';
+                if (isTaxPrepAdminUser && doc.customer_id) {
+                    btnHtml = `<button onclick="openRequirementsEmailForIncomplete(${doc.customer_id})" style="padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">📧 SEND EMAIL</button>`;
+                }
+
                 rowsHtml += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                         <td style="padding: 16px 12px; font-weight: 700; color: #bae6fd;">${doc.cust_num || '—'}</td>
                         <td style="padding: 16px 12px; font-weight: 500; color: var(--text-main);">${doc.legal_name || '—'}</td>
                         <td style="padding: 16px 12px; color: #f87171; font-weight: 600;">${doc.doc_type || '—'}</td>
-                        <td style="padding: 16px 12px; color: var(--text-muted); font-size: 0.85rem;">${doc.created_at || '—'}</td>
+                        <td style="padding: 16px 12px; color: var(--text-muted); font-size: 0.85rem;">${dateDisplay}</td>
+                        <td style="padding: 16px 12px; text-align: right;">${btnHtml}</td>
                     </tr>
                 `;
             });
             
             if (rowsHtml === '') {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">No records found for the selected tax year.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">No records found for the selected tax year.</td></tr>`;
             } else {
                 tbody.innerHTML = rowsHtml;
             }

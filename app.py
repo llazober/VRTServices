@@ -12033,6 +12033,17 @@ async def send_customer_email(customer_id: str, request: Request):
             """, (real_cust_id, from_email, recipient_email, custom_reply_to, full_subject, message_text))
             conn.commit()
 
+        update_tax_req_year = body.get("update_tax_req_year")
+        if update_tax_req_year:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE tax_return_requirements 
+                    SET updated_at = CURRENT_TIMESTAMP 
+                    WHERE customer_id = %s AND tax_year = %s 
+                      AND (manual_status IS NULL OR manual_status = '')
+                """, (real_cust_id, update_tax_req_year))
+                conn.commit()
+
         log_audit_event(username, "SEND_EMAIL", "Customer", real_cust_id, {"recipient": recipient_email, "subject": full_subject}, request=request)
 
         return {
@@ -15314,6 +15325,14 @@ async def send_tax_requirements_email(request: Request):
                                 tax_req_email_sent_at = CURRENT_TIMESTAMP,
                                 updated_at = CURRENT_TIMESTAMP;
                         """, (cid, period))
+
+                        _ucur.execute("""
+                            UPDATE tax_return_requirements
+                            SET updated_at = CURRENT_TIMESTAMP
+                            WHERE customer_id = %s AND tax_year = %s 
+                              AND (manual_status IS NULL OR manual_status = '')
+                        """, (cid, tax_year))
+
                         _uc.commit()
                     _uc.close()
                 except Exception as ue:
@@ -15425,10 +15444,12 @@ async def get_incomplete_documents(request: Request, tax_year: str = None):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
+                    c.id as customer_id,
                     c.custumer_number as cust_num, 
                     c.legal_name, 
+                    c.assigned_user_id as assigned_tax_prep,
                     trr.doc_type, 
-                    trr.created_at 
+                    trr.updated_at as created_at
                 FROM tax_return_requirements trr
                 JOIN customer c ON trr.customer_id = c.id
                 WHERE trr.tax_year = %s 
