@@ -7477,13 +7477,17 @@ async def download_file_proxy(key: str, request: Request, inline: bool = False):
     filename = os.path.basename(actual_key)
     try:
         disposition = "inline" if inline else "attachment"
+        params = {
+            'Bucket': bucket,
+            'Key': actual_key,
+            'ResponseContentDisposition': f'{disposition}; filename="{filename}"'
+        }
+        if inline and filename.lower().endswith(".pdf"):
+            params['ResponseContentType'] = 'application/pdf'
+            
         presigned_url = client.generate_presigned_url(
             'get_object',
-            Params={
-                'Bucket': bucket,
-                'Key': actual_key,
-                'ResponseContentDisposition': f'{disposition}; filename="{filename}"'
-            },
+            Params=params,
             ExpiresIn=3600
         )
         
