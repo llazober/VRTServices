@@ -7368,7 +7368,7 @@ async def view_pdf_proxy(key: str, request: Request):
         print(f"Error generating pre-signed URL for '{actual_key}': {e}")
         raise HTTPException(status_code=500, detail="Failed to generate file link")
 @app.get("/api/storage/download")
-async def download_file_proxy(key: str, request: Request):
+async def download_file_proxy(key: str, request: Request, inline: bool = False):
     """Generates a DO Spaces Pre-signed URL for downloading the file, falling back to proxy if dynamic recovery/compliance generation is needed."""
     username = get_current_username(request)
     if not username:
@@ -7416,8 +7416,9 @@ async def download_file_proxy(key: str, request: Request):
             recovered = try_recover_resend_attachment_by_key(clean_key)
             if recovered and len(recovered) > 100:
                 filename = os.path.basename(clean_key)
+                disposition = "inline" if inline else "attachment"
                 headers = {
-                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Disposition": f'{disposition}; filename="{filename}"',
                     "Cache-Control": "public, max-age=3600"
                 }
                 return StreamingResponse(
@@ -7455,8 +7456,9 @@ async def download_file_proxy(key: str, request: Request):
             elif lower_key.endswith(".jpg") or lower_key.endswith(".jpeg"):
                 content_type = "image/jpeg"
 
+            disposition = "inline" if inline else "attachment"
             headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": f'{disposition}; filename="{filename}"',
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
                 "Expires": "0",
@@ -7474,12 +7476,13 @@ async def download_file_proxy(key: str, request: Request):
 
     filename = os.path.basename(actual_key)
     try:
+        disposition = "inline" if inline else "attachment"
         presigned_url = client.generate_presigned_url(
             'get_object',
             Params={
                 'Bucket': bucket,
                 'Key': actual_key,
-                'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                'ResponseContentDisposition': f'{disposition}; filename="{filename}"'
             },
             ExpiresIn=3600
         )
