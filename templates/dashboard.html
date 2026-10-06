@@ -8278,13 +8278,9 @@ function filterBillingTable(resetPages = true) {
                 const extractBtn = document.getElementById('extractTaxDataBtn');
                 const viewBtn = document.getElementById('viewExtractedDataBtn');
                 if (extractBtn && viewBtn) {
-                    if (data.current_prefix && data.current_prefix.includes('Tax Year')) {
-                        extractBtn.style.display = 'inline-block';
-                        viewBtn.style.display = 'inline-block';
-                    } else {
-                        extractBtn.style.display = 'none';
-                        viewBtn.style.display = 'none';
-                    }
+                    // Hidden for future use
+                    extractBtn.style.display = 'none';
+                    viewBtn.style.display = 'none';
                 }
 
 
