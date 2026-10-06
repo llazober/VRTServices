@@ -7475,6 +7475,28 @@ async def download_file_proxy(key: str, request: Request, inline: bool = False):
             raise HTTPException(status_code=500, detail="Failed to fetch compliance PDF")
 
     filename = os.path.basename(actual_key)
+    
+    if inline:
+        try:
+            s3_obj = client.get_object(Bucket=bucket, Key=actual_key)
+            body_bytes = s3_obj["Body"].read()
+            content_type = "application/pdf" if filename.lower().endswith(".pdf") else (s3_obj.get("ContentType") or "application/octet-stream")
+            headers = {
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Frame-Options": "SAMEORIGIN",
+                "Access-Control-Allow-Origin": "*"
+            }
+            return StreamingResponse(
+                io.BytesIO(body_bytes),
+                media_type=content_type,
+                headers=headers
+            )
+        except Exception as e:
+            print(f"Error proxying inline PDF '{actual_key}': {e}")
+            
     try:
         disposition = "inline" if inline else "attachment"
         params = {
