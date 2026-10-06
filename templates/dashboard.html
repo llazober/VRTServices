@@ -15285,7 +15285,12 @@ async function extractTaxData() {
     const confirmed = await showCustomConfirm(`Extracting data from ${files.length} documents.\n\nThis will overwrite any existing extracted tax data for this client for the year ${taxYear}.\n\nProceed?`, "Extract Tax Data", "Yes, Extract", "Cancel");
     if (!confirmed) return;
 
-    showLoadingSpinner("Extracting and identifying tax forms... this may take a moment.");
+    const btn = document.getElementById('extractTaxDataBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ Extracting... Please wait.";
+    btn.style.opacity = "0.7";
+    btn.disabled = true;
+
     try {
         const res = await fetch('/api/storage/extract-tax-data', {
             method: 'POST',
@@ -15297,12 +15302,18 @@ async function extractTaxData() {
             })
         });
         const data = await res.json();
-        hideLoadingSpinner();
+        
+        btn.innerHTML = originalText;
+        btn.style.opacity = "1";
+        btn.disabled = false;
+        
         if (!res.ok) throw new Error(data.detail || "Extraction failed");
         
         showCustomAlert(`Successfully extracted data for ${data.extracted_count} forms!`, "success");
     } catch(err) {
-        hideLoadingSpinner();
+        btn.innerHTML = originalText;
+        btn.style.opacity = "1";
+        btn.disabled = false;
         showCustomAlert("Error during extraction: " + err.message, "error");
     }
 }
