@@ -8275,6 +8275,18 @@ function filterBillingTable(resetPages = true) {
 
                 renderStorageBreadcrumbs();
                 renderStorageItems(data.subfolders, data.files);
+                const extractBtn = document.getElementById('extractTaxDataBtn');
+                const viewBtn = document.getElementById('viewExtractedDataBtn');
+                if (extractBtn && viewBtn) {
+                    if (data.current_prefix && data.current_prefix.includes('Tax Year')) {
+                        extractBtn.style.display = 'inline-block';
+                        viewBtn.style.display = 'inline-block';
+                    } else {
+                        extractBtn.style.display = 'none';
+                        viewBtn.style.display = 'none';
+                    }
+                }
+
 
             } catch (err) {
                 if (tbody) {
@@ -11969,6 +11981,8 @@ function filterBillingTable(resetPages = true) {
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <input type="file" id="storageFileInput" multiple style="display: none;" onchange="handleStorageFileUpload(event)">
                 <button onclick="document.getElementById('storageFileInput').click()" style="padding: 7px 16px; background: var(--upload-btn-bg); border: none; color: var(--upload-btn-text); font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;">📤 Upload Files</button>
+                <button id="extractTaxDataBtn" onclick="extractTaxData()" style="padding: 7px 16px; background: linear-gradient(135deg, #10b981, #059669); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer; display: none;" title="Extract JSON Data from PDFs in this folder">⚡ Extract Tax Data</button>
+                <button id="viewExtractedDataBtn" onclick="openExtractedDataViewerModal()" style="padding: 7px 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; color: #fff; font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer; display: none;" title="View all extracted tax data">📊 View Extracted Data</button>
                 <button onclick="createStorageFolder()" style="padding: 7px 14px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.4); color: #facc15; font-weight: 700; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Create a new subfolder in the current directory">📁 New Folder</button>
                 <button id="storageMergePdfBtn" onclick="mergeSelectedStorageImagesToPdf()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: var(--text-main); font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Merge checked image files into 1 PDF document">📑 Merge Selected (0) -> PDF</button>
                 <button id="storageBatchMoveBtn" onclick="moveSelectedStorageFiles()" style="display: none; padding: 7px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: var(--text-main); font-weight: 800; border-radius: 8px; font-size: 0.76rem; text-transform: uppercase; cursor: pointer;" title="Move selected files to another directory">🚚 Move Selected (0)</button>
@@ -15241,6 +15255,98 @@ function filterBillingTable(resetPages = true) {
         const container = document.getElementById('chatMessages');
         container.scrollTop = container.scrollHeight;
     }
+</script>
+
+
+<!-- Extracted Data Viewer Modal -->
+<div id="extractedDataViewerModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2147483648; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+        <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
+            <h2 style="margin: 0; font-size: 1.25rem; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 8px;">📊 Extracted Tax Data</h2>
+            <button onclick="closeExtractedDataViewerModal()" style="background: var(--subtle-bg); border: 1px solid var(--border-color); color: var(--text-muted); width: 32px; height: 32px; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">✕</button>
+        </div>
+        <div id="extractedDataContent" style="padding: 24px; overflow-y: auto; flex: 1; color: var(--text-main);">
+            Loading data...
+        </div>
+    </div>
+</div>
+
+<script>
+async function extractTaxData() {
+    const files = currentStorageData.files.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.jpg') || f.name.toLowerCase().endsWith('.png'));
+    if (files.length === 0) {
+        showCustomAlert("No suitable files found in this folder to extract.", "warning");
+        return;
+    }
+    
+    let taxYearMatch = currentStoragePrefix.match(/Tax Year (\d{4})/);
+    let taxYear = taxYearMatch ? parseInt(taxYearMatch[1]) : new Date().getFullYear();
+
+    const confirmed = await showCustomConfirm(`Extracting data from ${files.length} documents.\n\nThis will overwrite any existing extracted tax data for this client for the year ${taxYear}.\n\nProceed?`, "Extract Tax Data", "Yes, Extract", "Cancel");
+    if (!confirmed) return;
+
+    showLoadingSpinner("Extracting and identifying tax forms... this may take a moment.");
+    try {
+        const res = await fetch('/api/storage/extract-tax-data', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                customer_id: currentStorageCustomerId,
+                tax_year: taxYear,
+                files: files.map(f => f.key)
+            })
+        });
+        const data = await res.json();
+        hideLoadingSpinner();
+        if (!res.ok) throw new Error(data.detail || "Extraction failed");
+        
+        showCustomAlert(`Successfully extracted data for ${data.extracted_count} forms!`, "success");
+    } catch(err) {
+        hideLoadingSpinner();
+        showCustomAlert("Error during extraction: " + err.message, "error");
+    }
+}
+
+async function openExtractedDataViewerModal() {
+    document.getElementById('extractedDataViewerModal').style.display = 'flex';
+    const content = document.getElementById('extractedDataContent');
+    content.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">⏳ Fetching extracted data...</div>';
+
+    let taxYearMatch = currentStoragePrefix.match(/Tax Year (\d{4})/);
+    let taxYear = taxYearMatch ? parseInt(taxYearMatch[1]) : new Date().getFullYear();
+
+    try {
+        const res = await fetch(`/api/storage/extracted-data?customer_id=${currentStorageCustomerId}&tax_year=${taxYear}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to load data");
+
+        if (data.results.length === 0) {
+            content.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No extracted data found for this year.</div>';
+            return;
+        }
+
+        let html = '';
+        data.results.forEach((item, idx) => {
+            html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 20px; overflow: hidden;">
+                <div style="background: rgba(0,0,0,0.2); padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8;">📄 ${item.form_type}</h3>
+                    <span style="font-size: 0.8rem; color: #64748b;">File: ${item.file_path.split('/').pop()}</span>
+                </div>
+                <div style="padding: 20px;">
+                    <pre style="margin: 0; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #a7f3d0; font-size: 0.85rem; overflow-x: auto;">${JSON.stringify(item.raw_data, null, 2)}</pre>
+                </div>
+            </div>`;
+        });
+        content.innerHTML = html;
+
+    } catch(err) {
+        content.innerHTML = `<div style="text-align: center; padding: 40px; color: #f87171;">⚠️ ${err.message}</div>`;
+    }
+}
+
+function closeExtractedDataViewerModal() {
+    document.getElementById('extractedDataViewerModal').style.display = 'none';
+}
 </script>
 
 </body>
