@@ -15319,42 +15319,41 @@ async function extractTaxData() {
 }
 
 async function openExtractedDataViewerModal() {
+    document.getElementById('extractedDataViewerModal').style.display = 'flex';
+    const content = document.getElementById('extractedDataContent');
+    content.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">⏳ Fetching extracted data...</div>';
+
     let taxYearMatch = currentStoragePrefix.match(/Tax Year (\d{4})/);
     let taxYear = taxYearMatch ? parseInt(taxYearMatch[1]) : new Date().getFullYear();
 
     try {
-        const btn = document.querySelector('button[onclick="openExtractedDataViewerModal()"]');
-        let oldHTML = "";
-        if(btn) { oldHTML = btn.innerHTML; btn.innerHTML = "⏳ Loading..."; btn.disabled = true; }
-
         const res = await fetch(`/api/storage/extracted-data?customer_id=${currentStorageCustomerId}&tax_year=${taxYear}`);
         const data = await res.json();
-        
-        if(btn) { btn.innerHTML = oldHTML; btn.disabled = false; }
         
         if (!res.ok) throw new Error(data.detail || "Failed to load data");
 
         if (data.results.length === 0) {
-            showCustomAlert('No extracted data found for this year.', 'info');
+            content.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No extracted data found for this year.</div>';
             return;
         }
 
         window.currentExtractedTaxData = data.results;
-        
-        const select = document.getElementById('taxComparisonSelect');
-        select.innerHTML = '';
+        let html = '';
         data.results.forEach((item, idx) => {
-            const opt = document.createElement('option');
-            opt.value = idx;
-            opt.innerText = item.form_type + " (" + item.file_path.split('/').pop() + ")";
-            select.appendChild(opt);
+            html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 20px; overflow: hidden;">
+                <div style="background: rgba(0,0,0,0.2); padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8;">📄 ${item.form_type}</h3>
+                    <button onclick='openTaxComparisonViewer(${idx})' style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.2)'" onmouseout="this.style.background='rgba(56, 189, 248, 0.1)'">🔍 Compare Data</button>
+                </div>
+                <div style="padding: 20px;">
+                    <pre style="margin: 0; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #a7f3d0; font-size: 0.85rem; overflow-x: auto;">${JSON.stringify(item.raw_data, null, 2)}</pre>
+                </div>
+            </div>`;
         });
-
-        document.getElementById('taxComparisonViewerModal').style.display = 'flex';
-        openTaxComparisonViewer(0);
+        content.innerHTML = html;
 
     } catch(err) {
-        showCustomAlert("⚠️ " + err.message, "error");
+        content.innerHTML = `<div style="text-align: center; padding: 40px; color: #f87171;">⚠️ ${err.message}</div>`;
     }
 }
 
@@ -15367,12 +15366,16 @@ function openTaxComparisonViewer(idx) {
     const filePath = item.file_path;
     const rawData = item.raw_data;
     
+    const viewerModal = document.getElementById('taxComparisonViewerModal');
     const iframe = document.getElementById('taxComparisonIframe');
     const jsonPre = document.getElementById('taxComparisonJson');
-    
-    document.getElementById('taxComparisonSelect').value = idx;
+    const title = document.getElementById('taxComparisonTitle');
+
+    title.innerText = "Reviewing: " + filePath.split('/').pop();
     iframe.src = "/api/storage/download?key=" + encodeURIComponent(filePath) + "&inline=true";
     jsonPre.innerHTML = JSON.stringify(rawData, null, 2);
+    
+    viewerModal.style.display = 'flex';
 }
 
 function closeTaxComparisonViewer() {
@@ -15383,18 +15386,14 @@ function closeTaxComparisonViewer() {
 </script>
 
 <!-- Split-Screen Tax Data Comparison Viewer Modal -->
-<div id="taxComparisonViewerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(11, 12, 16, 0.95); z-index: 100000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+<div id="taxComparisonViewerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(11, 12, 16, 0.95); z-index: 2147483649; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
     <div style="background: var(--card-bg, #1e293b); width: 95vw; height: 95vh; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
         
         <!-- Header -->
         <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.5rem;">🔍</span>
-                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 15px;">
-                    Reviewing Data
-                    <select id="taxComparisonSelect" onchange="openTaxComparisonViewer(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 1rem; outline: none; cursor: pointer; min-width: 250px;">
-                    </select>
-                </h2>
+                <h2 id="taxComparisonTitle" style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #f1f5f9;">Data Comparison</h2>
             </div>
             <button onclick="closeTaxComparisonViewer()" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; transition: color 0.2s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#64748b'">✕</button>
         </div>
