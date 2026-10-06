@@ -15336,12 +15336,13 @@ async function openExtractedDataViewerModal() {
             return;
         }
 
+        window.currentExtractedTaxData = data.results;
         let html = '';
         data.results.forEach((item, idx) => {
             html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 20px; overflow: hidden;">
                 <div style="background: rgba(0,0,0,0.2); padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8;">📄 ${item.form_type}</h3>
-                    <button onclick='openTaxComparisonViewer("${encodeURIComponent(item.file_path)}", ${JSON.stringify(JSON.stringify(item.raw_data))})' style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.2)'" onmouseout="this.style.background='rgba(56, 189, 248, 0.1)'">🔍 Compare Data</button>
+                    <button onclick='openTaxComparisonViewer(${idx})' style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.2)'" onmouseout="this.style.background='rgba(56, 189, 248, 0.1)'">🔍 Compare Data</button>
                 </div>
                 <div style="padding: 20px;">
                     <pre style="margin: 0; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #a7f3d0; font-size: 0.85rem; overflow-x: auto;">${JSON.stringify(item.raw_data, null, 2)}</pre>
@@ -15359,15 +15360,18 @@ function closeExtractedDataViewerModal() {
     document.getElementById('extractedDataViewerModal').style.display = 'none';
 }
 
-function openTaxComparisonViewer(filePath, rawDataStr) {
-    const rawData = JSON.parse(rawDataStr);
+function openTaxComparisonViewer(idx) {
+    const item = window.currentExtractedTaxData[idx];
+    const filePath = item.file_path;
+    const rawData = item.raw_data;
+    
     const viewerModal = document.getElementById('taxComparisonViewerModal');
     const iframe = document.getElementById('taxComparisonIframe');
     const jsonPre = document.getElementById('taxComparisonJson');
     const title = document.getElementById('taxComparisonTitle');
 
-    title.innerText = "Reviewing: " + decodeURIComponent(filePath).split('/').pop();
-    iframe.src = "/api/storage/download?key=" + filePath + "&inline=true";
+    title.innerText = "Reviewing: " + filePath.split('/').pop();
+    iframe.src = "/api/storage/download?key=" + encodeURIComponent(filePath) + "&inline=true";
     jsonPre.innerHTML = JSON.stringify(rawData, null, 2);
     
     viewerModal.style.display = 'flex';
