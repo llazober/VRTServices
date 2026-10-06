@@ -15341,7 +15341,7 @@ async function openExtractedDataViewerModal() {
             html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 20px; overflow: hidden;">
                 <div style="background: rgba(0,0,0,0.2); padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8;">📄 ${item.form_type}</h3>
-                    <span style="font-size: 0.8rem; color: #64748b;">File: ${item.file_path.split('/').pop()}</span>
+                    <a href="/api/storage/download?key=${encodeURIComponent(item.file_path)}" target="_blank" style="font-size: 0.8rem; color: #38bdf8; text-decoration: none; cursor: pointer; border-bottom: 1px dashed #38bdf8;" title="Open PDF in new tab">File: ${item.file_path.split('/').pop()} ↗</a>
                 </div>
                 <div style="padding: 20px;">
                     <pre style="margin: 0; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #a7f3d0; font-size: 0.85rem; overflow-x: auto;">${JSON.stringify(item.raw_data, null, 2)}</pre>
