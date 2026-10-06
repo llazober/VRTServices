@@ -1361,7 +1361,7 @@ def run_boa_pipeline(all_pages_words, pdf_path, csv_output=None):
                             'category': cat
                         }
                         details.append(current_tx)
-                    elif match_nodate and last_date and not any(k in text.lower() for k in ['total', 'subtotal', 'balance', 'continued']):
+                    elif match_nodate and last_date and not any(k in text.lower() for k in ['total', 'subtotal', 'balance', 'continued', 'credits $', 'debits $', 'deposits and other credits', 'withdrawals and other debits']):
                         desc = match_nodate.group(1).strip()
                         amount = abs(clean_amount(match_nodate.group(2)))
                         
@@ -1374,7 +1374,7 @@ def run_boa_pipeline(all_pages_words, pdf_path, csv_output=None):
                             }
                             details.append(current_tx)
                     else:
-                        if current_tx and not any(k in text for k in ['Total', 'Subtotal', 'balance']):
+                        if current_tx and not any(k in text.lower() for k in ['total', 'subtotal', 'balance', 'continued', 'credits $', 'debits $', 'deposits and other credits', 'withdrawals and other debits']):
                             current_tx['description'] += " " + text.strip()
                             
     for t in details:
