@@ -16008,10 +16008,18 @@ async def extract_tax_data(payload: ExtractTaxDataRequest, request: Request):
                     
                     if file_key.lower().endswith('.pdf'):
                         pdf = fitz.open(stream=file_bytes, filetype="pdf")
-                        page = pdf[0]
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                        img_bytes = pix.tobytes("jpeg")
-                        b64_img = base64.b64encode(img_bytes).decode('utf-8')
+                        prompt = "You are an expert tax accountant. Extract data from this IRS document into strict JSON format. Include 'form_type' (e.g. 1099-INT, 1095-A, W-2, 1098, 1099-R) and any key-value pairs of the boxes visible."
+                        content_array = [{"type": "text", "text": prompt}]
+                        
+                        for page_num in range(min(3, len(pdf))):
+                            page = pdf[page_num]
+                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                            img_bytes = pix.tobytes("jpeg")
+                            b64_img = base64.b64encode(img_bytes).decode('utf-8')
+                            content_array.append({
+                                "type": "image_url", 
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}
+                            })
                         
                         # Use OpenAI API to extract structured JSON data
                         if openai_key:
@@ -16019,7 +16027,6 @@ async def extract_tax_data(payload: ExtractTaxDataRequest, request: Request):
                                 "Content-Type": "application/json",
                                 "Authorization": f"Bearer {openai_key}"
                             }
-                            prompt = "You are an expert tax accountant. Extract data from this IRS document into strict JSON format. Include 'form_type' (e.g. 1099-INT, 1095-A, W-2, 1098, 1099-R) and any key-value pairs of the boxes visible."
                             
                             ai_payload = {
                                 "model": "gpt-4o-mini",
@@ -16027,10 +16034,7 @@ async def extract_tax_data(payload: ExtractTaxDataRequest, request: Request):
                                 "messages": [
                                     {
                                         "role": "user",
-                                        "content": [
-                                            {"type": "text", "text": prompt},
-                                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
-                                        ]
+                                        "content": content_array
                                     }
                                 ],
                                 "max_tokens": 1000
