@@ -10021,7 +10021,18 @@ function filterBillingTable(resetPages = true) {
 
             if (titleEl) titleEl.textContent = targetEmail ? `↩️ Reply Email — ${targetEmail}` : `📧 Send Email — ${custName}`;
             if (subtitleEl) subtitleEl.textContent = `Customer #: ${custNum} | Recipient: ${custEmail || 'Not configured'}`;
-            if (toEl) toEl.value = custEmail;
+            if (toEl) {
+                toEl.value = custEmail;
+                if (custName === 'Unassigned Inbound Emails' || custName.includes('Unassigned Inbound')) {
+                    toEl.removeAttribute('readonly');
+                    toEl.style.background = 'var(--bg-color)';
+                    toEl.placeholder = 'Enter email address...';
+                } else {
+                    toEl.setAttribute('readonly', 'readonly');
+                    toEl.style.background = 'var(--subtle-bg)';
+                    toEl.placeholder = '';
+                }
+            }
             let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'notification@vrtservices12.com';
             if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
                 defaultReplyTo = 'notification@vrtservices12.com';
