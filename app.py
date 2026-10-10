@@ -12009,7 +12009,7 @@ async def send_customer_email(customer_id: str, request: Request):
         full_subject = subject if ref_tag.lower() in subject.lower() else f"{subject} {ref_tag}"
 
         display_heading = cust.get('legal_name') or cust.get('display_name') or "Customer"
-        if cust_ref == "CUST-0000":
+        if cust_ref.upper() == "CUST-0000" or "Unassigned Inbound" in display_heading:
             display_heading = "VRT Services"
 
         # HTML formatted message
