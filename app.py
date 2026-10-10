@@ -12008,11 +12008,15 @@ async def send_customer_email(customer_id: str, request: Request):
         ref_tag = f"[Ref: {cust_ref}]"
         full_subject = subject if ref_tag.lower() in subject.lower() else f"{subject} {ref_tag}"
 
+        display_heading = cust.get('legal_name') or cust.get('display_name') or "Customer"
+        if cust_ref == "CUST-0000":
+            display_heading = "VRT Services"
+
         # HTML formatted message
         formatted_html = f"""
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
             <div style="border-bottom: 2px solid #7f00ff; padding-bottom: 12px; margin-bottom: 20px;">
-                <h2 style="color: #0b0c10; margin: 0; font-size: 1.25rem;">{cust.get('legal_name') or cust.get('display_name')}</h2>
+                <h2 style="color: #0b0c10; margin: 0; font-size: 1.25rem;">{display_heading}</h2>
                 <p style="color: #64748b; margin: 4px 0 0 0; font-size: 0.85rem;">Communication Message</p>
             </div>
             <div style="white-space: pre-wrap; font-size: 0.95rem; color: #1e293b;">{message_text}</div>
