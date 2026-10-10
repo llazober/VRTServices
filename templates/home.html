@@ -711,6 +711,7 @@
 
         <ul class="nav-menu">
             <li><a href="#services" class="nav-link">Our Services</a></li>
+            <li><a href="javascript:void(0)" onclick="openContactUsModal()" class="nav-link">Contact Us</a></li>
             <li><a href="#workflow" class="nav-link">Filing Process</a></li>
         </ul>
 
@@ -1074,6 +1075,51 @@
         </div>
     </div>
 
+    <!-- Contact Us Modal -->
+    <div id="contactUsModal" style="display: none; position: fixed; inset: 0; background: rgba(5, 7, 13, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 2147483647; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: #0e1322; border: 1px solid rgba(236, 72, 153, 0.35); border-radius: 24px; max-width: 500px; width: 100%; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(236,72,153,0.15); color: #fff; overflow: hidden; position: relative;">
+            <div style="padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; box-shadow: 0 0 20px rgba(236,72,153,0.3);">
+                            ✉️
+                        </div>
+                        <div>
+                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">
+                                Contact Us
+                            </h3>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                                Send us a message and we'll get back to you shortly.
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="closeContactUsModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">✕</button>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Full Name</label>
+                        <input type="text" id="contactNameInput" placeholder="John Doe" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Email Address</label>
+                        <input type="email" id="contactEmailInput" placeholder="client@example.com" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Message</label>
+                        <textarea id="contactMessageInput" rows="4" placeholder="How can we help you?" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none; resize: none; font-family: inherit;"></textarea>
+                    </div>
+                    <div id="contactUsError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
+                    <div id="contactUsSuccess" style="display: none; font-size: 0.82rem; color: #34d399; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
+                </div>
+
+                <button id="btnContactUsSubmit" onclick="submitContactUsForm()" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; padding: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3); transition: all 0.25s ease; width: 100%; margin-top: 6px;">
+                    Send Message ➔
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Bottom Footer -->
     <footer class="bottom-footer">
         <div class="footer-inner">
@@ -1087,6 +1133,95 @@
             </div>
         </div>
     <script>
+        // ── Contact Us Modal Logic ──────────────────────────────────────────
+        function openContactUsModal() {
+            let modal = document.getElementById('contactUsModal');
+            if (!modal) return;
+            if (modal.parentNode !== document.body) {
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            modal.style.zIndex = '2147483647';
+            
+            // Reset fields
+            document.getElementById('contactNameInput').value = '';
+            document.getElementById('contactEmailInput').value = '';
+            document.getElementById('contactMessageInput').value = '';
+            document.getElementById('contactUsError').style.display = 'none';
+            document.getElementById('contactUsSuccess').style.display = 'none';
+            const btn = document.getElementById('btnContactUsSubmit');
+            btn.disabled = false;
+            btn.innerHTML = 'Send Message ➔';
+        }
+
+        function closeContactUsModal() {
+            let modal = document.getElementById('contactUsModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitContactUsForm() {
+            const name = document.getElementById('contactNameInput').value.trim();
+            const email = document.getElementById('contactEmailInput').value.trim();
+            const message = document.getElementById('contactMessageInput').value.trim();
+            const errEl = document.getElementById('contactUsError');
+            const successEl = document.getElementById('contactUsSuccess');
+            const btn = document.getElementById('btnContactUsSubmit');
+
+            errEl.style.display = 'none';
+            successEl.style.display = 'none';
+
+            if (!name) {
+                errEl.innerText = 'Please enter your name.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!email) {
+                errEl.innerText = 'Please enter your email address.';
+                errEl.style.display = 'block';
+                return;
+            }
+            // Basic email validation regex
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                errEl.innerText = 'Please enter a valid email address format.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!message) {
+                errEl.innerText = 'Please enter a message.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Sending...';
+
+            try {
+                const res = await fetch('/api/contact-us', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, email: email, message: message })
+                });
+                
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Failed to send message.');
+                }
+
+                successEl.innerText = 'Your message has been sent successfully. We will get back to you soon!';
+                successEl.style.display = 'block';
+                btn.innerHTML = 'Sent ✓';
+                
+                // Hide modal after 3 seconds on success
+                setTimeout(closeContactUsModal, 3000);
+            } catch (err) {
+                errEl.innerText = err.message || 'An error occurred while sending your message.';
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = 'Send Message ➔';
+            }
+        }
+
         // ── Client Portal Modal Logic ───────────────────────────────────────
         let PORTAL_CURRENT_CUSTOMER = null;
         let PORTAL_SELECTED_FILES = [];

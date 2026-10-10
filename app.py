@@ -16140,3 +16140,38 @@ async def get_extracted_data(customer_id: int, tax_year: int, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+class ContactUsRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+
+@app.post("/api/contact-us")
+async def contact_us(req: ContactUsRequest):
+    import re
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", req.email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    html_content = f"""
+    <h3>New Contact Us Submission</h3>
+    <p><strong>Name:</strong> {req.name}</p>
+    <p><strong>Email:</strong> {req.email}</p>
+    <p><strong>Message:</strong></p>
+    <p>{req.message.replace(chr(10), '<br>')}</p>
+    """
+    
+    payload = {
+        "from": format_resend_from_header("VRT Contact Form"),
+        "to": "notification@vrtservices12.com",
+        "reply_to": req.email,
+        "subject": f"New Contact Us Submission from {req.name}",
+        "html": html_content
+    }
+    
+    try:
+        send_resend_email(payload)
+        return {"status": "success", "message": "Email sent."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
