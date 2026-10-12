@@ -968,6 +968,16 @@
 
             <div class="nav-label" style="margin-top: 14px;">CRM Modules</div>
 
+            <a href="/leads" class="nav-item {% if active_tab == 'leads' %}active{% endif %}" title="Lead Pipeline & Acquisition">
+                <div class="icon-box" style="color: #06b6d4;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.96.76 1.58V19z"/>
+                    </svg>
+                </div>
+                <span class="nav-text" style="font-weight: 800;">Leads</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: #000;">HOT</span>
+            </a>
+
             <a href="/customers" class="nav-item {% if active_tab == 'customers' %}active{% endif %}" title="Customer Management">
                 <div class="icon-box" style="color: #e100ff;">
                     <svg viewBox="0 0 24 24">
@@ -1087,7 +1097,7 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="header-left">
-                <span class="page-title">{% if active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% elif active_tab == 'wu_checks' %}Western Union Check Automation (Strategy 1){% elif active_tab == 'utilities' %}System Utilities & Bulk Operations{% else %}Enterprise Dashboard{% endif %}</span>
+                <span class="page-title">{% if active_tab == 'leads' %}Leads Overview & Pipeline{% elif active_tab == 'customers' %}Customer Management{% elif active_tab == 'knowledge' %}Knowledge Base & AI Assistant{% elif active_tab == 'billing' %}Billing & Recurring Invoicing{% elif active_tab == 'compliance' %}Compliance & Tax Calendar{% elif active_tab == 'management' %}Management & Tools Hub{% elif active_tab == 'company_profile' %}Company Profile & Firm Credentials{% elif active_tab == 'wu_checks' %}Western Union Check Automation (Strategy 1){% elif active_tab == 'utilities' %}System Utilities & Bulk Operations{% else %}Enterprise Dashboard{% endif %}</span>
                 <div class="search-bar">
                     <svg viewBox="0 0 24 24">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -1158,7 +1168,778 @@
         <!-- Dashboard Content Body -->
         <div class="content-body">
 
-            {% if active_tab == 'customers' %}
+            {% if active_tab == 'leads' %}
+            <!-- ── DEDICATED LEADS & PIPELINE VIEW (MATCHING DATALAZO) ─────────────────── -->
+            <div id="leads-view-wrapper" style="display: flex; flex-direction: column; gap: 28px; padding-bottom: 40px; font-family: 'Outfit', sans-serif;">
+                
+                <!-- Toast Notification Box -->
+                <div id="leadToastBox" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 99999; padding: 14px 22px; border-radius: 12px; font-weight: 700; font-size: 0.9rem; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px;"></div>
+
+                <!-- Header Banner -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <h1 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 4px; letter-spacing: -0.5px;">Leads Overview</h1>
+                        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Manage and track your incoming business requests.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <a href="/compliance" style="padding: 10px 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #38bdf8; font-size: 0.88rem; font-weight: 700; border-radius: 10px; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)';" onmouseout="this.style.background='rgba(255,255,255,0.05)';">
+                            <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Manage Bookings
+                        </a>
+                        <a href="/customers" style="padding: 10px 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #38bdf8; font-size: 0.88rem; font-weight: 700; border-radius: 10px; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)';" onmouseout="this.style.background='rgba(255,255,255,0.05)';">
+                            <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                            </svg>
+                            CRM Customers
+                        </a>
+                        <a href="/company-profile" style="padding: 10px 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #cbd5e1; font-size: 0.88rem; font-weight: 700; border-radius: 10px; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)';" onmouseout="this.style.background='rgba(255,255,255,0.05)';">
+                            <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Settings
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 4 Stats Cards (Matching Screenshot) -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+                    <div style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 22px 24px;">
+                        <div style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Total Leads</div>
+                        <div id="statTotalLeads" style="font-size: 2.2rem; font-weight: 800; color: #fff;">0</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 22px 24px;">
+                        <div style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Won Deals</div>
+                        <div id="statWonDeals" style="font-size: 2.2rem; font-weight: 800; color: #34d399;">0</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 22px 24px;">
+                        <div style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Pending</div>
+                        <div id="statPendingLeads" style="font-size: 2.2rem; font-weight: 800; color: #fbbf24;">0</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 22px 24px;">
+                        <div style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Conversion</div>
+                        <div id="statConversionRate" style="font-size: 2.2rem; font-weight: 800; color: #38bdf8;">0%</div>
+                    </div>
+                </div>
+
+                <!-- Lead Pipeline Card -->
+                <div style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+                    <!-- Pipeline Header Bar -->
+                    <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.015); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">Lead Pipeline</h3>
+                            <button onclick="openAddLeadModal()" style="padding: 7px 16px; background: #06b6d4; color: #000; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 15px rgba(6, 182, 212, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#22d3ee';" onmouseout="this.style.background='#06b6d4';">
+                                <span style="font-size: 1rem; font-weight: 900;">+</span> ADD LEAD
+                            </button>
+                            <button onclick="openConvertClientModal(null)" style="padding: 7px 16px; background: #9333ea; color: #fff; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 15px rgba(147, 51, 234, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#a855f7';" onmouseout="this.style.background='#9333ea';">
+                                <span style="font-size: 1rem; font-weight: 900;">+</span> ADD CLIENT
+                            </button>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: #64748b; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></div> NEW
+                            </div>
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: #64748b; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4;"></div> CONTACTED
+                            </div>
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: #64748b; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></div> WON
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leads Table -->
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+                            <thead>
+                                <tr style="background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.06); color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <th style="padding: 16px 20px; font-weight: 700;">CONTACT</th>
+                                    <th style="padding: 16px 20px; font-weight: 700;">COMPANY / SERVICE</th>
+                                    <th style="padding: 16px 20px; font-weight: 700;">MESSAGE / INTERNAL NOTES</th>
+                                    <th style="padding: 16px 20px; font-weight: 700;">STATUS</th>
+                                    <th style="padding: 16px 20px; font-weight: 700; text-align: right;">ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leadsTableBody">
+                                <tr>
+                                    <td colspan="5" style="padding: 40px; text-align: center; color: #64748b;">
+                                        Loading lead pipeline...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── MODAL 1: ADD NEW LEAD (EXACT MATCH TO SCREENSHOT) ──────────────── -->
+            <div id="addLeadModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+                <div style="background: #0d1117; border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 20px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); font-family: 'Outfit', sans-serif;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; margin: 0;">
+                            ADD NEW LEAD
+                        </h2>
+                        <button type="button" onclick="closeAddLeadModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; line-height: 1;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">✕</button>
+                    </div>
+
+                    <form id="addLeadForm" onsubmit="handleCreateLeadSubmit(event)">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">FULL NAME *</label>
+                                <input type="text" id="add_lead_name" placeholder="e.g. John Doe" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">EMAIL ADDRESS *</label>
+                                <input type="email" id="add_lead_email" placeholder="e.g. john@example.com" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">PHONE NUMBER</label>
+                                <input type="text" id="add_lead_phone" placeholder="e.g. +1 (555) 123-4567" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">COMPANY</label>
+                                <input type="text" id="add_lead_company" placeholder="e.g. Acme Corp" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">SERVICE *</label>
+                                <input type="text" id="add_lead_service" placeholder="e.g. SEO Audit / Accounting / Tax" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">STATUS</label>
+                                <select id="add_lead_status" style="width: 100%; background: #0b0f17; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; cursor: pointer;">
+                                    <option value="IN_REVIEW" selected>In Review</option>
+                                    <option value="CONTACTED">Contacted</option>
+                                    <option value="BOOKED">Booked</option>
+                                    <option value="MAYBE">Maybe</option>
+                                    <option value="WON">Won</option>
+                                    <option value="LOST">Lost</option>
+                                    <option value="PROCESSED">Processed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">INITIAL MESSAGE</label>
+                            <textarea id="add_lead_message" rows="3" placeholder="Enter any message details or custom description..." style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';"></textarea>
+                        </div>
+
+                        <div style="margin-bottom: 24px;">
+                            <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">INTERNAL NOTES</label>
+                            <textarea id="add_lead_notes" rows="3" placeholder="Enter internal notes, follow-up history..." style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical;" onfocus="this.style.borderColor='#06b6d4';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); pt: 18px; padding-top: 18px;">
+                            <button type="button" onclick="closeAddLeadModal()" style="background: transparent; border: none; color: #94a3b8; font-weight: 700; font-size: 0.92rem; cursor: pointer; padding: 10px 18px; border-radius: 8px;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">
+                                Cancel
+                            </button>
+                            <button type="submit" id="btnSubmitAddLead" style="background: #06b6d4; color: #000; font-weight: 900; font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 12px; padding: 12px 28px; cursor: pointer; box-shadow: 0 0 20px rgba(6, 182, 212, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#22d3ee';" onmouseout="this.style.background='#06b6d4';">
+                                CREATE LEAD
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ── MODAL 2: EDIT LEAD DETAILS & AI PROPOSAL ────────────────────────── -->
+            <div id="editLeadModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+                <div style="background: #0d1117; border: 1px solid rgba(6, 182, 212, 0.35); border-radius: 20px; width: 100%; max-width: 760px; max-height: 90vh; overflow-y: auto; padding: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); font-family: 'Outfit', sans-serif;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0;">
+                            EDIT LEAD: <span id="editLeadNameTitle" style="color: #38bdf8;"></span>
+                        </h2>
+                        <button type="button" onclick="closeEditLeadModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; line-height: 1;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">✕</button>
+                    </div>
+
+                    <form id="editLeadForm" onsubmit="handleSaveLeadEditSubmit(event)">
+                        <input type="hidden" id="edit_lead_id">
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Full Name *</label>
+                                <input type="text" id="edit_lead_name" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Email Address *</label>
+                                <input type="email" id="edit_lead_email" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Phone Number</label>
+                                <input type="text" id="edit_lead_phone" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Company</label>
+                                <input type="text" id="edit_lead_company" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Service *</label>
+                                <input type="text" id="edit_lead_service" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Status</label>
+                                <select id="edit_lead_status" style="width: 100%; background: #0b0f17; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; cursor: pointer;">
+                                    <option value="IN_REVIEW">In Review</option>
+                                    <option value="CONTACTED">Contacted</option>
+                                    <option value="BOOKED">Booked</option>
+                                    <option value="MAYBE">Maybe</option>
+                                    <option value="WON">Won</option>
+                                    <option value="LOST">Lost</option>
+                                    <option value="PROCESSED">Processed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 14px;">
+                            <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Initial Message</label>
+                            <textarea id="edit_lead_message" rows="2" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                        </div>
+
+                        <div style="margin-bottom: 18px;">
+                            <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Internal Notes</label>
+                            <textarea id="edit_lead_notes" rows="3" placeholder="Enter internal notes, follow-up history, or meeting highlights..." style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                        </div>
+
+                        <!-- AI Proposal Section -->
+                        <div style="background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.25); border-radius: 14px; padding: 16px; margin-bottom: 24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #c084fc; letter-spacing: 0.5px;">AI Proposal Draft</span>
+                                <button type="button" onclick="generateAiProposalForEdit()" id="btnGenAiPitch" style="padding: 6px 14px; background: rgba(217, 70, 239, 0.2); border: 1px solid rgba(217, 70, 239, 0.4); color: #f0abfc; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(217,70,239,0.35)';" onmouseout="this.style.background='rgba(217,70,239,0.2)';">
+                                    ✨ Generate AI Pitch
+                                </button>
+                            </div>
+                            <textarea id="edit_lead_ai_proposal" rows="7" placeholder="Generate an AI proposal or type one manually..." style="width: 100%; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical; line-height: 1.5;"></textarea>
+                        </div>
+
+                        <!-- Modal Action Bar -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 18px;">
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" onclick="sendProposalFromEdit()" id="btnSendProposalEdit" style="padding: 10px 18px; background: linear-gradient(135deg, #d946ef, #9333ea); color: #fff; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(217, 70, 239, 0.4); display: flex; align-items: center; gap: 6px;">
+                                    ✉️ Approve & Send Email
+                                </button>
+                                <button type="button" onclick="openConvertClientModalFromEdit()" style="padding: 10px 18px; background: #9333ea; color: #fff; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(147, 51, 234, 0.35); display: flex; align-items: center; gap: 6px;">
+                                    👤 Create Client
+                                </button>
+                            </div>
+
+                            <div style="display: flex; gap: 12px;">
+                                <button type="button" onclick="closeEditLeadModal()" style="background: transparent; border: none; color: #94a3b8; font-weight: 700; font-size: 0.92rem; cursor: pointer; padding: 10px 18px; border-radius: 8px;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">
+                                    Cancel
+                                </button>
+                                <button type="submit" id="btnSaveLeadEdit" style="background: #06b6d4; color: #000; font-weight: 900; font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 12px; padding: 10px 24px; cursor: pointer; box-shadow: 0 0 20px rgba(6, 182, 212, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#22d3ee';" onmouseout="this.style.background='#06b6d4';">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ── MODAL 3: CONVERT / ADD CLIENT ──────────────────────────────────── -->
+            <div id="convertClientModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+                <div style="background: #0d1117; border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 20px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); font-family: 'Outfit', sans-serif;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 id="convertClientModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0;">
+                            Convert Lead to Client
+                        </h2>
+                        <button type="button" onclick="closeConvertClientModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; line-height: 1;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">✕</button>
+                    </div>
+
+                    <form id="convertClientForm" onsubmit="handleConvertClientSubmit(event)">
+                        <input type="hidden" id="convert_lead_id">
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Full Name *</label>
+                                <input type="text" id="convert_name" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Email Address *</label>
+                                <input type="email" id="convert_email" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Phone Number</label>
+                                <input type="text" id="convert_phone" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Company</label>
+                                <input type="text" id="convert_company" style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Type of Services *</label>
+                                <input type="text" id="convert_services" placeholder="e.g. Premium Tax Advisory + Bookkeeping" required style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box;">
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 24px;">
+                            <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Notes / Instructions</label>
+                            <textarea id="convert_notes" rows="3" placeholder="Enter client specific notes, instructions or contract details..." style="width: 100%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 18px;">
+                            <button type="button" onclick="closeConvertClientModal()" style="background: transparent; border: none; color: #94a3b8; font-weight: 700; font-size: 0.92rem; cursor: pointer; padding: 10px 18px; border-radius: 8px;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">
+                                Cancel
+                            </button>
+                            <button type="submit" id="btnSubmitConvertClient" style="background: #9333ea; color: #fff; font-weight: 900; font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 12px; padding: 12px 28px; cursor: pointer; box-shadow: 0 0 20px rgba(147, 51, 234, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#a855f7';" onmouseout="this.style.background='#9333ea';">
+                                Create Client
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ── JAVASCRIPT CONTROLLER FOR LEADS ───────────────────────────────── -->
+            <script>
+                let currentLeads = [];
+
+                function showLeadToast(message, type = 'success') {
+                    const box = document.getElementById('leadToastBox');
+                    if (!box) return;
+                    box.style.display = 'flex';
+                    if (type === 'success') {
+                        box.style.background = 'rgba(16, 185, 129, 0.2)';
+                        box.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+                        box.style.color = '#34d399';
+                        box.innerHTML = '<span>✅</span> ' + message;
+                    } else {
+                        box.style.background = 'rgba(239, 68, 68, 0.2)';
+                        box.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                        box.style.color = '#f87171';
+                        box.innerHTML = '<span>⚠️</span> ' + message;
+                    }
+                    setTimeout(() => {
+                        box.style.display = 'none';
+                    }, 4000);
+                }
+
+                function getLeadStatusColor(status) {
+                    const norm = (status || '').toUpperCase();
+                    switch (norm) {
+                        case 'WON':
+                            return 'background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35);';
+                        case 'CONTACTED':
+                            return 'background: rgba(6, 182, 212, 0.18); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.35);';
+                        case 'BOOKED':
+                            return 'background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);';
+                        case 'PROCESSED':
+                            return 'background: rgba(99, 102, 241, 0.18); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.35);';
+                        case 'LOST':
+                            return 'background: rgba(244, 63, 94, 0.18); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35);';
+                        case 'MAYBE':
+                            return 'background: rgba(234, 179, 8, 0.18); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.35);';
+                        default: // IN_REVIEW / NEW
+                            return 'background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35);';
+                    }
+                }
+
+                async function loadLeads() {
+                    const tbody = document.getElementById('leadsTableBody');
+                    if (!tbody) return;
+
+                    try {
+                        const res = await fetch('/api/leads');
+                        const data = await res.json();
+                        if (!data.success) {
+                            tbody.innerHTML = '<tr><td colspan="5" style="padding: 32px; text-align: center; color: #f87171;">Failed to load leads: ' + (data.error || 'Server error') + '</td></tr>';
+                            return;
+                        }
+
+                        currentLeads = data.leads || [];
+
+                        // Update Stat Cards
+                        if (data.stats) {
+                            document.getElementById('statTotalLeads').textContent = data.stats.total_leads || 0;
+                            document.getElementById('statWonDeals').textContent = data.stats.won_deals || 0;
+                            document.getElementById('statPendingLeads').textContent = data.stats.pending || 0;
+                            document.getElementById('statConversionRate').textContent = data.stats.conversion || '0%';
+                        }
+
+                        if (currentLeads.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="5" style="padding: 40px; text-align: center; color: #64748b;">No leads found in pipeline. Click <strong>+ ADD LEAD</strong> to get started.</td></tr>';
+                            return;
+                        }
+
+                        tbody.innerHTML = '';
+                        currentLeads.forEach(lead => {
+                            const tr = document.createElement('tr');
+                            tr.style.borderTop = '1px solid rgba(255, 255, 255, 0.05)';
+                            tr.style.transition = 'background 0.2s';
+                            tr.onmouseover = () => tr.style.background = 'rgba(255, 255, 255, 0.02)';
+                            tr.onmouseout = () => tr.style.background = 'transparent';
+
+                            const normStatus = (lead.status || 'IN_REVIEW').toUpperCase();
+                            const statusColor = getLeadStatusColor(normStatus);
+
+                            tr.innerHTML = `
+                                <td style="padding: 16px 20px;">
+                                    <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">${escapeHtml(lead.name || '')}</div>
+                                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 2px;">${escapeHtml(lead.email || '')}</div>
+                                    ${lead.phone ? `<div style="color: #94a3b8; font-size: 0.75rem; margin-top: 2px;">${escapeHtml(lead.phone)}</div>` : ''}
+                                </td>
+                                <td style="padding: 16px 20px;">
+                                    <div style="color: #cbd5e1; font-size: 0.88rem;">${escapeHtml(lead.company || 'Personal')}</div>
+                                    <div style="color: #38bdf8; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px;">
+                                        ${escapeHtml(lead.service || '')}
+                                    </div>
+                                </td>
+                                <td style="padding: 16px 20px; max-width: 280px;">
+                                    <div style="color: #94a3b8; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${escapeHtml(lead.message || '—')}
+                                    </div>
+                                    ${lead.notes ? `
+                                        <div style="color: #06b6d4; font-size: 0.75rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; display: flex; align-items: center; gap: 4px;">
+                                            <span>📝</span> ${escapeHtml(lead.notes)}
+                                        </div>
+                                    ` : ''}
+                                </td>
+                                <td style="padding: 16px 20px;">
+                                    <select onchange="handleLeadStatusChange(${lead.id}, this.value)" style="padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; outline: none; cursor: pointer; ${statusColor}">
+                                        <option value="IN_REVIEW" ${normStatus === 'IN_REVIEW' ? 'selected' : ''}>In Review</option>
+                                        <option value="CONTACTED" ${normStatus === 'CONTACTED' ? 'selected' : ''}>Contacted</option>
+                                        <option value="BOOKED" ${normStatus === 'BOOKED' ? 'selected' : ''}>Booked 📅</option>
+                                        <option value="MAYBE" ${normStatus === 'MAYBE' ? 'selected' : ''}>Maybe</option>
+                                        <option value="WON" ${normStatus === 'WON' ? 'selected' : ''}>Won</option>
+                                        <option value="LOST" ${normStatus === 'LOST' ? 'selected' : ''}>Lost</option>
+                                        <option value="PROCESSED" ${normStatus === 'PROCESSED' ? 'selected' : ''}>Processed</option>
+                                    </select>
+                                </td>
+                                <td style="padding: 16px 20px; text-align: right;">
+                                    <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                                        <button onclick="openConvertClientModal(${lead.id})" title="Convert to Client" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
+                                            <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                            </svg>
+                                        </button>
+                                        <button onclick="sendDiscoveryLink(${lead.id}, '${lead.status}')" title="Email Discovery Link" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.3)';" onmouseout="this.style.background='rgba(16,185,129,0.15)';">
+                                            <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                            </svg>
+                                        </button>
+                                        <button onclick="openEditLeadModal(${lead.id})" title="Edit Lead Details" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: #38bdf8; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.3)';" onmouseout="this.style.background='rgba(6,182,212,0.15)';">
+                                            <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                            </svg>
+                                        </button>
+                                        <button onclick="deleteLead(${lead.id})" title="Delete Lead" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.3)';" onmouseout="this.style.background='rgba(239,68,68,0.15)';">
+                                            <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    } catch (e) {
+                        console.error('Error in loadLeads:', e);
+                        tbody.innerHTML = '<tr><td colspan="5" style="padding: 32px; text-align: center; color: #f87171;">Connection error loading leads.</td></tr>';
+                    }
+                }
+
+                function openAddLeadModal() {
+                    document.getElementById('addLeadForm').reset();
+                    document.getElementById('add_lead_status').value = 'IN_REVIEW';
+                    document.getElementById('addLeadModal').style.display = 'flex';
+                }
+
+                function closeAddLeadModal() {
+                    document.getElementById('addLeadModal').style.display = 'none';
+                }
+
+                async function handleCreateLeadSubmit(e) {
+                    e.preventDefault();
+                    const btn = document.getElementById('btnSubmitAddLead');
+                    btn.disabled = true;
+                    btn.textContent = 'CREATING...';
+
+                    const payload = {
+                        name: document.getElementById('add_lead_name').value.trim(),
+                        email: document.getElementById('add_lead_email').value.trim(),
+                        phone: document.getElementById('add_lead_phone').value.trim(),
+                        company: document.getElementById('add_lead_company').value.trim(),
+                        service: document.getElementById('add_lead_service').value.trim(),
+                        status: document.getElementById('add_lead_status').value,
+                        message: document.getElementById('add_lead_message').value.trim(),
+                        notes: document.getElementById('add_lead_notes').value.trim()
+                    };
+
+                    try {
+                        const res = await fetch('/api/leads', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            closeAddLeadModal();
+                            showLeadToast('Lead created successfully');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to create lead', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Error connecting to server', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'CREATE LEAD';
+                    }
+                }
+
+                function openEditLeadModal(id) {
+                    const lead = currentLeads.find(l => l.id == id);
+                    if (!lead) return;
+
+                    document.getElementById('edit_lead_id').value = lead.id;
+                    document.getElementById('editLeadNameTitle').textContent = lead.name;
+                    document.getElementById('edit_lead_name').value = lead.name || '';
+                    document.getElementById('edit_lead_email').value = lead.email || '';
+                    document.getElementById('edit_lead_phone').value = lead.phone || '';
+                    document.getElementById('edit_lead_company').value = lead.company || '';
+                    document.getElementById('edit_lead_service').value = lead.service || '';
+                    document.getElementById('edit_lead_status').value = (lead.status || 'IN_REVIEW').toUpperCase();
+                    document.getElementById('edit_lead_message').value = lead.message || '';
+                    document.getElementById('edit_lead_notes').value = lead.notes || '';
+                    document.getElementById('edit_lead_ai_proposal').value = lead.ai_proposal || '';
+
+                    document.getElementById('editLeadModal').style.display = 'flex';
+                }
+
+                function closeEditLeadModal() {
+                    document.getElementById('editLeadModal').style.display = 'none';
+                }
+
+                async function handleSaveLeadEditSubmit(e) {
+                    e.preventDefault();
+                    const id = document.getElementById('edit_lead_id').value;
+                    const btn = document.getElementById('btnSaveLeadEdit');
+                    btn.disabled = true;
+                    btn.textContent = 'Saving...';
+
+                    const payload = {
+                        name: document.getElementById('edit_lead_name').value.trim(),
+                        email: document.getElementById('edit_lead_email').value.trim(),
+                        phone: document.getElementById('edit_lead_phone').value.trim(),
+                        company: document.getElementById('edit_lead_company').value.trim(),
+                        service: document.getElementById('edit_lead_service').value.trim(),
+                        status: document.getElementById('edit_lead_status').value,
+                        message: document.getElementById('edit_lead_message').value.trim(),
+                        notes: document.getElementById('edit_lead_notes').value.trim(),
+                        ai_proposal: document.getElementById('edit_lead_ai_proposal').value
+                    };
+
+                    try {
+                        const res = await fetch(`/api/leads/${id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            closeEditLeadModal();
+                            showLeadToast('Lead updated successfully');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to update lead', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Error saving lead updates', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'Save Changes';
+                    }
+                }
+
+                async function generateAiProposalForEdit() {
+                    const id = document.getElementById('edit_lead_id').value;
+                    const btn = document.getElementById('btnGenAiPitch');
+                    btn.disabled = true;
+                    btn.textContent = 'Generating...';
+
+                    try {
+                        const res = await fetch(`/api/leads/${id}/generate-proposal`, { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            document.getElementById('edit_lead_ai_proposal').value = data.aiProposal;
+                            showLeadToast('AI Pitch generated successfully!');
+                        } else {
+                            showLeadToast(data.error || 'Failed to generate pitch', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('AI generation failed', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = '✨ Generate AI Pitch';
+                    }
+                }
+
+                async function sendProposalFromEdit() {
+                    const id = document.getElementById('edit_lead_id').value;
+                    const proposal = document.getElementById('edit_lead_ai_proposal').value.trim();
+                    if (!proposal) {
+                        showLeadToast('Please generate or enter a proposal before sending.', 'error');
+                        return;
+                    }
+
+                    const btn = document.getElementById('btnSendProposalEdit');
+                    btn.disabled = true;
+                    btn.textContent = 'Sending...';
+
+                    try {
+                        const res = await fetch(`/api/leads/${id}/proposal`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ aiProposal: proposal })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            closeEditLeadModal();
+                            showLeadToast('Proposal emailed successfully!');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to send proposal', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Error sending proposal email', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = '✉️ Approve & Send Email';
+                    }
+                }
+
+                function openConvertClientModalFromEdit() {
+                    const id = document.getElementById('edit_lead_id').value;
+                    closeEditLeadModal();
+                    openConvertClientModal(id);
+                }
+
+                function openConvertClientModal(id) {
+                    document.getElementById('convertClientForm').reset();
+                    if (id) {
+                        const lead = currentLeads.find(l => l.id == id);
+                        if (lead) {
+                            document.getElementById('convert_lead_id').value = lead.id;
+                            document.getElementById('convertClientModalTitle').textContent = `Convert Lead: ${lead.name}`;
+                            document.getElementById('convert_name').value = lead.name || '';
+                            document.getElementById('convert_email').value = lead.email || '';
+                            document.getElementById('convert_phone').value = lead.phone || '';
+                            document.getElementById('convert_company').value = lead.company || '';
+                            document.getElementById('convert_services').value = lead.service || '';
+                            document.getElementById('convert_notes').value = lead.notes || '';
+                        }
+                    } else {
+                        document.getElementById('convert_lead_id').value = '';
+                        document.getElementById('convertClientModalTitle').textContent = 'Add New Client';
+                    }
+                    document.getElementById('convertClientModal').style.display = 'flex';
+                }
+
+                function closeConvertClientModal() {
+                    document.getElementById('convertClientModal').style.display = 'none';
+                }
+
+                async function handleConvertClientSubmit(e) {
+                    e.preventDefault();
+                    const btn = document.getElementById('btnSubmitConvertClient');
+                    btn.disabled = true;
+                    btn.textContent = 'Creating...';
+
+                    const payload = {
+                        leadId: document.getElementById('convert_lead_id').value,
+                        name: document.getElementById('convert_name').value.trim(),
+                        email: document.getElementById('convert_email').value.trim(),
+                        phone: document.getElementById('convert_phone').value.trim(),
+                        company: document.getElementById('convert_company').value.trim(),
+                        services: document.getElementById('convert_services').value.trim(),
+                        notes: document.getElementById('convert_notes').value.trim()
+                    };
+
+                    try {
+                        const res = await fetch('/api/leads/convert-to-client', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            closeConvertClientModal();
+                            showLeadToast(data.message || 'Client created successfully');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to create client', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Error converting lead to client', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'Create Client';
+                    }
+                }
+
+                async function handleLeadStatusChange(id, newStatus) {
+                    try {
+                        const res = await fetch(`/api/leads/${id}/status`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus })
+                        });
+                        if (res.ok) {
+                            showLeadToast(`Status updated to ${newStatus}`);
+                            loadLeads();
+                        } else {
+                            showLeadToast('Failed to update status', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Status update failed', 'error');
+                    }
+                }
+
+                async function sendDiscoveryLink(id, currentStatus) {
+                    const norm = (currentStatus || '').toUpperCase();
+                    if (norm === 'CONTACTED') {
+                        if (!confirm('This discovery assessment email was sent already. Send again?')) return;
+                    }
+
+                    try {
+                        const res = await fetch(`/api/leads/${id}/send-discovery-link`, { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showLeadToast('Discovery link emailed successfully!');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to send discovery link', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Discovery link send error', 'error');
+                    }
+                }
+
+                async function deleteLead(id) {
+                    if (!confirm('Are you sure you want to delete this lead?')) return;
+                    try {
+                        const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showLeadToast('Lead deleted successfully');
+                            loadLeads();
+                        } else {
+                            showLeadToast(data.error || 'Failed to delete lead', 'error');
+                        }
+                    } catch (err) {
+                        showLeadToast('Delete error', 'error');
+                    }
+                }
+
+                // Initial loader for Leads tab
+                document.addEventListener('DOMContentLoaded', () => {
+                    loadLeads();
+                });
+                // In case tab is switched or page already loaded
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    loadLeads();
+                }
+            </script>
+            {% elif active_tab == 'customers' %}
             <!-- ── DEDICATED CUSTOMER MANAGEMENT VIEW ─────────────────── -->
             <div style="background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">

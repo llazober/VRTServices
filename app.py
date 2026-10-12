@@ -1610,6 +1610,34 @@ def save_company_profile(data: dict) -> dict:
         if conn:
             conn.close()
 
+def init_leads_table():
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS leads (
+                    id                  BIGSERIAL PRIMARY KEY,
+                    name                VARCHAR(200) NOT NULL,
+                    email               VARCHAR(255) NOT NULL,
+                    phone               VARCHAR(50),
+                    company             VARCHAR(200),
+                    service             VARCHAR(200) NOT NULL,
+                    status              VARCHAR(50) NOT NULL DEFAULT 'IN_REVIEW',
+                    message             TEXT,
+                    notes               TEXT,
+                    ai_proposal         TEXT,
+                    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+    except Exception as e:
+        print(f"Error init leads table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
     if not text:
         return []
@@ -2043,6 +2071,7 @@ try:
     init_esignature_tables()
     init_company_profile_table()
     init_tax_document_tracking_tables()
+    init_leads_table()
     cleanup_duplicate_communications()
 except Exception as e:
     print(f"Startup table init exception: {e}")
@@ -3640,6 +3669,21 @@ async def read_utilities_page(request: Request, msg: str = "", error: str = ""):
     ctx["msg"] = msg
     ctx["error"] = error
     ctx["active_tab"] = "utilities"
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=ctx
+    )
+
+@app.get("/leads", response_class=HTMLResponse)
+@app.get("/lead-pipeline", response_class=HTMLResponse)
+async def read_leads_page(request: Request, msg: str = "", error: str = ""):
+    ctx = prepare_dashboard_context(request)
+    if isinstance(ctx, RedirectResponse):
+        return ctx
+    ctx["msg"] = msg
+    ctx["error"] = error
+    ctx["active_tab"] = "leads"
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -11807,6 +11851,522 @@ async def run_billing_scheduler_endpoint():
     if isinstance(res, dict) and res.get("status") == "error":
         raise HTTPException(status_code=500, detail=res.get("message", "Failed to run billing job."))
     return res
+
+# ── Leads CRM & Pipeline API Endpoints ──────────────────────────────────────────────
+@app.get("/api/leads")
+async def list_leads_endpoint(request: Request):
+    """Returns all leads sorted by id DESC, along with summary counts and conversion rate."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                       to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at,
+                       to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at
+                FROM leads
+                ORDER BY id DESC;
+            """)
+            leads = [dict(row) for row in cur.fetchall()]
+
+            total_leads = len(leads)
+            won_deals = len([l for l in leads if str(l.get("status", "")).upper() == "WON"])
+            pending = len([l for l in leads if str(l.get("status", "")).upper() in ("IN_REVIEW", "PENDING", "NEW")])
+            conversion = f"{round((won_deals / total_leads) * 100)}%" if total_leads > 0 else "0%"
+
+            stats = {
+                "total_leads": total_leads,
+                "won_deals": won_deals,
+                "pending": pending,
+                "conversion": conversion
+            }
+
+            return JSONResponse({"success": True, "leads": leads, "stats": stats})
+    except Exception as e:
+        print(f"Error fetching leads: {e}")
+        return JSONResponse({"success": False, "error": str(e), "leads": [], "stats": {"total_leads": 0, "won_deals": 0, "pending": 0, "conversion": "0%"}}, status_code=500)
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/api/leads")
+async def create_lead_endpoint(request: Request):
+    """Creates a new lead in the pipeline and sends an optional Resend notification."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.json()
+    name = str(body.get("name", "")).strip()
+    email = str(body.get("email", "")).strip()
+    phone = str(body.get("phone", "")).strip()
+    company = str(body.get("company", "")).strip()
+    service = str(body.get("service", "")).strip()
+    status = str(body.get("status", "IN_REVIEW")).strip() or "IN_REVIEW"
+    message = str(body.get("message", "")).strip()
+    notes = str(body.get("notes", "")).strip()
+
+    if not name or not email or not service:
+        raise HTTPException(status_code=400, detail="Full Name, Email Address, and Service are required.")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO leads (name, email, phone, company, service, status, message, notes, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                          to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at;
+            """, (name, email, phone, company, service, status, message, notes))
+            new_lead = dict(cur.fetchone())
+            conn.commit()
+
+            # Optional notification email
+            try:
+                resend_key = (os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY") or "").strip()
+                if resend_key:
+                    send_resend_email({
+                        "from": format_resend_from_header("VRT Services CRM"),
+                        "to": ["notification@vrtservices12.com"],
+                        "subject": f"📥 New Lead Captured: {name} ({service})",
+                        "html": f"""
+                            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                                <h2 style="color: #06b6d4; margin-top: 0;">New Lead Notification</h2>
+                                <p><strong>Name:</strong> {name}</p>
+                                <p><strong>Email:</strong> <a href="mailto:{email}">{email}</a></p>
+                                <p><strong>Phone:</strong> {phone or 'N/A'}</p>
+                                <p><strong>Company:</strong> {company or 'Personal'}</p>
+                                <p><strong>Service:</strong> {service}</p>
+                                <p><strong>Status:</strong> {status}</p>
+                                {f'<div style="background: #f8fafc; padding: 12px; border-left: 4px solid #06b6d4; margin-top: 12px;"><strong>Message:</strong><br>{message}</div>' if message else ''}
+                                {f'<div style="background: #f1f5f9; padding: 12px; border-left: 4px solid #a855f7; margin-top: 12px;"><strong>Notes:</strong><br>{notes}</div>' if notes else ''}
+                            </div>
+                        """
+                    })
+            except Exception as notify_err:
+                print(f"[Lead notification email non-critical error]: {notify_err}")
+
+            return JSONResponse({"success": True, "lead": new_lead})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error creating lead: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/api/leads/{lead_id}")
+async def get_lead_endpoint(lead_id: str, request: Request):
+    """Fetches details of a specific lead."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                       to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at,
+                       to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at
+                FROM leads WHERE id = %s;
+            """, (int(lead_id),))
+            lead = cur.fetchone()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+            return JSONResponse({"success": True, "lead": dict(lead)})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn:
+            conn.close()
+
+@app.patch("/api/leads/{lead_id}")
+@app.put("/api/leads/{lead_id}")
+async def update_lead_endpoint(lead_id: str, request: Request):
+    """Updates lead fields."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.json()
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE leads
+                SET name = COALESCE(%s, name),
+                    email = COALESCE(%s, email),
+                    phone = COALESCE(%s, phone),
+                    company = COALESCE(%s, company),
+                    service = COALESCE(%s, service),
+                    status = COALESCE(%s, status),
+                    message = COALESCE(%s, message),
+                    notes = COALESCE(%s, notes),
+                    ai_proposal = COALESCE(%s, ai_proposal),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                          to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at;
+            """, (
+                body.get("name"), body.get("email"), body.get("phone"), body.get("company"),
+                body.get("service"), body.get("status"), body.get("message"), body.get("notes"),
+                body.get("aiProposal") or body.get("ai_proposal"), int(lead_id)
+            ))
+            updated = cur.fetchone()
+            conn.commit()
+            if not updated:
+                raise HTTPException(status_code=404, detail="Lead not found")
+            return JSONResponse({"success": True, "lead": dict(updated)})
+    except Exception as e:
+        if conn: conn.rollback()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.patch("/api/leads/{lead_id}/status")
+async def update_lead_status_endpoint(lead_id: str, request: Request):
+    """Updates only the lead status."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.json()
+    new_status = str(body.get("status", "")).strip()
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Status is required")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE leads
+                SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, name, email, status;
+            """, (new_status, int(lead_id)))
+            updated = cur.fetchone()
+            conn.commit()
+            if not updated:
+                raise HTTPException(status_code=404, detail="Lead not found")
+            return JSONResponse({"success": True, "lead": dict(updated)})
+    except Exception as e:
+        if conn: conn.rollback()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.delete("/api/leads/{lead_id}")
+async def delete_lead_endpoint(lead_id: str, request: Request):
+    """Deletes a lead from the pipeline."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM leads WHERE id = %s;", (int(lead_id),))
+            conn.commit()
+            return JSONResponse({"success": True, "message": "Lead deleted successfully"})
+    except Exception as e:
+        if conn: conn.rollback()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/leads/{lead_id}/generate-proposal")
+async def generate_lead_proposal_endpoint(lead_id: str, request: Request):
+    """Generates an AI sales pitch / proposal for the lead matching Datalazo's architecture."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM leads WHERE id = %s;", (int(lead_id),))
+            lead = cur.fetchone()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead_name = lead.get("name") or "Valued Client"
+        company = lead.get("company") or "their business"
+        service = lead.get("service") or "Professional Accounting & Tax Services"
+        notes = lead.get("notes") or lead.get("message") or "Requested custom advisory and preparation package."
+
+        prompt = f"""You are the Senior Client Solutions & Tax Strategy Architect at VRT Services / Datalazo.
+A potential customer named {lead_name} from {company} requested a proposal for {service}.
+
+Context & Client Notes:
+{notes}
+
+Your task: Write a highly professional, compelling 4-paragraph proposal emailing them a customized strategy and service roadmap to solve their biggest problems. Explain exactly how VRT Services delivers value, automation, and compliance. Keep the tone confident, visionary, and helpful.
+Include placeholder text like "[INSERT PRICING TIER HERE]" so the user knows where to manually adjust pricing.
+Format it nicely with clean paragraphs."""
+
+        ai_proposal = ""
+        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if openai_key:
+            try:
+                ai_req = urllib.request.Request(
+                    "https://api.openai.com/v1/chat/completions",
+                    data=json.dumps({
+                        "model": "gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": "You are an expert executive sales architect."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 800
+                    }).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(ai_req, timeout=20) as resp:
+                    resp_json = json.loads(resp.read().decode("utf-8"))
+                    ai_proposal = resp_json["choices"][0]["message"]["content"]
+            except Exception as ai_err:
+                print(f"[OpenAI Lead Proposal Error]: {ai_err}")
+
+        if not ai_proposal:
+            ai_proposal = f"""Dear {lead_name},
+
+Thank you for reaching out to VRT Services regarding your interest in our {service} solutions for {company}. We have reviewed your business requirements and are excited to present a customized roadmap designed to streamline your workflows, eliminate administrative bottlenecks, and optimize your financial operations.
+
+Our team combines industry-leading accounting precision with modern cloud automation tools to give you real-time visibility into your financial health. By partnering with VRT Services, {company} will benefit from dedicated compliance oversight, proactive advisory, and seamless execution across all required deliverables.
+
+Service Package Summary:
+• Comprehensive {service} Onboarding & Historical Review
+• Scheduled Compliance Milestones & Priority Filing
+• Dedicated Account Manager & Secure Client Portal Access
+• Real-time Document Sharing & Automated Receipt Capture
+
+Proposed Investment:
+[INSERT PRICING TIER HERE - e.g., $450/month or Custom Project Retainer]
+
+We would welcome the opportunity to review this proposal with you in detail. Please let us know a convenient time for a brief follow-up discussion, or simply reply to confirm your preferred start date.
+
+Warm regards,
+VRT Services & Datalazo Solutions Team
+www.vrtservices12.com"""
+
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE leads
+                SET ai_proposal = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (ai_proposal, int(lead_id)))
+            conn.commit()
+
+        return JSONResponse({"success": True, "aiProposal": ai_proposal})
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error generating proposal: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/leads/{lead_id}/proposal")
+async def send_lead_proposal_endpoint(lead_id: str, request: Request):
+    """Sends the approved proposal email to the lead via Resend."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.json()
+    ai_proposal = body.get("aiProposal") or body.get("ai_proposal")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM leads WHERE id = %s;", (int(lead_id),))
+            lead = cur.fetchone()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+        content = ai_proposal or lead.get("ai_proposal") or ""
+        if not content:
+            raise HTTPException(status_code=400, detail="Proposal content is empty. Please generate or enter a proposal first.")
+
+        formatted_html = "<br>".join(content.split("\n"))
+        resend_res = send_resend_email({
+            "from": format_resend_from_header("VRT Services Solutions"),
+            "to": [lead["email"]],
+            "subject": f"Custom Solutions Proposal: {lead.get('service', 'Services')} - VRT Services",
+            "html": f"""
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 650px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <div style="border-bottom: 2px solid #06b6d4; padding-bottom: 12px; margin-bottom: 16px;">
+                        <h2 style="color: #06b6d4; margin: 0;">VRT Services Proposal</h2>
+                        <span style="color: #64748b; font-size: 0.88rem;">Tailored Solutions for {lead.get('company') or lead.get('name')}</span>
+                    </div>
+                    <div style="font-size: 0.95rem; color: #344155; line-height: 1.7;">
+                        {formatted_html}
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 16px;">
+                    <p style="font-size: 0.78rem; color: #94a3b8; text-align: center; margin: 0;">
+                        VRT Services LLC • Secure Client Document & CRM Portal
+                    </p>
+                </div>
+            """
+        })
+
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE leads
+                SET status = 'PROCESSED', ai_proposal = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (content, int(lead_id)))
+            conn.commit()
+
+        return JSONResponse({"success": True, "message": "Proposal emailed successfully!", "resend": resend_res})
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error sending proposal: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/leads/{lead_id}/send-discovery-link")
+async def send_discovery_link_endpoint(lead_id: str, request: Request):
+    """Sends a client discovery intake / assessment link and sets status to CONTACTED."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM leads WHERE id = %s;", (int(lead_id),))
+            lead = cur.fetchone()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+        host = get_request_host(request) or "portal.vrtservices12.com"
+        discovery_url = f"https://{host}/intake?lead={lead['id']}"
+
+        send_resend_email({
+            "from": format_resend_from_header("VRT Services"),
+            "to": [lead["email"]],
+            "subject": f"Next Steps: Client Discovery Assessment - VRT Services",
+            "html": f"""
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h2 style="color: #06b6d4; margin-top: 0;">Welcome to VRT Services</h2>
+                    <p>Hi {lead.get('name', 'Valued Client')},</p>
+                    <p>It was a pleasure connecting with you regarding your <strong>{lead.get('service', 'business and tax')}</strong> needs.</p>
+                    <p>To help us prepare your custom onboarding package and roadmap, please click the button below to complete our discovery assessment:</p>
+                    <div style="text-align: center; margin: 28px 0;">
+                        <a href="{discovery_url}" style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: #000; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Start Discovery Assessment
+                        </a>
+                    </div>
+                    <p style="color: #64748b; font-size: 0.9rem;">If you have any immediate questions, feel free to reply directly to this email.</p>
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 16px;">
+                    <p style="font-size: 0.78rem; color: #94a3b8; text-align: center; margin: 0;">
+                        VRT Services LLC • Accounting, Tax Strategy & Business Solutions
+                    </p>
+                </div>
+            """
+        })
+
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE leads
+                SET status = 'CONTACTED', updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (int(lead_id),))
+            conn.commit()
+
+        return JSONResponse({"success": True, "message": "Discovery link emailed successfully!"})
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error sending discovery link: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/leads/convert-to-client")
+async def convert_lead_to_client_endpoint(request: Request):
+    """Converts a lead into a real client in the customer table and marks the lead as WON."""
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.json()
+    lead_id = body.get("leadId")
+    name = str(body.get("name", "")).strip()
+    email = str(body.get("email", "")).strip()
+    phone = str(body.get("phone", "")).strip()
+    company = str(body.get("company", "")).strip()
+    services = str(body.get("services", "")).strip()
+    notes = str(body.get("notes", "")).strip()
+
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Full Name and Email Address are required.")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT COALESCE(MAX(id), 0) + 1001 FROM customer;")
+            next_num = cur.fetchone()[0]
+            custumer_number = f"CUST-{next_num}"
+
+            legal_name = company if company else name
+            display_name = name if company else None
+            cust_type = "Business" if company else "Individual"
+            parent_name = get_user_parent_name(username) or "VRT Services"
+
+            combined_notes = f"Converted from Lead Pipeline. Service: {services}."
+            if notes:
+                combined_notes += f" Notes: {notes}"
+
+            cur.execute("""
+                INSERT INTO customer (
+                    custumer_number, customer_type, legal_name, display_name,
+                    phone, email, notes, parent_name, status,
+                    created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, 'Active',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                ) RETURNING *;
+            """, (
+                custumer_number, cust_type, legal_name, display_name,
+                phone or None, email or None, combined_notes, parent_name
+            ))
+            new_cust = dict(cur.fetchone())
+
+            if lead_id:
+                cur.execute("""
+                    UPDATE leads
+                    SET status = 'WON', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                """, (int(lead_id),))
+
+            conn.commit()
+            return JSONResponse({"success": True, "customer": new_cust, "message": f"Client created successfully with customer # {custumer_number}"})
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error converting lead to client: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
 
 # ── Workload Pending Tasks Endpoint ──────────────────────────────────────────────
 @app.get("/api/dashboard/pending-tasks")
