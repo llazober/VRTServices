@@ -3724,12 +3724,39 @@
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div>
-                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Monthly Fee ($ USD) *</label>
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Billing Frequency *</label>
+                        <select id="scheduleFrequencySelect" onchange="onScheduleFrequencyChange(this.value)" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: var(--text-main); outline: none; font-weight: 700;">
+                            <option value="MONTHLY" selected>📅 Monthly (Every Month)</option>
+                            <option value="QUARTERLY">📊 Quarterly (Every 3 Months)</option>
+                            <option value="ANNUALLY">🗓️ Annually (Once a Year)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label id="scheduleAmountLabel" style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Monthly Fee ($ USD) *</label>
                         <input type="number" step="0.01" min="0.01" id="scheduleAmountInput" required placeholder="e.g. 350.00" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: var(--text-main); outline: none;">
                     </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div>
                         <label style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Billing Day of Month (1 - 31) *</label>
                         <input type="number" min="1" max="31" id="scheduleDayInput" value="1" required style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: var(--text-main); outline: none;">
+                    </div>
+                    <div id="scheduleAnnualMonthContainer" style="display: none;">
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #c084fc; margin-bottom: 6px;">Annual Renewal Month *</label>
+                        <select id="scheduleMonthInput" style="width: 100%; background: var(--subtle-bg); border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; color: var(--text-main); outline: none;">
+                            <option value="1" selected>January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
                     </div>
                 </div>
                 <div>
@@ -6012,14 +6039,37 @@ function filterBillingTable(resetPages = true) {
                 return;
             }
 
-            tbody.innerHTML = pageSchedules.map(s => `
+            tbody.innerHTML = pageSchedules.map(s => {
+                const freq = (s.frequency || 'MONTHLY').toUpperCase();
+                let freqSuffix = '/ mo';
+                let freqBadge = 'Monthly';
+                let cycleDetail = `Day ${s.billing_day} of month`;
+                const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                if (freq === 'QUARTERLY') {
+                    freqSuffix = '/ qtr';
+                    freqBadge = 'Quarterly';
+                    cycleDetail = `Day ${s.billing_day} (every 3 mos)`;
+                } else if (freq === 'ANNUALLY') {
+                    freqSuffix = '/ yr';
+                    freqBadge = 'Annually';
+                    const mName = monthNames[s.billing_month || 1] || 'Jan';
+                    cycleDetail = `${mName} (Day ${s.billing_day})`;
+                }
+
+                return `
                 <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
                     <td style="padding: 14px 18px;">
                         <strong style="color: var(--text-main); display: block;">${s.legal_name || 'Client #' + s.customer_id}</strong>
                         <span style="font-size: 0.78rem; color: var(--text-muted);">${s.custumer_number || ''}</span>
                     </td>
-                    <td style="padding: 14px 18px; font-weight: 800; color: #c084fc; font-size: 0.95rem;">$${parseFloat(s.billing_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / mo</td>
-                    <td style="padding: 14px 18px; color: #38bdf8; font-weight: 700;">Day ${s.billing_day} of month</td>
+                    <td style="padding: 14px 18px; font-weight: 800; color: #c084fc; font-size: 0.95rem;">
+                        $${parseFloat(s.billing_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${freqSuffix}
+                        <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 2px;">
+                            <span style="background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); padding: 1px 6px; border-radius: 6px; color: #c084fc;">${freqBadge}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 14px 18px; color: #38bdf8; font-weight: 700;">${cycleDetail}</td>
                     <td style="padding: 14px 18px; color: var(--text-muted);">${(s.payment_terms_days === 0) ? 'Due Upon Receipt' : ('Net ' + (s.payment_terms_days ?? 30) + ' Days')}</td>
                     <td style="padding: 14px 18px;">
                         ${s.auto_send ? `<span style="color: #4ade80; font-weight: 700;">✓ Enabled</span>` : `<span style="color: #64748b;">Disabled</span>`}
@@ -6042,13 +6092,40 @@ function filterBillingTable(resetPages = true) {
                         </div>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             document.querySelectorAll('body > .schedule-action-dropdown-menu').forEach(m => m.remove());
         }
 
 
 
         // --- Modals Control Functions ---
+        function onScheduleFrequencyChange(freq) {
+            const lbl = document.getElementById('scheduleAmountLabel');
+            const annualContainer = document.getElementById('scheduleAnnualMonthContainer');
+            const desc = document.getElementById('scheduleDescInput');
+
+            if (freq === 'QUARTERLY') {
+                if (lbl) lbl.innerText = 'Quarterly Fee ($ USD) *';
+                if (annualContainer) annualContainer.style.display = 'none';
+                if (desc && (!desc.value || desc.value.includes('Accounting & Tax Advisory Retainer'))) {
+                    desc.value = 'Quarterly Accounting & Tax Advisory Retainer';
+                }
+            } else if (freq === 'ANNUALLY') {
+                if (lbl) lbl.innerText = 'Annual Fee ($ USD) *';
+                if (annualContainer) annualContainer.style.display = 'block';
+                if (desc && (!desc.value || desc.value.includes('Accounting & Tax Advisory Retainer'))) {
+                    desc.value = 'Annual Accounting & Tax Advisory Retainer';
+                }
+            } else {
+                if (lbl) lbl.innerText = 'Monthly Fee ($ USD) *';
+                if (annualContainer) annualContainer.style.display = 'none';
+                if (desc && (!desc.value || desc.value.includes('Accounting & Tax Advisory Retainer'))) {
+                    desc.value = 'Monthly Accounting & Tax Advisory Retainer';
+                }
+            }
+        }
+
         function openCreateScheduleModal() {
             closeAllAppModals();
             populateBillingCustomerDropdowns();
@@ -6058,6 +6135,13 @@ function filterBillingTable(resetPages = true) {
             if (titleElem) titleElem.innerText = '🔄 New Recurring Billing Schedule';
             const submitBtn = document.getElementById('scheduleSubmitBtn');
             if (submitBtn) submitBtn.innerText = 'Create Schedule';
+            const freqSelect = document.getElementById('scheduleFrequencySelect');
+            if (freqSelect) {
+                freqSelect.value = 'MONTHLY';
+                onScheduleFrequencyChange('MONTHLY');
+            }
+            const monthInput = document.getElementById('scheduleMonthInput');
+            if (monthInput) monthInput.value = '1';
             const modal = document.getElementById('billingScheduleModal');
             if (modal) {
                 modal.style.display = 'flex';
@@ -6076,6 +6160,16 @@ function filterBillingTable(resetPages = true) {
 
             const custSelect = document.getElementById('scheduleCustomerSelect');
             if (custSelect) custSelect.value = sched.customer_id;
+
+            const freqSelect = document.getElementById('scheduleFrequencySelect');
+            const currentFreq = (sched.frequency || 'MONTHLY').toUpperCase();
+            if (freqSelect) {
+                freqSelect.value = currentFreq;
+                onScheduleFrequencyChange(currentFreq);
+            }
+
+            const monthInput = document.getElementById('scheduleMonthInput');
+            if (monthInput) monthInput.value = sched.billing_month || 1;
 
             const amtInput = document.getElementById('scheduleAmountInput');
             if (amtInput) amtInput.value = sched.billing_amount;
@@ -6118,14 +6212,19 @@ function filterBillingTable(resetPages = true) {
             const custVal = document.getElementById('scheduleCustomerSelect').value;
             const amtVal = document.getElementById('scheduleAmountInput').value;
             if (!custVal || !amtVal) {
-                showCustomAlert("Input Error", "Please select a client and enter a valid monthly fee.", "error");
+                showCustomAlert("Input Error", "Please select a client and enter a valid recurring fee.", "error");
                 return;
             }
+
+            const freqVal = document.getElementById('scheduleFrequencySelect') ? document.getElementById('scheduleFrequencySelect').value : 'MONTHLY';
+            const monthVal = document.getElementById('scheduleMonthInput') ? parseInt(document.getElementById('scheduleMonthInput').value || '1') : 1;
 
             const payload = {
                 customer_id: parseInt(custVal),
                 billing_amount: parseFloat(amtVal),
                 billing_day: parseInt(document.getElementById('scheduleDayInput').value || '1'),
+                frequency: freqVal,
+                billing_month: monthVal,
                 description: document.getElementById('scheduleDescInput').value || '',
                 payment_terms_days: document.getElementById('scheduleTermsSelect').value !== "" ? parseInt(document.getElementById('scheduleTermsSelect').value) : 30,
                 auto_send: document.getElementById('scheduleAutoSendCheck').checked

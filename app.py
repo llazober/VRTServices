@@ -1189,6 +1189,8 @@ def init_billing_tables():
                     currency            VARCHAR(10) NOT NULL DEFAULT 'USD',
                     billing_day         INT NOT NULL CHECK (billing_day >= 1 AND billing_day <= 31),
                     description         TEXT NOT NULL,
+                    frequency           VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
+                    billing_month       INT DEFAULT 1,
                     auto_send           BOOLEAN NOT NULL DEFAULT TRUE,
                     payment_terms_days  INT NOT NULL DEFAULT 15,
                     status              VARCHAR(30) NOT NULL DEFAULT 'Active',
@@ -1260,6 +1262,8 @@ def init_billing_tables():
                 CREATE INDEX IF NOT EXISTS idx_to_invoice_status ON to_invoice (status);
                 CREATE INDEX IF NOT EXISTS idx_inv_hist_invoice_id ON customer_invoice_history (invoice_id);
                 CREATE INDEX IF NOT EXISTS idx_inv_att_invoice_id ON customer_invoice_attachments (invoice_id);
+                ALTER TABLE customer_billing_schedules ADD COLUMN IF NOT EXISTS frequency VARCHAR(20) NOT NULL DEFAULT 'MONTHLY';
+                ALTER TABLE customer_billing_schedules ADD COLUMN IF NOT EXISTS billing_month INT DEFAULT 1;
                 ALTER TABLE customer_invoices ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12, 2) NOT NULL DEFAULT 0.00;
                 UPDATE customer_invoices SET amount_paid = total_amount WHERE status = 'PAID' AND (amount_paid IS NULL OR amount_paid = 0);
             """)
@@ -10768,7 +10772,13 @@ async def get_billing_overview(request: Request):
 
             cur.execute("""
                 SELECT 
-                    COALESCE(SUM(billing_amount), 0) AS mrr,
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN UPPER(frequency) = 'QUARTERLY' THEN billing_amount / 3.0
+                            WHEN UPPER(frequency) = 'ANNUALLY'  THEN billing_amount / 12.0
+                            ELSE billing_amount
+                        END
+                    ), 0) AS mrr,
                     COUNT(DISTINCT customer_id) AS active_subscribers,
                     COUNT(*) AS active_schedules
                 FROM customer_billing_schedules 
@@ -10821,13 +10831,19 @@ async def list_billing_schedules(request: Request):
 
 @app.post("/api/billing/schedules")
 async def create_billing_schedule(request: Request):
-    """Create a recurring monthly billing schedule for a customer."""
+    """Create a recurring billing schedule (Monthly, Quarterly, Annually) for a customer."""
     check_billing_admin_access(request)
     payload = await request.json()
     customer_id = payload.get("customer_id")
     billing_amount = float(payload.get("billing_amount") or 0.0)
     billing_day = int(payload.get("billing_day") or 1)
-    description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
+    frequency = str(payload.get("frequency") or "MONTHLY").strip().upper()
+    if frequency not in ["MONTHLY", "QUARTERLY", "ANNUALLY"]:
+        frequency = "MONTHLY"
+    billing_month = int(payload.get("billing_month") or 1)
+    if billing_month < 1 or billing_month > 12:
+        billing_month = 1
+    description = payload.get("description") or f"{frequency.capitalize()} Accounting & Tax Advisory Retainer"
     auto_send = bool(payload.get("auto_send", True))
     raw_pt = payload.get("payment_terms_days")
     payment_terms_days = int(raw_pt) if raw_pt is not None and str(raw_pt).strip() != "" else 15
@@ -10844,10 +10860,10 @@ async def create_billing_schedule(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 INSERT INTO customer_billing_schedules (
-                    customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, 'Active')
+                    customer_id, billing_amount, billing_day, frequency, billing_month, description, auto_send, payment_terms_days, status
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Active')
                 RETURNING id;
-            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days))
+            """, (customer_id, billing_amount, billing_day, frequency, billing_month, description, auto_send, payment_terms_days))
             row = cur.fetchone()
             conn.commit()
             return {"status": "success", "schedule_id": row["id"]}
@@ -10881,7 +10897,7 @@ async def delete_billing_schedule(schedule_id: str, request: Request):
 
 @app.put("/api/billing/schedules/{schedule_id}")
 async def update_billing_schedule(schedule_id: str, request: Request):
-    """Update an existing recurring monthly billing schedule."""
+    """Update an existing recurring billing schedule."""
     check_billing_admin_access(request)
     try:
         sid = int(str(schedule_id).strip())
@@ -10892,7 +10908,13 @@ async def update_billing_schedule(schedule_id: str, request: Request):
     customer_id = payload.get("customer_id")
     billing_amount = float(payload.get("billing_amount") or 0.0)
     billing_day = int(payload.get("billing_day") or 1)
-    description = payload.get("description") or "Monthly Accounting & Tax Advisory Retainer"
+    frequency = str(payload.get("frequency") or "MONTHLY").strip().upper()
+    if frequency not in ["MONTHLY", "QUARTERLY", "ANNUALLY"]:
+        frequency = "MONTHLY"
+    billing_month = int(payload.get("billing_month") or 1)
+    if billing_month < 1 or billing_month > 12:
+        billing_month = 1
+    description = payload.get("description") or f"{frequency.capitalize()} Accounting & Tax Advisory Retainer"
     auto_send = bool(payload.get("auto_send", True))
     raw_pt = payload.get("payment_terms_days")
     payment_terms_days = int(raw_pt) if raw_pt is not None and str(raw_pt).strip() != "" else 15
@@ -10913,13 +10935,15 @@ async def update_billing_schedule(schedule_id: str, request: Request):
                 SET customer_id = %s,
                     billing_amount = %s,
                     billing_day = %s,
+                    frequency = %s,
+                    billing_month = %s,
                     description = %s,
                     auto_send = %s,
                     payment_terms_days = %s,
                     status = %s,
                     updated_at = NOW()
                 WHERE id = %s;
-            """, (customer_id, billing_amount, billing_day, description, auto_send, payment_terms_days, status, sid))
+            """, (customer_id, billing_amount, billing_day, frequency, billing_month, description, auto_send, payment_terms_days, status, sid))
             conn.commit()
             return {"status": "success", "message": f"Schedule #{sid} updated successfully."}
     except HTTPException:
@@ -11656,7 +11680,7 @@ async def view_invoice_html(invoice_id: str, request: Request):
         if conn: conn.close()
 
 def run_daily_billing_job():
-    """Generates monthly recurring invoices for active schedules matching today's day of month or any unbilled past days in the current month."""
+    """Generates recurring invoices (Monthly, Quarterly, Annually) for active schedules matching today's scheduled billing day or cycle."""
     import datetime
     today = datetime.date.today()
     current_day = today.day
@@ -11671,12 +11695,42 @@ def run_daily_billing_job():
                 FROM customer_billing_schedules s
                 JOIN customer c ON s.customer_id = c.id
                 WHERE s.status = 'Active'
-                  AND (s.last_billed_at IS NULL OR s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE))
+                  AND (
+                      -- MONTHLY: Billed if not billed in current calendar month
+                      (
+                          (s.frequency IS NULL OR UPPER(s.frequency) = 'MONTHLY')
+                          AND (s.last_billed_at IS NULL OR s.last_billed_at < DATE_TRUNC('month', CURRENT_DATE))
+                      )
+                      -- QUARTERLY: Billed if at least 3 months have elapsed since last bill (or never billed)
+                      OR (
+                          UPPER(s.frequency) = 'QUARTERLY'
+                          AND (
+                              s.last_billed_at IS NULL 
+                              OR s.last_billed_at < (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months')
+                          )
+                      )
+                      -- ANNUALLY: Billed once a year in the designated billing_month
+                      OR (
+                          UPPER(s.frequency) = 'ANNUALLY'
+                          AND (
+                              (
+                                  s.last_billed_at IS NULL 
+                                  AND EXTRACT(MONTH FROM CURRENT_DATE) = COALESCE(s.billing_month, EXTRACT(MONTH FROM CURRENT_DATE))
+                              )
+                              OR (
+                                  s.last_billed_at IS NOT NULL 
+                                  AND s.last_billed_at < (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months')
+                                  AND EXTRACT(MONTH FROM CURRENT_DATE) = COALESCE(s.billing_month, 1)
+                              )
+                          )
+                      )
+                  )
                   AND (
                       s.billing_day <= %s 
                       OR (s.billing_day >= 28 AND %s >= 28 AND EXTRACT(DAY FROM (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')) = %s)
                       OR (
                           s.last_billed_at IS NOT NULL 
+                          AND (s.frequency IS NULL OR UPPER(s.frequency) = 'MONTHLY')
                           AND DATE_TRUNC('month', s.last_billed_at) < DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
                       )
                   );
@@ -11687,7 +11741,8 @@ def run_daily_billing_job():
                 inv_number = generate_invoice_number(cur)
                 due_date = today + datetime.timedelta(days=s["payment_terms_days"])
                 amount = float(s["billing_amount"])
-                desc = s["description"] or "Monthly Accounting & Tax Advisory Retainer"
+                freq_label = (s.get("frequency") or "Monthly").capitalize()
+                desc = s["description"] or f"{freq_label} Accounting & Tax Advisory Retainer"
 
                 cur.execute("""
                     INSERT INTO customer_invoices (

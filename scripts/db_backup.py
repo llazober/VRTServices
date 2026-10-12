@@ -175,15 +175,31 @@ def run_db_backup():
         
         success_count += 1
 
-    # Prune local backups older than 7 days
-    print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🧹 Cleaning up local backups older than 7 days...")
-    cutoff_time = time.time() - (7 * 86400)
+    # Prune local backups older than 15 days
+    print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🧹 Cleaning up local backups older than 15 days...")
+    cutoff_time = time.time() - (15 * 86400)
     if os.path.exists(LOCAL_BACKUP_DIR):
         for fname in os.listdir(LOCAL_BACKUP_DIR):
             fpath = os.path.join(LOCAL_BACKUP_DIR, fname)
             if os.path.isfile(fpath) and "_backup_" in fname and os.path.getmtime(fpath) < cutoff_time:
                 os.remove(fpath)
                 print(f"   Deleted old local backup: {fname}")
+
+    # Prune DO Spaces backups older than 15 days
+    if s3_client:
+        print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ☁️ Cleaning up DigitalOcean Spaces backups older than 15 days...")
+        try:
+            do_cutoff_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=15)
+            # Handle pagination if there are more than 1000 backups
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=DO_BUCKET, Prefix='db_backups/'):
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        if "_backup_" in obj['Key'] and obj['LastModified'] < do_cutoff_time:
+                            s3_client.delete_object(Bucket=DO_BUCKET, Key=obj['Key'])
+                            print(f"   Deleted old DO Spaces backup: {obj['Key']}")
+        except Exception as e:
+            print(f"[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] ❌ Failed to prune DO Spaces backups: {e}")
 
     print(f"\n[{NOW_ET.strftime('%Y-%m-%d %H:%M:%S')} ET] 🎉 Backup Process Completed. {success_count} succeeded, {fail_count} failed.")
 
