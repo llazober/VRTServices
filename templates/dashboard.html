@@ -1173,7 +1173,7 @@
             <div id="leads-view-wrapper" style="display: flex; flex-direction: column; gap: 28px; padding-bottom: 40px; font-family: 'Outfit', sans-serif;">
                 
                 <!-- Toast Notification Box -->
-                <div id="leadToastBox" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 99999; padding: 14px 22px; border-radius: 12px; font-weight: 700; font-size: 0.9rem; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px;"></div>
+                <div id="leadToastBox" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 99999; padding: 14px 22px; border-radius: 12px; font-weight: 700; font-size: 0.9rem; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); align-items: center; gap: 10px;"></div>
 
                 <!-- Header Banner -->
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
@@ -1414,7 +1414,7 @@
 
                         <!-- Modal Action Bar -->
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 18px;">
-                            <div style="display: flex; gap: 10px;">
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                                 <button type="button" onclick="sendProposalFromEdit()" id="btnSendProposalEdit" style="padding: 10px 18px; background: linear-gradient(135deg, #d946ef, #9333ea); color: #fff; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(217, 70, 239, 0.4); display: flex; align-items: center; gap: 6px;">
                                     ✉️ Approve & Send Email
                                 </button>
@@ -1423,7 +1423,11 @@
                                 </button>
                             </div>
 
-                            <div style="display: flex; gap: 12px;">
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <button type="button" onclick="deleteLeadFromEditModal()" style="padding: 10px 18px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.3)';" onmouseout="this.style.background='rgba(239,68,68,0.15)';">
+                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    Delete Lead
+                                </button>
                                 <button type="button" onclick="closeEditLeadModal()" style="background: transparent; border: none; color: #94a3b8; font-weight: 700; font-size: 0.92rem; cursor: pointer; padding: 10px 18px; border-radius: 8px;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">
                                     Cancel
                                 </button>
@@ -1606,22 +1610,22 @@
                                 </td>
                                 <td style="padding: 16px 20px; text-align: right;">
                                     <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
-                                        <button onclick="openConvertClientModal(${lead.id})" title="Convert to Client" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
+                                        <button type="button" onclick="openConvertClientModal(${lead.id})" title="Convert to Client" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
                                             <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                                             </svg>
                                         </button>
-                                        <button onclick="sendDiscoveryLink(${lead.id}, '${lead.status}')" title="Email Discovery Link" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.3)';" onmouseout="this.style.background='rgba(16,185,129,0.15)';">
+                                        <button type="button" onclick="event.stopPropagation(); openLeadEmailScreen(${lead.id})" title="Send Email (Customer Modal)" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.3)';" onmouseout="this.style.background='rgba(16,185,129,0.15)';">
                                             <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                                             </svg>
                                         </button>
-                                        <button onclick="openEditLeadModal(${lead.id})" title="Edit Lead Details" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: #38bdf8; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.3)';" onmouseout="this.style.background='rgba(6,182,212,0.15)';">
+                                        <button type="button" onclick="openEditLeadModal(${lead.id})" title="Edit Lead Details" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: #38bdf8; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.3)';" onmouseout="this.style.background='rgba(6,182,212,0.15)';">
                                             <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                             </svg>
                                         </button>
-                                        <button onclick="deleteLead(${lead.id})" title="Delete Lead" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.3)';" onmouseout="this.style.background='rgba(239,68,68,0.15)';">
+                                        <button type="button" onclick="event.stopPropagation(); deleteLead(${lead.id})" title="Delete Lead" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.3)';" onmouseout="this.style.background='rgba(239,68,68,0.15)';">
                                             <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                             </svg>
@@ -1773,38 +1777,20 @@
                     }
                 }
 
-                async function sendProposalFromEdit() {
+                function sendProposalFromEdit() {
                     const id = document.getElementById('edit_lead_id').value;
                     const proposal = document.getElementById('edit_lead_ai_proposal').value.trim();
-                    if (!proposal) {
-                        showLeadToast('Please generate or enter a proposal before sending.', 'error');
-                        return;
+                    const lead = currentLeads.find(l => l.id == id);
+                    if (lead && proposal) {
+                        lead.ai_proposal = proposal;
                     }
+                    closeEditLeadModal();
+                    openLeadEmailScreen(id, null, proposal);
+                }
 
-                    const btn = document.getElementById('btnSendProposalEdit');
-                    btn.disabled = true;
-                    btn.textContent = 'Sending...';
-
-                    try {
-                        const res = await fetch(`/api/leads/${id}/proposal`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ aiProposal: proposal })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            closeEditLeadModal();
-                            showLeadToast('Proposal emailed successfully!');
-                            loadLeads();
-                        } else {
-                            showLeadToast(data.error || 'Failed to send proposal', 'error');
-                        }
-                    } catch (err) {
-                        showLeadToast('Error sending proposal email', 'error');
-                    } finally {
-                        btn.disabled = false;
-                        btn.textContent = '✉️ Approve & Send Email';
-                    }
+                function deleteLeadFromEditModal() {
+                    const id = document.getElementById('edit_lead_id').value;
+                    if (id) deleteLead(id);
                 }
 
                 function openConvertClientModalFromEdit() {
@@ -1915,18 +1901,33 @@
                 }
 
                 async function deleteLead(id) {
-                    if (!confirm('Are you sure you want to delete this lead?')) return;
+                    if (!id) return;
+                    if (!confirm('Are you sure you want to permanently delete this lead?')) return;
                     try {
-                        const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
-                        const data = await res.json();
-                        if (data.success) {
+                        let res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+                        if (!res.ok) {
+                            res = await fetch(`/api/leads/${id}/delete`, { method: 'POST' });
+                        }
+                        let data = {};
+                        try { data = await res.json(); } catch(e) {}
+                        if (res.ok && (data.success !== false)) {
                             showLeadToast('Lead deleted successfully');
+                            closeEditLeadModal();
                             loadLeads();
                         } else {
-                            showLeadToast(data.error || 'Failed to delete lead', 'error');
+                            showLeadToast(data.error || data.detail || 'Failed to delete lead', 'error');
                         }
                     } catch (err) {
-                        showLeadToast('Delete error', 'error');
+                        try {
+                            const res2 = await fetch(`/api/leads/${id}/delete`, { method: 'POST' });
+                            if (res2.ok) {
+                                showLeadToast('Lead deleted successfully');
+                                closeEditLeadModal();
+                                loadLeads();
+                                return;
+                            }
+                        } catch(e) {}
+                        showLeadToast('Delete error: ' + err.message, 'error');
                     }
                 }
 
@@ -10925,9 +10926,70 @@ function filterBillingTable(resetPages = true) {
 
         // --- Customer Email Communication Functions ---
         let currentEmailCustomerId = null;
+        let currentEmailLeadId = null;
+
+        function openLeadEmailScreen(leadId, customSubject = null, customMessage = null) {
+            let lead = null;
+            if (typeof currentLeads !== 'undefined' && Array.isArray(currentLeads)) {
+                lead = currentLeads.find(l => l.id == leadId);
+            }
+            if (!lead) return;
+
+            currentEmailCustomerId = null;
+            currentEmailLeadId = lead.id;
+
+            let modal = document.getElementById('sendCustomerEmailModal');
+            if (!modal) return;
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+
+            const titleEl = document.getElementById('sendEmailModalTitle');
+            const subtitleEl = document.getElementById('sendEmailModalSubtitle');
+            const toEl = document.getElementById('emailFormTo');
+            const replyToEl = document.getElementById('emailFormReplyTo');
+            const tplEl = document.getElementById('emailFormTemplateSelect');
+            const subjectEl = document.getElementById('emailFormSubject');
+            const msgEl = document.getElementById('emailFormMessage');
+
+            const leadName = lead.name || 'Valued Lead';
+            const leadCompany = lead.company || '';
+            const leadEmail = lead.email || '';
+
+            if (titleEl) titleEl.textContent = `📧 Send Email — ${leadName}${leadCompany ? ' (' + leadCompany + ')' : ''}`;
+            if (subtitleEl) subtitleEl.textContent = `Lead #: ${lead.id} | Recipient: ${leadEmail || 'Not configured'}`;
+            if (toEl) {
+                toEl.value = leadEmail;
+                toEl.removeAttribute('readonly');
+                toEl.style.background = 'var(--bg-color)';
+                toEl.placeholder = 'Enter email address...';
+            }
+            let defaultReplyTo = (typeof RESEND_REPLY_TO_EMAIL !== 'undefined' && RESEND_REPLY_TO_EMAIL) ? RESEND_REPLY_TO_EMAIL : 'notification@vrtservices12.com';
+            if (!defaultReplyTo || defaultReplyTo.includes('receive.datalazo.net')) {
+                defaultReplyTo = 'notification@vrtservices12.com';
+            }
+            if (replyToEl) replyToEl.value = defaultReplyTo;
+            if (tplEl) tplEl.value = 'custom';
+
+            if (customSubject) {
+                if (subjectEl) subjectEl.value = customSubject;
+            } else {
+                if (subjectEl) subjectEl.value = `VRT Services — Tax & Accounting Proposal for ${leadCompany || leadName}`;
+            }
+
+            if (customMessage !== null && customMessage !== undefined && customMessage.trim().length > 0) {
+                if (msgEl) msgEl.value = customMessage;
+            } else if (lead.ai_proposal && lead.ai_proposal.trim().length > 0) {
+                if (msgEl) msgEl.value = lead.ai_proposal;
+            } else {
+                if (msgEl) msgEl.value = `Dear ${leadName},\n\nThank you for connecting with VRT Services LLC. We specialize in comprehensive Corporate & Individual Tax Preparation, Monthly Bookkeeping, Payroll, and Financial Advisory services tailored specifically for ${leadCompany || 'your business'}.\n\nWe would welcome the opportunity to discuss how we can maximize your tax deductions, maintain audit-proof books, and optimize your cash flow.\n\nPlease let us know a convenient time for a brief call.\n\nWarm regards,\nTax & Advisory Solutions Team\nVRT Services LLC\nnotification@vrtservices12.com | www.vrtservices12.com`;
+            }
+
+            modal.style.zIndex = '2147483648';
+            modal.style.display = 'flex';
+        }
 
         async function openSendCustomerEmailModal(event, customerId, targetEmail = null, targetSubject = null) {
             if (event) event.stopPropagation();
+            currentEmailLeadId = null;
             const cid = customerId || currentChecklistCustomerId;
             if (!cid) return;
 
@@ -11000,6 +11062,7 @@ function filterBillingTable(resetPages = true) {
         function closeSendCustomerEmailModal() {
             const modal = document.getElementById('sendCustomerEmailModal');
             if (modal) modal.style.display = 'none';
+            currentEmailLeadId = null;
             const msgEl = document.getElementById('emailFormMessage');
             if (msgEl) msgEl.value = '';
         }
@@ -11168,8 +11231,16 @@ function filterBillingTable(resetPages = true) {
             const msgEl = document.getElementById('emailFormMessage');
             if (!subjectEl || !msgEl) return;
 
-            const cust = custData || currentCustomerRecords.find(c => c.id == currentEmailCustomerId) || {};
-            const name = cust.legal_name || cust.display_name || 'Client';
+            let cust = custData;
+            if (!cust && currentEmailCustomerId && typeof currentCustomerRecords !== 'undefined' && Array.isArray(currentCustomerRecords)) {
+                cust = currentCustomerRecords.find(c => c.id == currentEmailCustomerId);
+            }
+            if (!cust && currentEmailLeadId && typeof currentLeads !== 'undefined' && Array.isArray(currentLeads)) {
+                const leadObj = currentLeads.find(l => l.id == currentEmailLeadId);
+                if (leadObj) cust = { legal_name: leadObj.name, display_name: leadObj.name, email: leadObj.email };
+            }
+            cust = cust || {};
+            const name = cust.name || cust.legal_name || cust.display_name || 'Client';
 
             if (typeId === 'custom' || !typeId) {
                 if (!subjectEl.value || !subjectEl.value.toLowerCase().startsWith('re:')) {
@@ -11187,7 +11258,7 @@ function filterBillingTable(resetPages = true) {
         }
 
         async function submitSendCustomerEmail() {
-            if (!currentEmailCustomerId) return;
+            if (!currentEmailCustomerId && !currentEmailLeadId) return;
             const toVal = document.getElementById('emailFormTo')?.value || '';
             const replyToVal = document.getElementById('emailFormReplyTo')?.value || '';
             const subjectVal = document.getElementById('emailFormSubject')?.value || '';
@@ -11195,7 +11266,7 @@ function filterBillingTable(resetPages = true) {
             const submitBtn = document.getElementById('sendEmailSubmitBtn');
 
             if (!toVal) {
-                alert('❌ Customer does not have an email address configured. Please edit customer and add an email address first.');
+                alert('❌ Recipient email address is required.');
                 return;
             }
             if (!subjectVal || !msgVal) {
@@ -11209,7 +11280,11 @@ function filterBillingTable(resetPages = true) {
             }
 
             try {
-                const res = await fetch(`/api/customers/${currentEmailCustomerId}/send-email`, {
+                const targetUrl = currentEmailLeadId
+                    ? `/api/leads/${currentEmailLeadId}/send-email`
+                    : `/api/customers/${currentEmailCustomerId}/send-email`;
+
+                const res = await fetch(targetUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -11226,11 +11301,15 @@ function filterBillingTable(resetPages = true) {
                     if (typeof data.detail === 'string') errDetail = data.detail;
                     else if (Array.isArray(data.detail)) errDetail = data.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
                     else if (data.message) errDetail = data.message;
+                    else if (data.error) errDetail = data.error;
                     throw new Error(errDetail);
                 }
 
-                alert(`✅ ${data.message}\nReply-To configured as: ${data.reply_to}`);
+                alert(`✅ ${data.message || 'Email sent successfully!'}\nReply-To configured as: ${data.reply_to || replyToVal}`);
                 closeSendCustomerEmailModal();
+                if (currentEmailLeadId && typeof loadLeads === 'function') {
+                    loadLeads();
+                }
             } catch (err) {
                 alert(`❌ Email Error: ${err.message}`);
             } finally {

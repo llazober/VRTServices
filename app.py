@@ -12066,55 +12066,93 @@ async def update_lead_status_endpoint(lead_id: str, request: Request):
         if conn: conn.close()
 
 @app.delete("/api/leads/{lead_id}")
+@app.post("/api/leads/{lead_id}/delete")
+@app.delete("/api/lead/{lead_id}")
+@app.post("/api/lead/{lead_id}/delete")
 async def delete_lead_endpoint(lead_id: str, request: Request):
     """Deletes a lead from the pipeline."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    try:
+        clean_id = int(str(lead_id).strip())
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid lead ID format")
+
     conn = None
     try:
         conn = get_db_connection("VRT")
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM leads WHERE id = %s;", (int(lead_id),))
+            cur.execute("DELETE FROM leads WHERE id = %s RETURNING id;", (clean_id,))
+            deleted = cur.fetchone()
             conn.commit()
-            return JSONResponse({"success": True, "message": "Lead deleted successfully"})
+            if not deleted:
+                return JSONResponse({"success": False, "error": f"Lead #{clean_id} not found"}, status_code=404)
+            print(f"[Lead Delete] Successfully deleted lead #{clean_id} by user '{username}'")
+            return JSONResponse({"success": True, "message": f"Lead #{clean_id} deleted successfully"})
     except Exception as e:
         if conn: conn.rollback()
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        print(f"[Lead Delete Error]: {e}")
+        return JSONResponse({"success": False, "error": str(e), "detail": str(e)}, status_code=500)
     finally:
         if conn: conn.close()
 
 @app.post("/api/leads/{lead_id}/generate-proposal")
+@app.post("/api/lead/{lead_id}/generate-proposal")
 async def generate_lead_proposal_endpoint(lead_id: str, request: Request):
-    """Generates an AI sales pitch / proposal for the lead matching Datalazo's architecture."""
+    """Generates an AI sales pitch / proposal for VRT Services (Tax Preparation, Bookkeeping, Payroll, CFO)."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        clean_id = int(str(lead_id).strip())
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid lead ID format")
 
     conn = None
     try:
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM leads WHERE id = %s;", (int(lead_id),))
+            cur.execute("SELECT * FROM leads WHERE id = %s;", (clean_id,))
             lead = cur.fetchone()
             if not lead:
                 raise HTTPException(status_code=404, detail="Lead not found")
 
-        lead_name = lead.get("name") or "Valued Client"
-        company = lead.get("company") or "their business"
-        service = lead.get("service") or "Professional Accounting & Tax Services"
-        notes = lead.get("notes") or lead.get("message") or "Requested custom advisory and preparation package."
+        lead_name = (lead.get("name") or "Valued Client").strip()
+        company = (lead.get("company") or "your business").strip()
+        client_industry = (lead.get("service") or "General Business").strip()
+        notes = (lead.get("notes") or lead.get("message") or "Requested custom tax, bookkeeping, and business accounting package.").strip()
 
-        prompt = f"""You are the Senior Client Solutions & Tax Strategy Architect at VRT Services / Datalazo.
-A potential customer named {lead_name} from {company} requested a proposal for {service}.
+        prompt = f"""You are the Senior Tax Strategist & Accounting Director at VRT Services LLC (www.vrtservices12.com).
+VRT Services is an elite accounting firm specializing exclusively in:
+- Corporate & Individual Business Tax Preparation (Forms 1040, 1120, 1120-S, 1065, Schedule C) & Tax Planning
+- Monthly Bookkeeping, General Ledger Reconciliation, and Financial Reporting (P&L, Balance Sheet, Cash Flow)
+- Full-Service Payroll Processing & 1099-NEC Contractor Compliance
+- Multi-State Sales Tax Filings & Corporate Annual Filings
+- Virtual CFO Advisory, Cash Flow Optimization, and Audit Defense
 
-Context & Client Notes:
-{notes}
+PROSPECT DETAILS:
+- Contact Person: {lead_name}
+- Company: {company}
+- Client's Industry / Line of Business: {client_industry}
+- Inquiries & Discovery Notes: {notes}
 
-Your task: Write a highly professional, compelling 4-paragraph proposal emailing them a customized strategy and service roadmap to solve their biggest problems. Explain exactly how VRT Services delivers value, automation, and compliance. Keep the tone confident, visionary, and helpful.
-Include placeholder text like "[INSERT PRICING TIER HERE]" so the user knows where to manually adjust pricing.
-Format it nicely with clean paragraphs."""
+CRITICAL BUSINESS RULES:
+1. VRT Services provides TAX, BOOKKEEPING, PAYROLL, AND ACCOUNTING SERVICES. VRT Services does NOT provide trade labor or services in the client's industry (for example, if the client's industry is "{client_industry}" such as Landscaping, Construction, or Restaurant, VRT Services does NOT do landscaping or food service! VRT Services provides tax deductions, bookkeeping, and payroll FOR their {client_industry} business).
+2. Write a highly professional, compelling 4-paragraph proposal emailing {lead_name} at {company}.
+3. Detail how VRT Services delivers tax savings, industry-specific deductions (e.g. equipment depreciation, vehicle mileage, materials, contractor 1099 write-offs for their {client_industry} business), audit-proof monthly bookkeeping, and peace of mind.
+4. Include a structured service breakdown:
+   • Strategic Business Tax Planning & Preparation (Maximizing Deductions)
+   • Monthly Bookkeeping & Financial Reporting (P&L, Balance Sheet, Cash Flow)
+   • Full-Service Payroll Processing & 1099 Contractor Compliance
+   • Multi-State Sales Tax & Corporate Annual Filings
+   • Dedicated Client Portal Access & Year-Round Tax Advisory
+5. Include a placeholder for investment tier:
+   [INSERT PRICING TIER HERE - e.g., $350 - $650/month or Custom Retainer]
+6. Close with an invitation to schedule an onboarding call or review past returns.
+Tone: Confident, consultative, elite, and welcoming. Format with clean spacing and paragraphs."""
 
         ai_proposal = ""
         openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -12125,11 +12163,11 @@ Format it nicely with clean paragraphs."""
                     data=json.dumps({
                         "model": "gpt-4o-mini",
                         "messages": [
-                            {"role": "system", "content": "You are an expert executive sales architect."},
+                            {"role": "system", "content": "You are the Senior Executive Tax Strategist & Accounting Director at VRT Services LLC."},
                             {"role": "user", "content": prompt}
                         ],
                         "temperature": 0.7,
-                        "max_tokens": 800
+                        "max_tokens": 850
                     }).encode("utf-8"),
                     headers={
                         "Authorization": f"Bearer {openai_key}",
@@ -12144,40 +12182,144 @@ Format it nicely with clean paragraphs."""
                 print(f"[OpenAI Lead Proposal Error]: {ai_err}")
 
         if not ai_proposal:
-            ai_proposal = f"""Dear {lead_name},
+            ai_proposal = f"""Subject: Tailored Tax, Bookkeeping & Advisory Proposal for {company}
 
-Thank you for reaching out to VRT Services regarding your interest in our {service} solutions for {company}. We have reviewed your business requirements and are excited to present a customized roadmap designed to streamline your workflows, eliminate administrative bottlenecks, and optimize your financial operations.
+Dear {lead_name},
 
-Our team combines industry-leading accounting precision with modern cloud automation tools to give you real-time visibility into your financial health. By partnering with VRT Services, {company} will benefit from dedicated compliance oversight, proactive advisory, and seamless execution across all required deliverables.
+Thank you for connecting with VRT Services LLC. We understand that managing and scaling a successful company in the {client_industry} industry demands precision financial controls, maximized write-offs, and seamless compliance so you can focus on your core business without administrative headaches.
 
-Service Package Summary:
-• Comprehensive {service} Onboarding & Historical Review
-• Scheduled Compliance Milestones & Priority Filing
-• Dedicated Account Manager & Secure Client Portal Access
-• Real-time Document Sharing & Automated Receipt Capture
+Our team provides end-to-end accounting, tax preparation, and bookkeeping intelligence tailored specifically for {company}. We take full ownership of your financial operations—ensuring every expense, vehicle, and equipment depreciation deduction is maximized, your general ledger is reconciled monthly, and all federal and state tax returns are filed accurately on schedule.
+
+Tailored Service Package for {company}:
+• Strategic Business Tax Planning & Annual Filing (Forms 1120/1120-S/1065/1040)
+• Monthly Bookkeeping & Financial Statements (P&L, Balance Sheet, Cash Flow)
+• Full-Service Payroll Processing & 1099-NEC Contractor Compliance
+• Multi-State Sales Tax Filings & Corporate Annual Filings
+• 24/7 Secure VRT Client Portal Access for Document & Receipt Sharing
+• Dedicated Senior Tax Advisor & Year-Round Consultation
 
 Proposed Investment:
-[INSERT PRICING TIER HERE - e.g., $450/month or Custom Project Retainer]
+[INSERT PRICING TIER HERE - e.g., $350 - $650/month or Custom Retainer]
 
-We would welcome the opportunity to review this proposal with you in detail. Please let us know a convenient time for a brief follow-up discussion, or simply reply to confirm your preferred start date.
+We would welcome the opportunity to review your current financials and answer any questions. Please reply directly to this email or call our office at your convenience to finalize your onboarding.
 
 Warm regards,
-VRT Services & Datalazo Solutions Team
-www.vrtservices12.com"""
+Tax & Advisory Solutions Team
+VRT Services LLC
+notification@vrtservices12.com | www.vrtservices12.com"""
 
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE leads
                 SET ai_proposal = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s;
-            """, (ai_proposal, int(lead_id)))
+            """, (ai_proposal, clean_id))
             conn.commit()
 
         return JSONResponse({"success": True, "aiProposal": ai_proposal})
     except Exception as e:
         if conn: conn.rollback()
         print(f"Error generating proposal: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"success": False, "error": str(e), "detail": str(e)}, status_code=500)
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/leads/{lead_id}/send-email")
+@app.post("/api/lead/{lead_id}/send-email")
+async def send_lead_custom_email_endpoint(lead_id: str, request: Request):
+    """Sends an email directly to a lead using Resend, matching the Customer page email modal."""
+    import html as _html
+    username = get_current_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        clean_id = int(str(lead_id).strip())
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid lead ID format")
+
+    body = await request.json()
+    subject = (body.get("subject") or "").strip()
+    message_text = (body.get("message") or "").strip()
+    to_email = parse_clean_email(body.get("recipient_email") or body.get("to") or "")
+    custom_reply_to = (body.get("reply_to") or "").strip()
+    default_reply_to = get_resend_reply_to_email()
+    if not custom_reply_to or "@" not in custom_reply_to or "receive.datalazo.net" in custom_reply_to.lower():
+        custom_reply_to = default_reply_to
+
+    if not subject or not message_text:
+        raise HTTPException(status_code=400, detail="Subject and message text are required.")
+
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM leads WHERE id = %s;", (clean_id,))
+            lead = cur.fetchone()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+        recipient = to_email or parse_clean_email(lead.get("email") or "")
+        if not recipient:
+            raise HTTPException(status_code=400, detail="No valid recipient email configured for this lead.")
+
+        lead_name = lead.get("name") or "Valued Client"
+        company_name = lead.get("company") or ""
+
+        # HTML formatted message matching VRT Services style
+        formatted_html = "<br><br>".join(
+            _html.escape(p).replace("\n", "<br>") for p in message_text.split("\n\n")
+        ) if "\n\n" in message_text else _html.escape(message_text).replace("\n", "<br>")
+
+        email_body_html = f"""
+        <div style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #1e293b; max-width: 650px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+            <div style="border-bottom: 2px solid #7f00ff; padding-bottom: 12px; margin-bottom: 20px;">
+                <h2 style="color: #0b0c10; margin: 0; font-size: 1.25rem;">VRT Services LLC</h2>
+                <p style="color: #64748b; margin: 4px 0 0 0; font-size: 0.85rem;">Accounting, Tax Preparation & Business Advisory</p>
+            </div>
+            <div style="font-size: 0.95rem; color: #1e293b; line-height: 1.7;">
+                {formatted_html}
+            </div>
+            <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #cbd5e1; font-size: 0.8rem; color: #64748b;">
+                <p style="margin: 0; font-weight: bold;">VRT Services LLC • Client Communications Team</p>
+                <p style="margin: 4px 0 0 0;">Please reply directly to this email to contact your dedicated account team.</p>
+                <p style="margin: 4px 0 0 0; font-family: monospace; color: #94a3b8;">Ref: LEAD-{clean_id}</p>
+            </div>
+        </div>
+        """
+
+        reply_to_list = parse_reply_to_list(custom_reply_to)
+        clean_reply_to = ", ".join(reply_to_list)
+
+        resend_payload = {
+            "from": format_resend_from_header("VRT Services"),
+            "to": [recipient],
+            "reply_to": reply_to_list if len(reply_to_list) > 1 else reply_to_list[0],
+            "subject": subject,
+            "html": email_body_html
+        }
+        resend_res = send_resend_email(resend_payload)
+
+        # Update lead notes/status
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE leads
+                SET status = CASE WHEN status = 'IN_REVIEW' THEN 'CONTACTED' ELSE status END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (clean_id,))
+            conn.commit()
+
+        return JSONResponse({
+            "success": True,
+            "message": f"Email delivered successfully to {recipient}",
+            "reply_to": clean_reply_to,
+            "resend": resend_res
+        })
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[Lead Send Email Error]: {e}")
+        return JSONResponse({"success": False, "error": str(e), "detail": str(e)}, status_code=500)
     finally:
         if conn: conn.close()
 
