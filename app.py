@@ -12069,14 +12069,23 @@ async def update_lead_status_endpoint(lead_id: str, request: Request):
 @app.post("/api/leads/{lead_id}/delete")
 @app.delete("/api/lead/{lead_id}")
 @app.post("/api/lead/{lead_id}/delete")
-async def delete_lead_endpoint(lead_id: str, request: Request):
+@app.post("/api/leads/delete")
+async def delete_lead_endpoint(request: Request, lead_id: str = ""):
     """Deletes a lead from the pipeline."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    target_id = str(lead_id).strip()
+    if not target_id or target_id == "":
+        try:
+            body = await request.json()
+            target_id = str(body.get("leadId") or body.get("id") or "").strip()
+        except Exception:
+            pass
+
     try:
-        clean_id = int(str(lead_id).strip())
+        clean_id = int(target_id)
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid lead ID format")
 
@@ -12088,7 +12097,7 @@ async def delete_lead_endpoint(lead_id: str, request: Request):
             deleted = cur.fetchone()
             conn.commit()
             if not deleted:
-                return JSONResponse({"success": False, "error": f"Lead #{clean_id} not found"}, status_code=404)
+                return JSONResponse({"success": True, "message": f"Lead #{clean_id} already removed or not found"})
             print(f"[Lead Delete] Successfully deleted lead #{clean_id} by user '{username}'")
             return JSONResponse({"success": True, "message": f"Lead #{clean_id} deleted successfully"})
     except Exception as e:
@@ -12466,8 +12475,14 @@ async def convert_lead_to_client_endpoint(request: Request):
     try:
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT COALESCE(MAX(id), 0) + 1001 FROM customer;")
-            next_num = cur.fetchone()[0]
+            # Safely calculate next customer number (e.g. CUST-4223)
+            cur.execute("""
+                SELECT COALESCE(MAX(CAST(SUBSTRING(custumer_number FROM 6) AS INTEGER)), 4222) + 1 AS next_num
+                FROM customer
+                WHERE custumer_number ~ '^CUST-[0-9]+$';
+            """)
+            row = cur.fetchone()
+            next_num = row["next_num"] if row and row.get("next_num") else 4223
             custumer_number = f"CUST-{next_num}"
 
             legal_name = company if company else name
@@ -12487,22 +12502,33 @@ async def convert_lead_to_client_endpoint(request: Request):
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, 'Active',
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                ) RETURNING *;
+                ) RETURNING id, custumer_number, customer_type, legal_name, display_name, phone, email, status;
             """, (
                 custumer_number, cust_type, legal_name, display_name,
                 phone or None, email or None, combined_notes, parent_name
             ))
-            new_cust = dict(cur.fetchone())
+            new_cust_row = cur.fetchone()
+            new_cust = dict(new_cust_row) if new_cust_row else {}
 
             if lead_id:
-                cur.execute("""
-                    UPDATE leads
-                    SET status = 'WON', updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s;
-                """, (int(lead_id),))
+                try:
+                    clean_lead_id = int(str(lead_id).strip())
+                    cur.execute("""
+                        UPDATE leads
+                        SET status = 'WON', updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s;
+                    """, (clean_lead_id,))
+                except (ValueError, TypeError):
+                    pass
 
             conn.commit()
-            return JSONResponse({"success": True, "customer": new_cust, "message": f"Client created successfully with customer # {custumer_number}"})
+            print(f"[Lead Conversion] Successfully converted lead '{name}' to customer '{custumer_number}' (ID: {new_cust.get('id')})")
+            return JSONResponse({
+                "success": True,
+                "customer": new_cust,
+                "customer_number": custumer_number,
+                "message": f"Client created successfully with customer # {custumer_number}"
+            })
     except Exception as e:
         if conn: conn.rollback()
         print(f"Error converting lead to client: {e}")
