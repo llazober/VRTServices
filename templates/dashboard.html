@@ -278,6 +278,31 @@
             display: none;
         }
 
+        .nav-subitem {
+            padding-left: 32px !important;
+            margin-top: -2px;
+            font-size: 0.84rem !important;
+            color: #94a3b8;
+            border-left: 2px solid rgba(6, 182, 212, 0.4);
+            margin-left: 18px;
+            width: calc(100% - 18px) !important;
+            border-radius: 0 10px 10px 0 !important;
+        }
+
+        .nav-subitem:hover {
+            border-left-color: #06b6d4;
+            color: #fff !important;
+            background: rgba(6, 182, 212, 0.08) !important;
+        }
+
+        body.sidebar-collapsed .nav-subitem {
+            padding-left: 14px !important;
+            margin-left: 0;
+            width: 100% !important;
+            border-left: none;
+            border-radius: 12px !important;
+        }
+
         .sidebar-footer {
             padding: 16px;
             border-top: 1px solid var(--border-color);
@@ -1015,13 +1040,15 @@
                 <span class="nav-badge" style="background: linear-gradient(135deg, #06b6d4, #0891b2); color: var(--text-main);">TOOLS</span>
             </a>
 
-            <button class="nav-item" onclick="openEmailTemplatesModal()" title="Manage Email Templates">
-                <div class="icon-box" style="color: #38bdf8;">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <button class="nav-item nav-subitem" onclick="openEmailTemplatesModal()" title="Manage Email Templates">
+                <div class="icon-box" style="color: #38bdf8; width: 18px; height: 18px; min-width: 18px;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0l-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"/>
                     </svg>
                 </div>
-                <span class="nav-text" style="font-weight: 800;">Email Templates</span>
+                <span class="nav-text" style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #06b6d4; font-size: 0.82rem; opacity: 0.85;">↳</span> Email Templates
+                </span>
             </button>
             {% endif %}
 
@@ -2666,7 +2693,47 @@
                 <!-- Two-Column Cards Grid -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 24px;">
 
+                    <!-- CARD 1: Email Templates -->
+                    <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid var(--border-color); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px; max-width: 600px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: #38bdf8; font-size: 1.3rem; display: flex; align-items: center; justify-content: center;">
+                                    📝
+                                </div>
+                                <div>
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0;">Email Templates</h3>
+                                    <span style="color: var(--text-muted); font-size: 0.82rem;">Standardized Client & System Communication</span>
+                                </div>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; margin-bottom: 18px;">
+                                Manage customizable email templates, subject lines, and dynamic merge tags (<code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #38bdf8;">{client_name}</code>, <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #38bdf8;">{portal_url}</code>, <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #38bdf8;">{year}</code>) used for automated requirements and client dispatches.
+                            </p>
 
+                            <div style="display: flex; flex-direction: column; gap: 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 10px; font-size: 0.84rem; color: #cbd5e1;">
+                                    <span style="color: #38bdf8; font-size: 1rem;">✨</span>
+                                    <span><strong>Dynamic Placeholders:</strong> Auto-populates client names, login URLs, and tax years.</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px; font-size: 0.84rem; color: #cbd5e1;">
+                                    <span style="color: #06b6d4; font-size: 1rem;">⚡</span>
+                                    <span><strong>Instant Synchronization:</strong> Available immediately in bulk and single-client dispatches.</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px; font-size: 0.84rem; color: #cbd5e1;">
+                                    <span style="color: #a855f7; font-size: 1rem;">🔒</span>
+                                    <span><strong>Deliverability Ready:</strong> Fully authenticated via Resend DKIM, SPF & custom domains.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button onclick="openEmailTemplatesModal()" style="width: 100%; background: linear-gradient(135deg, #06b6d4, #0891b2); color: #000; border: none; border-radius: 12px; padding: 14px 20px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                    <path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0l-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"/>
+                                </svg>
+                                <span>Manage Email Templates</span>
+                            </button>
+                        </div>
+                    </div>
 
                     <!-- CARD 2: Bulk Send Requirement Emails -->
                     <div style="background: rgba(20, 24, 36, 0.75); border: 1px solid var(--border-color); border-radius: 20px; padding: 28px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; gap: 20px; max-width: 600px;">
