@@ -190,12 +190,12 @@
         }
 
         .nav-label {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--text-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #94a3b8 !important;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 10px 12px 6px;
+            letter-spacing: 1.2px;
+            padding: 12px 14px 6px;
             white-space: nowrap;
             overflow: hidden;
         }
@@ -935,7 +935,7 @@
 
         <!-- Navigation Section -->
         <div class="nav-section">
-            <div class="nav-label">Main Navigation</div>
+            <div class="nav-label" style="color: #94a3b8 !important; font-weight: 800; letter-spacing: 1.2px; font-size: 0.72rem;">Main Navigation</div>
 
             {% if user_role != 'TAX_PREP' %}
             <a href="/" class="nav-item" title="Go to Home Portal">
@@ -966,7 +966,7 @@
                 <span class="nav-badge">CORE</span>
             </a>
 
-            <div class="nav-label" style="margin-top: 14px;">CRM Modules</div>
+            <div class="nav-label" style="margin-top: 14px; color: #94a3b8 !important; font-weight: 800; letter-spacing: 1.2px; font-size: 0.72rem;">CRM Modules</div>
 
             <a href="/leads" class="nav-item {% if active_tab == 'leads' %}active{% endif %}" title="Lead Pipeline & Acquisition">
                 <div class="icon-box" style="color: #06b6d4;">
@@ -1380,11 +1380,17 @@
 
                         <!-- AI Proposal Section -->
                         <div style="background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.25); border-radius: 14px; padding: 16px; margin-bottom: 24px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
                                 <span style="font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #c084fc; letter-spacing: 0.5px;">AI Proposal Draft</span>
-                                <button type="button" onclick="generateAiProposalForEdit()" id="btnGenAiPitch" style="padding: 6px 14px; background: rgba(217, 70, 239, 0.2); border: 1px solid rgba(217, 70, 239, 0.4); color: #f0abfc; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(217,70,239,0.35)';" onmouseout="this.style.background='rgba(217,70,239,0.2)';">
-                                    ✨ Generate AI Pitch
-                                </button>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <select id="edit_lead_ai_lang" style="padding: 6px 10px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(217, 70, 239, 0.4); border-radius: 8px; color: #f0abfc; font-size: 0.78rem; font-weight: 700; outline: none; cursor: pointer; font-family: 'Outfit', sans-serif;">
+                                        <option value="English">🇺🇸 English</option>
+                                        <option value="Spanish">🇪🇸 Spanish (Español)</option>
+                                    </select>
+                                    <button type="button" onclick="generateAiProposalForEdit()" id="btnGenAiPitch" style="padding: 6px 14px; background: rgba(217, 70, 239, 0.2); border: 1px solid rgba(217, 70, 239, 0.4); color: #f0abfc; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(217,70,239,0.35)';" onmouseout="this.style.background='rgba(217,70,239,0.2)';">
+                                        ✨ Generate AI Pitch
+                                    </button>
+                                </div>
                             </div>
                             <textarea id="edit_lead_ai_proposal" rows="7" placeholder="Generate an AI proposal or type one manually..." style="width: 100%; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; resize: vertical; line-height: 1.5;"></textarea>
                         </div>
@@ -1396,7 +1402,7 @@
                                     ✉️ Approve & Send Email
                                 </button>
                                 <button type="button" onclick="openConvertClientModalFromEdit()" style="padding: 10px 18px; background: #9333ea; color: #fff; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(147, 51, 234, 0.35); display: flex; align-items: center; gap: 6px;">
-                                    👤 Create Client
+                                    👤 Create Customer
                                 </button>
                             </div>
 
@@ -1422,7 +1428,7 @@
                 <div style="background: #0d1117; border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 20px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); font-family: 'Outfit', sans-serif;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h2 id="convertClientModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0;">
-                            Convert Lead to Client
+                            Convert Lead to Customer
                         </h2>
                         <button type="button" onclick="closeConvertClientModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; line-height: 1;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='#94a3b8';">✕</button>
                     </div>
@@ -1463,7 +1469,7 @@
                                 Cancel
                             </button>
                             <button type="submit" id="btnSubmitConvertClient" style="background: #9333ea; color: #fff; font-weight: 900; font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-radius: 12px; padding: 12px 28px; cursor: pointer; box-shadow: 0 0 20px rgba(147, 51, 234, 0.35); transition: all 0.2s;" onmouseover="this.style.background='#a855f7';" onmouseout="this.style.background='#9333ea';">
-                                Create Client
+                                Create Customer
                             </button>
                         </div>
                     </form>
@@ -1611,7 +1617,7 @@
                                 </td>
                                 <td style="padding: 16px 20px; text-align: right;">
                                     <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
-                                        <button type="button" onclick="openConvertClientModal(${lead.id})" title="Convert to Client" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
+                                        <button type="button" onclick="openConvertClientModal(${lead.id})" title="Convert to Customer" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
                                             <svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                                             </svg>
@@ -1757,16 +1763,22 @@
 
                 async function generateAiProposalForEdit() {
                     const id = document.getElementById('edit_lead_id').value;
+                    const langSelect = document.getElementById('edit_lead_ai_lang');
+                    const language = langSelect ? langSelect.value : 'English';
                     const btn = document.getElementById('btnGenAiPitch');
                     btn.disabled = true;
-                    btn.textContent = 'Generating...';
+                    btn.textContent = language === 'Spanish' ? 'Generando...' : 'Generating...';
 
                     try {
-                        const res = await fetch(`/api/leads/${id}/generate-proposal`, { method: 'POST' });
+                        const res = await fetch(`/api/leads/${id}/generate-proposal`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ language: language })
+                        });
                         const data = await res.json();
                         if (data.success) {
                             document.getElementById('edit_lead_ai_proposal').value = data.aiProposal;
-                            showLeadToast('AI Pitch generated successfully!');
+                            showLeadToast(language === 'Spanish' ? '¡Propuesta IA generada en Español!' : 'AI Pitch generated successfully!');
                         } else {
                             showLeadToast(data.error || 'Failed to generate pitch', 'error');
                         }
@@ -1809,7 +1821,7 @@
                         const lead = currentLeads.find(l => String(l.id) === String(id));
                         if (lead) {
                             document.getElementById('convert_lead_id').value = lead.id;
-                            document.getElementById('convertClientModalTitle').textContent = `Convert Lead: ${lead.name}`;
+                            document.getElementById('convertClientModalTitle').textContent = `Convert Lead to Customer: ${lead.name}`;
                             document.getElementById('convert_name').value = lead.name || '';
                             document.getElementById('convert_email').value = lead.email || '';
                             document.getElementById('convert_phone').value = lead.phone || '';
@@ -1819,7 +1831,7 @@
                         }
                     } else {
                         document.getElementById('convert_lead_id').value = '';
-                        document.getElementById('convertClientModalTitle').textContent = 'Add New Client';
+                        document.getElementById('convertClientModalTitle').textContent = 'Add New Customer';
                     }
                     document.getElementById('convertClientModal').style.display = 'flex';
                 }
@@ -1853,16 +1865,16 @@
                         const data = await res.json();
                         if (res.ok && data.success) {
                             closeConvertClientModal();
-                            showLeadToast(data.message || 'Client created successfully');
+                            showLeadToast(data.message || 'Customer created successfully');
                             loadLeads();
                         } else {
-                            showLeadToast(data.error || data.detail || 'Failed to create client', 'error');
+                            showLeadToast(data.error || data.detail || 'Failed to create customer', 'error');
                         }
                     } catch (err) {
-                        showLeadToast('Error converting lead to client: ' + err.message, 'error');
+                        showLeadToast('Error converting lead to customer: ' + err.message, 'error');
                     } finally {
                         btn.disabled = false;
-                        btn.textContent = 'Create Client';
+                        btn.textContent = 'Create Customer';
                     }
                 }
 

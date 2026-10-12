@@ -12110,7 +12110,7 @@ async def delete_lead_endpoint(request: Request, lead_id: str = ""):
 @app.post("/api/leads/{lead_id}/generate-proposal")
 @app.post("/api/lead/{lead_id}/generate-proposal")
 async def generate_lead_proposal_endpoint(lead_id: str, request: Request):
-    """Generates an AI sales pitch / proposal for VRT Services (Tax Preparation, Bookkeeping, Payroll, CFO)."""
+    """Generates an AI sales pitch / proposal for VRT Services (Tax Preparation, Bookkeeping, Payroll, CFO) in English or Spanish."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -12119,6 +12119,15 @@ async def generate_lead_proposal_endpoint(lead_id: str, request: Request):
         clean_id = int(str(lead_id).strip())
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid lead ID format")
+
+    # Read optional language payload
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    language = str(body.get("language") or body.get("lang") or "English").strip()
+    is_spanish = language.lower() in ["spanish", "es", "español", "espanol"]
 
     conn = None
     try:
@@ -12129,12 +12138,42 @@ async def generate_lead_proposal_endpoint(lead_id: str, request: Request):
             if not lead:
                 raise HTTPException(status_code=404, detail="Lead not found")
 
-        lead_name = (lead.get("name") or "Valued Client").strip()
-        company = (lead.get("company") or "your business").strip()
-        client_industry = (lead.get("service") or "General Business").strip()
-        notes = (lead.get("notes") or lead.get("message") or "Requested custom tax, bookkeeping, and business accounting package.").strip()
+        lead_name = (lead.get("name") or ("Estimado Cliente" if is_spanish else "Valued Client")).strip()
+        company = (lead.get("company") or ("su empresa" if is_spanish else "your business")).strip()
+        client_industry = (lead.get("service") or ("Negocios Generales" if is_spanish else "General Business")).strip()
+        notes = (lead.get("notes") or lead.get("message") or ("Interesado en servicios fiscales y contables." if is_spanish else "Requested custom tax, bookkeeping, and business accounting package.")).strip()
 
-        prompt = f"""You are the Senior Tax Strategist & Accounting Director at VRT Services LLC (www.vrtservices12.com).
+        if is_spanish:
+            prompt = f"""Eres el Estratega Fiscal Senior y Director de Contabilidad en VRT Services LLC (www.vrtservices12.com).
+VRT Services es una firma de contabilidad y asesoría fiscal élite especializada exclusivamente en:
+- Preparación y Planificación de Impuestos Corporativos e Individuales (Formularios 1040, 1120, 1120-S, 1065, Schedule C)
+- Contabilidad Mensual (Bookkeeping), Conciliación Bancaria y Estados Financieros (Pérdidas y Ganancias, Balance General, Flujo de Caja)
+- Procesamiento Completo de Nómina (Payroll) y Cumplimiento de Contratistas 1099-NEC
+- Declaraciones de Impuestos sobre Ventas (Sales Tax) y Reportes Anuales Corporativos
+- Asesoría de CFO Virtual, Optimización de Flujo de Efectivo y Blindaje Fiscal
+
+DATOS DEL PROSPECTO:
+- Contacto: {lead_name}
+- Empresa: {company}
+- Sector / Industria del Cliente: {client_industry}
+- Notas de Indagación: {notes}
+
+REGLAS CRÍTICAS DEL NEGOCIO:
+1. VRT Services proporciona SERVICIOS DE IMPUESTOS, CONTABILIDAD, NÓMINA (PAYROLL) Y ASESORÍA FISCAL. VRT Services NO presta mano de obra ni servicios en la industria del cliente (por ejemplo, si la industria del cliente es "{client_industry}" como Construcción, Jardinería o Restaurante, ¡VRT Services NO hace construcción o jardinería! VRT Services optimiza los impuestos, deducciones y nómina PARA su empresa de {client_industry}).
+2. Escribe una propuesta comercial sumamente persuasiva y profesional en 4 párrafos en ESPAÑOL, dirigida por correo a {lead_name} en {company}.
+3. Detalla cómo VRT Services genera ahorro fiscal, maximiza deducciones sectoriales (depreciación de herramientas, millaje de vehículos, materiales, pagos a subcontratistas 1099 para su negocio de {client_industry}) y garantiza tranquilidad contable mensual.
+4. Incluye un desglose claro de servicios:
+   • Planificación Fiscal Estratégica y Declaración Anual de Impuestos (Maximización de Deducciones)
+   • Contabilidad Mensual y Estados Financieros (P&L, Balance General, Flujo de Caja)
+   • Procesamiento Integral de Nómina (Payroll) y Cumplimiento 1099
+   • Impuestos sobre Ventas (Sales Tax) y Renovaciones Corporativas Anuales
+   • Acceso Seguro al Portal de Clientes de VRT 24/7 y Asesoría Fiscal Todo el Año
+5. Incluye el espacio para el nivel de inversión:
+   [INGRESE AQUÍ EL PLAN O TARIFA - ej., $350 - $650/mes o Tarifa Personalizada]
+6. Cierra con una invitación cordial a agendar una llamada de bienvenida o revisar sus declaraciones anteriores.
+Tono: Seguro, consultivo, de alto nivel y cordial. Redacta en impecable ESPAÑOL profesional."""
+        else:
+            prompt = f"""You are the Senior Tax Strategist & Accounting Director at VRT Services LLC (www.vrtservices12.com).
 VRT Services is an elite accounting firm specializing exclusively in:
 - Corporate & Individual Business Tax Preparation (Forms 1040, 1120, 1120-S, 1065, Schedule C) & Tax Planning
 - Monthly Bookkeeping, General Ledger Reconciliation, and Financial Reporting (P&L, Balance Sheet, Cash Flow)
@@ -12191,7 +12230,34 @@ Tone: Confident, consultative, elite, and welcoming. Format with clean spacing a
                 print(f"[OpenAI Lead Proposal Error]: {ai_err}")
 
         if not ai_proposal:
-            ai_proposal = f"""Subject: Tailored Tax, Bookkeeping & Advisory Proposal for {company}
+            if is_spanish:
+                ai_proposal = f"""Asunto: Solución Integral de Impuestos, Contabilidad y Asesoría para {company}
+
+Estimado/a {lead_name},
+
+Gracias por ponerse en contacto con VRT Services LLC. Entendemos que liderar y hacer crecer una empresa exitosa en el sector de {client_industry} requiere un control financiero riguroso, maximización de deducciones tributarias y un cumplimiento fiscal impecable para que usted pueda enfocarse en su negocio sin preocupaciones administrativas.
+
+En VRT Services LLC ofrecemos soluciones integrales y personalizadas de contabilidad, preparación de impuestos corporativos y nómina (payroll) diseñadas específicamente para {company}. Nos encargamos de sus operaciones financieras: maximizamos cada deducción comercial permitida (depreciación de equipos, vehículos, materiales y pagos a contratistas 1099), conciliamos sus libros contables mensualmente y preparamos sus declaraciones tributarias con la mayor precisión y puntualidad.
+
+Plan de Servicios Diseñado para {company}:
+• Planificación Fiscal Estratégica y Declaración Anual de Impuestos (Formularios 1120/1120-S/1065/1040)
+• Contabilidad Mensual y Estados Financieros (Pérdidas y Ganancias, Balance General, Flujo de Caja)
+• Procesamiento Integral de Nómina (Payroll) y Cumplimiento de Contratistas 1099-NEC
+• Declaraciones de Impuestos sobre Ventas (Sales Tax) y Reportes Corporativos Anuales
+• Acceso 24/7 a nuestro Portal Seguro para Clientes de VRT para carga de facturas y recibos
+• Asesor Tributario Dedicado y Consultoría Fiscal durante todo el año
+
+Inversión Propuesta:
+[INGRESE AQUÍ EL PLAN O TARIFA - ej., $350 - $650/mes o Tarifa Personalizada]
+
+Será un verdadero placer coordinar una breve llamada inicial o revisar sus declaraciones anteriores para resolver cualquier inquietud. Por favor, responda directamente a este correo o llámenos a su conveniencia para formalizar su inicio con nosotros.
+
+Atentamente,
+Equipo de Soluciones Tributarias y Contables
+VRT Services LLC
+notification@vrtservices12.com | www.vrtservices12.com"""
+            else:
+                ai_proposal = f"""Subject: Tailored Tax, Bookkeeping & Advisory Proposal for {company}
 
 Dear {lead_name},
 
@@ -12225,7 +12291,7 @@ notification@vrtservices12.com | www.vrtservices12.com"""
             """, (ai_proposal, clean_id))
             conn.commit()
 
-        return JSONResponse({"success": True, "aiProposal": ai_proposal})
+        return JSONResponse({"success": True, "aiProposal": ai_proposal, "language": "Spanish" if is_spanish else "English"})
     except Exception as e:
         if conn: conn.rollback()
         print(f"Error generating proposal: {e}")
@@ -12527,7 +12593,7 @@ async def convert_lead_to_client_endpoint(request: Request):
                 "success": True,
                 "customer": new_cust,
                 "customer_number": custumer_number,
-                "message": f"Client created successfully with customer # {custumer_number}"
+                "message": f"Customer created successfully with customer # {custumer_number}"
             })
     except Exception as e:
         if conn: conn.rollback()
