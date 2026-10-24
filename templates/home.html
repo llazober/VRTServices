@@ -210,6 +210,44 @@
             box-shadow: 0 6px 24px rgba(0, 242, 254, 0.5);
         }
 
+        /* ── Language Switcher Pill ───────────────────────────────────── */
+        .lang-switch-container {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 20px;
+            padding: 3px 4px;
+            gap: 2px;
+            user-select: none;
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.76rem;
+            font-weight: 800;
+            padding: 5px 10px;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            line-height: 1;
+        }
+
+        .lang-btn:hover {
+            color: #ffffff;
+        }
+
+        .lang-btn.active {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: #ffffff;
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
+        }
+
         /* ── Main Container & Hero Section ───────────────────────────── */
         main.main-content {
             flex: 1;
@@ -710,22 +748,27 @@
         </a>
 
         <ul class="nav-menu">
-            <li><a href="#services" class="nav-link">Our Services</a></li>
-            <li><a href="javascript:void(0)" onclick="openContactUsModal()" class="nav-link">Contact Us</a></li>
-            <li><a href="#workflow" class="nav-link">Filing Process</a></li>
+            <li><a href="#services" class="nav-link" data-i18n="nav_services">Our Services</a></li>
+            <li><a href="javascript:void(0)" onclick="openContactUsModal()" class="nav-link" data-i18n="nav_contact">Contact Us</a></li>
+            <li><a href="#workflow" class="nav-link" data-i18n="nav_process">Filing Process</a></li>
         </ul>
 
         <div class="nav-actions">
+            <div class="lang-switch-container" role="group" aria-label="Language Selector">
+                <button type="button" class="lang-btn active" id="btnLangEn" onclick="switchLanguage('en')">EN</button>
+                <button type="button" class="lang-btn" id="btnLangEs" onclick="switchLanguage('es')">ES</button>
+            </div>
+
             <a href="javascript:void(0)" onclick="openClientPortalModal()" class="btn-header-portal">
-                📂 Client Portal
+                📂 <span data-i18n="nav_portal">Client Portal</span>
             </a>
             {% if username and username != 'user' %}
                 <a href="/dashboard" class="btn-header-login">
-                    Dashboard
+                    <span data-i18n="nav_dashboard">Dashboard</span>
                 </a>
             {% else %}
                 <a href="/login" class="btn-header-login">
-                    Login
+                    <span data-i18n="nav_login">Login</span>
                 </a>
             {% endif %}
         </div>
@@ -733,15 +776,15 @@
 
     <!-- Main Content Hero Section -->
     <main class="main-content">
-        <div class="hero-badge">
+        <div class="hero-badge" data-i18n="hero_badge">
             🏛️ Enterprise Tax & Accounting Advisory Firm
         </div>
 
-        <h1 class="hero-title">
+        <h1 class="hero-title" data-i18n="hero_title">
             Full-Service Tax Preparation & <span>Accounting Solutions</span>
         </h1>
 
-        <p class="hero-subtitle">
+        <p class="hero-subtitle" data-i18n="hero_subtitle">
             Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.
         </p>
 
@@ -750,29 +793,29 @@
         <!-- Trust & Highlights Bar -->
         <div class="stats-bar">
             <div class="stat-item">
-                <div class="stat-value">100% IRS E-File</div>
-                <div class="stat-label">Form 8879 Authorized</div>
+                <div class="stat-value" data-i18n="stat1_val">100% IRS E-File</div>
+                <div class="stat-label" data-i18n="stat1_lbl">Form 8879 Authorized</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">Form 1040 / 1120</div>
-                <div class="stat-label">Individual & Corporate</div>
+                <div class="stat-value" data-i18n="stat2_val">Form 1040 / 1120</div>
+                <div class="stat-label" data-i18n="stat2_lbl">Individual & Corporate</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">Automated OCR</div>
-                <div class="stat-label">Bank Reconciliation</div>
+                <div class="stat-value" data-i18n="stat3_val">Automated OCR</div>
+                <div class="stat-label" data-i18n="stat3_lbl">Bank Reconciliation</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">QBO Ready</div>
-                <div class="stat-label">QuickBooks Online Sync</div>
+                <div class="stat-value" data-i18n="stat4_val">QBO Ready</div>
+                <div class="stat-label" data-i18n="stat4_lbl">QuickBooks Online Sync</div>
             </div>
         </div>
 
         <!-- Services Section Header -->
         <section id="services" style="width: 100%;">
             <div class="section-header">
-                <span class="section-badge">Comprehensive Offerings</span>
-                <h2 class="section-title">Tax & Accounting Services</h2>
-                <p class="section-subtitle">
+                <span class="section-badge" data-i18n="services_badge">Comprehensive Offerings</span>
+                <h2 class="section-title" data-i18n="services_title">Tax & Accounting Services</h2>
+                <p class="section-subtitle" data-i18n="services_subtitle">
                     Discover our complete range of specialized tax return preparation, business accounting, automated bookkeeping, and IRS regulatory compliance services.
                 </p>
             </div>
@@ -789,17 +832,17 @@
                             </div>
                             <span class="service-tag tag-cyan">Form 1040 & 1040-SR</span>
                         </div>
-                        <h3 class="service-title">Individual Tax Returns</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s1_title">Individual Tax Returns</h3>
+                        <p class="service-desc" data-i18n="s1_desc">
                             Thorough federal and state income tax preparation for individuals, families, freelancers, and sole proprietors.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> Federal & State Income Tax Filings (Form 1040 / 1040-SR)</li>
-                            <li class="service-item"><span class="check">✓</span> Schedule C Self-Employment Tax & Expense Deductions</li>
-                            <li class="service-item"><span class="check">✓</span> W-2, 1099-NEC, 1099-MISC & 1099-K Income Reconciliation</li>
-                            <li class="service-item"><span class="check">✓</span> Schedule A Itemized Deductions (Mortgage, Taxes, Charity)</li>
-                            <li class="service-item"><span class="check">✓</span> Maximization of Earned Income & Child Tax Credits</li>
-                            <li class="service-item"><span class="check">✓</span> Form 8879 E-File Signature Authorization & IRS Submission</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i1">Federal & State Income Tax Filings (Form 1040 / 1040-SR)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i2">Schedule C Self-Employment Tax & Expense Deductions</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i3">W-2, 1099-NEC, 1099-MISC & 1099-K Income Reconciliation</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i4">Schedule A Itemized Deductions (Mortgage, Taxes, Charity)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i5">Maximization of Earned Income & Child Tax Credits</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s1_i6">Form 8879 E-File Signature Authorization & IRS Submission</span></li>
                         </ul>
                     </div>
                 </div>
@@ -813,17 +856,17 @@
                             </div>
                             <span class="service-tag tag-purple">Form 1120 / 1120-S / 1065</span>
                         </div>
-                        <h3 class="service-title">Corporate & Business Tax Filings</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s2_title">Corporate & Business Tax Filings</h3>
+                        <p class="service-desc" data-i18n="s2_desc">
                             Strategic tax preparation, Schedule K-1 generation, and corporate compliance for C-Corps, S-Corps, and LLCs.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> C-Corporation Tax Returns (Form 1120) & Officer Payroll</li>
-                            <li class="service-item"><span class="check">✓</span> S-Corporation Filings (Form 1120-S) & Shareholder K-1s</li>
-                            <li class="service-item"><span class="check">✓</span> Partnership & Multi-Member LLC Returns (Form 1065)</li>
-                            <li class="service-item"><span class="check">✓</span> Quarterly Estimated Tax Calculation & Officer Compensation</li>
-                            <li class="service-item"><span class="check">✓</span> Section 179 & Bonus Depreciation Capital Asset Schedules</li>
-                            <li class="service-item"><span class="check">✓</span> State Corporate Income & Annual Franchise Tax Filings</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i1">C-Corporation Tax Returns (Form 1120) & Officer Payroll</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i2">S-Corporation Filings (Form 1120-S) & Shareholder K-1s</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i3">Partnership & Multi-Member LLC Returns (Form 1065)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i4">Quarterly Estimated Tax Calculation & Officer Compensation</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i5">Section 179 & Bonus Depreciation Capital Asset Schedules</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s2_i6">State Corporate Income & Annual Franchise Tax Filings</span></li>
                         </ul>
                     </div>
                 </div>
@@ -837,17 +880,17 @@
                             </div>
                             <span class="service-tag tag-emerald">Bookkeeping & OCR</span>
                         </div>
-                        <h3 class="service-title">Automated Bookkeeping & Accounting</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s3_title">Automated Bookkeeping & Accounting</h3>
+                        <p class="service-desc" data-i18n="s3_desc">
                             Year-round financial management powered by AI OCR bank statement extraction and QuickBooks synchronization.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> AI Vision OCR Extraction for PDF & Image Bank Statements</li>
-                            <li class="service-item"><span class="check">✓</span> Monthly Profit & Loss (P&L) and Balance Sheet Reporting</li>
-                            <li class="service-item"><span class="check">✓</span> QuickBooks Online (QBO) Direct OAuth & Chart of Accounts Sync</li>
-                            <li class="service-item"><span class="check">✓</span> General Ledger Maintenance & Transaction Categorization</li>
-                            <li class="service-item"><span class="check">✓</span> Monthly Bank & Credit Card Account Reconciliation</li>
-                            <li class="service-item"><span class="check">✓</span> Check Image Digitization & Reference Record Archival</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i1">AI Vision OCR Extraction for PDF & Image Bank Statements</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i2">Monthly Profit & Loss (P&L) and Balance Sheet Reporting</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i3">QuickBooks Online (QBO) Direct OAuth & Chart of Accounts Sync</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i4">General Ledger Maintenance & Transaction Categorization</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i5">Monthly Bank & Credit Card Account Reconciliation</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s3_i6">Check Image Digitization & Reference Record Archival</span></li>
                         </ul>
                     </div>
                 </div>
@@ -861,17 +904,17 @@
                             </div>
                             <span class="service-tag tag-amber">Payroll & 1099 Reporting</span>
                         </div>
-                        <h3 class="service-title">Payroll Tax & Contractor Filing</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s4_title">Payroll Tax & Contractor Filing</h3>
+                        <p class="service-desc" data-i18n="s4_desc">
                             Comprehensive payroll tax administration, quarterly federal filings, and year-end 1099 contractor reporting.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> Employer Quarterly Federal Tax Returns (Form 941 Filing)</li>
-                            <li class="service-item"><span class="check">✓</span> Federal Unemployment Tax Reconciliation (Form 940)</li>
-                            <li class="service-item"><span class="check">✓</span> Independent Contractor 1099-NEC & 1099-MISC Information Filings</li>
-                            <li class="service-item"><span class="check">✓</span> Annual W-2 & W-3 Employee Wage Statement Processing</li>
-                            <li class="service-item"><span class="check">✓</span> State Unemployment Insurance (SUI) & Local Payroll Taxing</li>
-                            <li class="service-item"><span class="check">✓</span> Payroll Journal Entries Export to QuickBooks Online</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i1">Employer Quarterly Federal Tax Returns (Form 941 Filing)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i2">Federal Unemployment Tax Reconciliation (Form 940)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i3">Independent Contractor 1099-NEC & 1099-MISC Information Filings</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i4">Annual W-2 & W-3 Employee Wage Statement Processing</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i5">State Unemployment Insurance (SUI) & Local Payroll Taxing</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s4_i6">Payroll Journal Entries Export to QuickBooks Online</span></li>
                         </ul>
                     </div>
                 </div>
@@ -885,17 +928,17 @@
                             </div>
                             <span class="service-tag tag-rose">IRS Compliance & E-Sign</span>
                         </div>
-                        <h3 class="service-title">IRS Compliance & E-Filing</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s5_title">IRS Compliance & E-Filing</h3>
+                        <p class="service-desc" data-i18n="s5_desc">
                             Authorized IRS e-file signature authorization, extension processing, and notice correspondence support.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> Form 8879 Electronic Signature Workflow & Filing Authorization</li>
-                            <li class="service-item"><span class="check">✓</span> Automatic Tax Extension Processing (Form 4868 / Form 7004)</li>
-                            <li class="service-item"><span class="check">✓</span> IRS Notice & Penalty Relief Assistance</li>
-                            <li class="service-item"><span class="check">✓</span> Power of Attorney & Authorization Filings (Form 2848 / 8821)</li>
-                            <li class="service-item"><span class="check">✓</span> IRS Account Transcript Analysis & Income Verification</li>
-                            <li class="service-item"><span class="check">✓</span> Client Reference Code Tracking (`CUST-XXXX`) for Status Check</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i1">Form 8879 Electronic Signature Workflow & Filing Authorization</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i2">Automatic Tax Extension Processing (Form 4868 / Form 7004)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i3">IRS Notice & Penalty Relief Assistance</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i4">Power of Attorney & Authorization Filings (Form 2848 / 8821)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i5">IRS Account Transcript Analysis & Income Verification</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s5_i6">Client Reference Code Tracking (CUST-XXXX) for Status Check</span></li>
                         </ul>
                     </div>
                 </div>
@@ -909,17 +952,17 @@
                             </div>
                             <span class="service-tag tag-blue">Entity Formation & Advisory</span>
                         </div>
-                        <h3 class="service-title">Business Formation & Advisory</h3>
-                        <p class="service-desc">
+                        <h3 class="service-title" data-i18n="s6_title">Business Formation & Advisory</h3>
+                        <p class="service-desc" data-i18n="s6_desc">
                             Expert entity structuring, tax classification choice, and proactive tax minimization planning.
                         </p>
                         <ul class="service-list">
-                            <li class="service-item"><span class="check">✓</span> LLC, S-Corp, & C-Corp Entity Setup & Registration</li>
-                            <li class="service-item"><span class="check">✓</span> S-Corporation Election Filings (IRS Form 2553)</li>
-                            <li class="service-item"><span class="check">✓</span> Multi-State Business Tax Structuring & Nexus Review</li>
-                            <li class="service-item"><span class="check">✓</span> Proactive Year-End Tax Planning & Deduction Analysis</li>
-                            <li class="service-item"><span class="check">✓</span> Cash Flow Forecasting & Financial Performance Review</li>
-                            <li class="service-item"><span class="check">✓</span> Secure Cloud Document Portal Storage & Digital Archival</li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i1">LLC, S-Corp, & C-Corp Entity Setup & Registration</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i2">S-Corporation Election Filings (IRS Form 2553)</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i3">Multi-State Business Tax Structuring & Nexus Review</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i4">Proactive Year-End Tax Planning & Deduction Analysis</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i5">Cash Flow Forecasting & Financial Performance Review</span></li>
+                            <li class="service-item"><span class="check">✓</span> <span data-i18n="s6_i6">Secure Cloud Document Portal Storage & Digital Archival</span></li>
                         </ul>
                     </div>
                 </div>
@@ -930,9 +973,9 @@
         <!-- Filing Process Workflow Section -->
         <section id="workflow" class="workflow-container">
             <div class="section-header">
-                <span class="section-badge">Streamlined Process</span>
-                <h2 class="section-title">How Our Client Workflow Works</h2>
-                <p class="section-subtitle">
+                <span class="section-badge" data-i18n="wf_badge">Streamlined Process</span>
+                <h2 class="section-title" data-i18n="wf_title">How Our Client Workflow Works</h2>
+                <p class="section-subtitle" data-i18n="wf_subtitle">
                     Experience a hassle-free, secure digital process from initial document submission to final IRS acceptance.
                 </p>
             </div>
@@ -940,32 +983,32 @@
             <div class="workflow-grid">
                 <div class="workflow-card">
                     <div class="step-number">01</div>
-                    <h3 class="step-title">Document Intake</h3>
-                    <p class="step-desc">
+                    <h3 class="step-title" data-i18n="wf1_title">Document Intake</h3>
+                    <p class="step-desc" data-i18n="wf1_desc">
                         Upload tax documents to your Client Portal folder or email them to <code>notification@vrtservices12.com</code> with your reference tag (e.g. <code>[Ref: CUST-1001]</code>).
                     </p>
                 </div>
 
                 <div class="workflow-card">
                     <div class="step-number">02</div>
-                    <h3 class="step-title">OCR & Advisory Preparation</h3>
-                    <p class="step-desc">
+                    <h3 class="step-title" data-i18n="wf2_title">OCR & Advisory Preparation</h3>
+                    <p class="step-desc" data-i18n="wf2_desc">
                         Bank statements are extracted via OCR. Our tax specialists reconcile data, categorize expenses, and prepare your tax returns.
                     </p>
                 </div>
 
                 <div class="workflow-card">
                     <div class="step-number">03</div>
-                    <h3 class="step-title">Review & Form 8879 E-Sign</h3>
-                    <p class="step-desc">
+                    <h3 class="step-title" data-i18n="wf3_title">Review & Form 8879 E-Sign</h3>
+                    <p class="step-desc" data-i18n="wf3_desc">
                         Review completed tax returns in your secure portal. Electronically sign IRS Form 8879 e-file authorization with one click.
                     </p>
                 </div>
 
                 <div class="workflow-card">
                     <div class="step-number">04</div>
-                    <h3 class="step-title">Instant IRS E-Filing</h3>
-                    <p class="step-desc">
+                    <h3 class="step-title" data-i18n="wf4_title">Instant IRS E-Filing</h3>
+                    <p class="step-desc" data-i18n="wf4_desc">
                         Your return is electronically submitted to the IRS and state authorities. Track progress anytime through your client dashboard!
                     </p>
                 </div>
@@ -985,10 +1028,10 @@
                         📂
                     </div>
                     <div>
-                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">
+                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;" data-i18n="m_portal_title">
                             Client Portal Access
                         </h3>
-                        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;" data-i18n="m_portal_sub">
                             Enter your Customer ID to upload documents directly to your inbox folder.
                         </p>
                     </div>
@@ -996,25 +1039,25 @@
 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Customer ID or Reference Tag</label>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_portal_cid_lbl">Customer ID or Reference Tag</label>
                         <input type="text" id="portalCustomerIdInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. CUST-1001 or 4059" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
                     </div>
                     <div>
-                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Registered Email Address</label>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_portal_email_lbl">Registered Email Address</label>
                         <input type="email" id="portalEmailInput" onkeydown="handlePortalAuthKeyDown(event)" placeholder="e.g. client@example.com" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
                     </div>
                     <div id="portalAuthError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
                 </div>
 
                 <button id="btnPortalAuthSubmit" onclick="submitClientPortalAuth()" style="background: linear-gradient(135deg, #00f2fe, #2563eb); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; padding: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 242, 254, 0.3); transition: all 0.25s ease; width: 100%; margin-top: 6px;">
-                    Sign In to Inbox ➔
+                    <span data-i18n="m_portal_submit">Sign In to Inbox ➔</span>
                 </button>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 10px;">
-                    <div style="font-size: 0.76rem; color: #64748b; line-height: 1.4;">
+                    <div style="font-size: 0.76rem; color: #64748b; line-height: 1.4;" data-i18n="m_portal_hint">
                         💡 Don't know your Customer ID? Check your recent invoice or email from VRT Services.
                     </div>
-                    <button onclick="closeClientPortalModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 0.78rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap;">Exit</button>
+                    <button onclick="closeClientPortalModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 0.78rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap;" data-i18n="m_exit">Exit</button>
                 </div>
             </div>
 
@@ -1023,8 +1066,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px;">
                     <div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                            <span style="background: rgba(0,242,254,0.15); border: 1px solid rgba(0,242,254,0.3); color: #38bdf8; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;">AUTHENTICATED</span>
-                            <span style="background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #34d399; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;">📁 Inbox/ Folder</span>
+                            <span style="background: rgba(0,242,254,0.15); border: 1px solid rgba(0,242,254,0.3); color: #38bdf8; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;" data-i18n="m_auth_badge">AUTHENTICATED</span>
+                            <span style="background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #34d399; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 10px;" data-i18n="m_inbox_badge">📁 Inbox/ Folder</span>
                         </div>
                         <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0;">
                             <span id="portalCustomerNameText">John Doe</span>
@@ -1033,7 +1076,7 @@
                             ID: <strong id="portalCustomerRefText" style="color: #38bdf8;">CUST-1001</strong>
                         </div>
                     </div>
-                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; font-size: 0.76rem; font-weight: 800; padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; font-size: 0.76rem; font-weight: 800; padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" data-i18n="m_logout">
                         🚪 Log Out
                     </button>
                 </div>
@@ -1044,10 +1087,10 @@
                         ☁️
                     </div>
                     <div>
-                        <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 4px;">
+                        <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 4px;" data-i18n="m_drag_title">
                             Drag & drop files here, or <span style="color: #38bdf8; text-decoration: underline;">click to browse</span>
                         </div>
-                        <div style="font-size: 0.76rem; color: #94a3b8;">
+                        <div style="font-size: 0.76rem; color: #94a3b8;" data-i18n="m_drag_sub">
                             Upload PDF tax forms, bank statements, checks, W-2s, 1099s, or images
                         </div>
                     </div>
@@ -1056,7 +1099,7 @@
 
                 <!-- Selected Files List -->
                 <div id="portalFilesContainer" style="display: none; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
-                    <div style="font-size: 0.76rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Selected Files</div>
+                    <div style="font-size: 0.76rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="m_sel_files">Selected Files</div>
                     <div id="portalFileList" style="display: flex; flex-direction: column; gap: 6px;"></div>
                 </div>
 
@@ -1065,9 +1108,9 @@
 
                 <!-- Actions -->
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
-                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.16); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; padding: 10px 18px; border-radius: 10px; font-size: 0.84rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">🚪 Log Out & Exit</button>
+                    <button onclick="logoutAndExitClientPortal()" style="background: rgba(244,63,94,0.16); border: 1px solid rgba(244,63,94,0.35); color: #fb7185; padding: 10px 18px; border-radius: 10px; font-size: 0.84rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" data-i18n="m_logout_exit">🚪 Log Out & Exit</button>
                     <button id="btnPortalSubmitUpload" onclick="uploadSelectedFilesToInbox()" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; padding: 10px 22px; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 6px;">
-                        🚀 Upload to Inbox Folder
+                        <span data-i18n="m_upload_btn">🚀 Upload to Inbox Folder</span>
                     </button>
                 </div>
             </div>
@@ -1085,10 +1128,10 @@
                             ✉️
                         </div>
                         <div>
-                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">
+                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;" data-i18n="m_contact_title">
                                 Contact Us
                             </h3>
-                            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;" data-i18n="m_contact_sub">
                                 Send us a message and we'll get back to you shortly.
                             </p>
                         </div>
@@ -1098,15 +1141,15 @@
 
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
                     <div>
-                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Full Name</label>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_contact_name_lbl">Full Name</label>
                         <input type="text" id="contactNameInput" placeholder="John Doe" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
                     </div>
                     <div>
-                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Email Address</label>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_contact_email_lbl">Email Address</label>
                         <input type="email" id="contactEmailInput" placeholder="client@example.com" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
                     </div>
                     <div>
-                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;">Message</label>
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_contact_msg_lbl">Message</label>
                         <textarea id="contactMessageInput" rows="4" placeholder="How can we help you?" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none; resize: none; font-family: inherit;"></textarea>
                     </div>
                     <div id="contactUsError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
@@ -1114,7 +1157,7 @@
                 </div>
 
                 <button id="btnContactUsSubmit" onclick="submitContactUsForm()" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; color: #fff; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; padding: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3); transition: all 0.25s ease; width: 100%; margin-top: 6px;">
-                    Send Message ➔
+                    <span data-i18n="m_contact_submit">Send Message ➔</span>
                 </button>
             </div>
         </div>
@@ -1129,10 +1172,295 @@
             </div>
             <div class="footer-contacts">
                 <span><a href="mailto:notification@vrtservices12.com">notification@vrtservices12.com</a></span>
-                <span>Hours: Mon – Fri, 8:00 AM – 6:00 PM EST</span>
+                <span data-i18n="footer_hours">Hours: Mon – Fri, 8:00 AM – 6:00 PM EST</span>
             </div>
         </div>
+    </footer>
+
     <script>
+        // ── Multilingual i18n Dictionary (English & Spanish) ────────────────
+        const I18N_TRANSLATIONS = {
+            en: {
+                nav_services: "Our Services",
+                nav_contact: "Contact Us",
+                nav_process: "Filing Process",
+                nav_portal: "Client Portal",
+                nav_dashboard: "Dashboard",
+                nav_login: "Login",
+
+                hero_badge: "🏛️ Enterprise Tax & Accounting Advisory Firm",
+                hero_title: "Full-Service Tax Preparation & <span>Accounting Solutions</span>",
+                hero_subtitle: "Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.",
+
+                stat1_val: "100% IRS E-File",
+                stat1_lbl: "Form 8879 Authorized",
+                stat2_val: "Form 1040 / 1120",
+                stat2_lbl: "Individual & Corporate",
+                stat3_val: "Automated OCR",
+                stat3_lbl: "Bank Reconciliation",
+                stat4_val: "QBO Ready",
+                stat4_lbl: "QuickBooks Online Sync",
+
+                services_badge: "Comprehensive Offerings",
+                services_title: "Tax & Accounting Services",
+                services_subtitle: "Discover our complete range of specialized tax return preparation, business accounting, automated bookkeeping, and IRS regulatory compliance services.",
+
+                s1_title: "Individual Tax Returns",
+                s1_desc: "Thorough federal and state income tax preparation for individuals, families, freelancers, and sole proprietors.",
+                s1_i1: "Federal & State Income Tax Filings (Form 1040 / 1040-SR)",
+                s1_i2: "Schedule C Self-Employment Tax & Expense Deductions",
+                s1_i3: "W-2, 1099-NEC, 1099-MISC & 1099-K Income Reconciliation",
+                s1_i4: "Schedule A Itemized Deductions (Mortgage, Taxes, Charity)",
+                s1_i5: "Maximization of Earned Income & Child Tax Credits",
+                s1_i6: "Form 8879 E-File Signature Authorization & IRS Submission",
+
+                s2_title: "Corporate & Business Tax Filings",
+                s2_desc: "Strategic tax preparation, Schedule K-1 generation, and corporate compliance for C-Corps, S-Corps, and LLCs.",
+                s2_i1: "C-Corporation Tax Returns (Form 1120) & Officer Payroll",
+                s2_i2: "S-Corporation Filings (Form 1120-S) & Shareholder K-1s",
+                s2_i3: "Partnership & Multi-Member LLC Returns (Form 1065)",
+                s2_i4: "Quarterly Estimated Tax Calculation & Officer Compensation",
+                s2_i5: "Section 179 & Bonus Depreciation Capital Asset Schedules",
+                s2_i6: "State Corporate Income & Annual Franchise Tax Filings",
+
+                s3_title: "Automated Bookkeeping & Accounting",
+                s3_desc: "Year-round financial management powered by AI OCR bank statement extraction and QuickBooks synchronization.",
+                s3_i1: "AI Vision OCR Extraction for PDF & Image Bank Statements",
+                s3_i2: "Monthly Profit & Loss (P&L) and Balance Sheet Reporting",
+                s3_i3: "QuickBooks Online (QBO) Direct OAuth & Chart of Accounts Sync",
+                s3_i4: "General Ledger Maintenance & Transaction Categorization",
+                s3_i5: "Monthly Bank & Credit Card Account Reconciliation",
+                s3_i6: "Check Image Digitization & Reference Record Archival",
+
+                s4_title: "Payroll Tax & Contractor Filing",
+                s4_desc: "Comprehensive payroll tax administration, quarterly federal filings, and year-end 1099 contractor reporting.",
+                s4_i1: "Employer Quarterly Federal Tax Returns (Form 941 Filing)",
+                s4_i2: "Federal Unemployment Tax Reconciliation (Form 940)",
+                s4_i3: "Independent Contractor 1099-NEC & 1099-MISC Information Filings",
+                s4_i4: "Annual W-2 & W-3 Employee Wage Statement Processing",
+                s4_i5: "State Unemployment Insurance (SUI) & Local Payroll Taxing",
+                s4_i6: "Payroll Journal Entries Export to QuickBooks Online",
+
+                s5_title: "IRS Compliance & E-Filing",
+                s5_desc: "Authorized IRS e-file signature authorization, extension processing, and notice correspondence support.",
+                s5_i1: "Form 8879 Electronic Signature Workflow & Filing Authorization",
+                s5_i2: "Automatic Tax Extension Processing (Form 4868 / Form 7004)",
+                s5_i3: "IRS Notice & Penalty Relief Assistance",
+                s5_i4: "Power of Attorney & Authorization Filings (Form 2848 / 8821)",
+                s5_i5: "IRS Account Transcript Analysis & Income Verification",
+                s5_i6: "Client Reference Code Tracking (CUST-XXXX) for Status Check",
+
+                s6_title: "Business Formation & Advisory",
+                s6_desc: "Expert entity structuring, tax classification choice, and proactive tax minimization planning.",
+                s6_i1: "LLC, S-Corp, & C-Corp Entity Setup & Registration",
+                s6_i2: "S-Corporation Election Filings (IRS Form 2553)",
+                s6_i3: "Multi-State Business Tax Structuring & Nexus Review",
+                s6_i4: "Proactive Year-End Tax Planning & Deduction Analysis",
+                s6_i5: "Cash Flow Forecasting & Financial Performance Review",
+                s6_i6: "Secure Cloud Document Portal Storage & Digital Archival",
+
+                wf_badge: "Streamlined Process",
+                wf_title: "How Our Client Workflow Works",
+                wf_subtitle: "Experience a hassle-free, secure digital process from initial document submission to final IRS acceptance.",
+                wf1_title: "Document Intake",
+                wf1_desc: "Upload tax documents to your Client Portal folder or email them to <code>notification@vrtservices12.com</code> with your reference tag (e.g. <code>[Ref: CUST-1001]</code>).",
+                wf2_title: "OCR & Advisory Preparation",
+                wf2_desc: "Bank statements are extracted via OCR. Our tax specialists reconcile data, categorize expenses, and prepare your tax returns.",
+                wf3_title: "Review & Form 8879 E-Sign",
+                wf3_desc: "Review completed tax returns in your secure portal. Electronically sign IRS Form 8879 e-file authorization with one click.",
+                wf4_title: "Instant IRS E-Filing",
+                wf4_desc: "Your return is electronically submitted to the IRS and state authorities. Track progress anytime through your client dashboard!",
+
+                m_portal_title: "Client Portal Access",
+                m_portal_sub: "Enter your Customer ID to upload documents directly to your inbox folder.",
+                m_portal_cid_lbl: "Customer ID or Reference Tag",
+                m_portal_email_lbl: "Registered Email Address",
+                m_portal_submit: "Sign In to Inbox ➔",
+                m_portal_hint: "💡 Don't know your Customer ID? Check your recent invoice or email from VRT Services.",
+                m_exit: "Exit",
+                m_auth_badge: "AUTHENTICATED",
+                m_inbox_badge: "📁 Inbox/ Folder",
+                m_logout: "🚪 Log Out",
+                m_logout_exit: "🚪 Log Out & Exit",
+                m_drag_title: "Drag & drop files here, or <span style=\"color: #38bdf8; text-decoration: underline;\">click to browse</span>",
+                m_drag_sub: "Upload PDF tax forms, bank statements, checks, W-2s, 1099s, or images",
+                m_sel_files: "Selected Files",
+                m_upload_btn: "🚀 Upload to Inbox Folder",
+
+                m_contact_title: "Contact Us",
+                m_contact_sub: "Send us a message and we'll get back to you shortly.",
+                m_contact_name_lbl: "Full Name",
+                m_contact_email_lbl: "Email Address",
+                m_contact_msg_lbl: "Message",
+                m_contact_submit: "Send Message ➔",
+
+                footer_hours: "Hours: Mon – Fri, 8:00 AM – 6:00 PM EST"
+            },
+            es: {
+                nav_services: "Nuestros Servicios",
+                nav_contact: "Contáctenos",
+                nav_process: "Proceso de Declaración",
+                nav_portal: "Portal de Clientes",
+                nav_dashboard: "Panel de Control",
+                nav_login: "Iniciar Sesión",
+
+                hero_badge: "🏛️ Firma de Asesoría Tributaria y Contable para Empresas",
+                hero_title: "Preparación de Impuestos y <span>Soluciones Contables</span>",
+                hero_subtitle: "Impulsando a personas, pequeñas empresas y corporaciones con preparación experta de impuestos federales y estatales, contabilidad automatizada, conciliación bancaria con OCR y envíos electrónicos seguros al IRS.",
+
+                stat1_val: "100% E-File del IRS",
+                stat1_lbl: "Autorizado con Formulario 8879",
+                stat2_val: "Formulario 1040 / 1120",
+                stat2_lbl: "Individual y Corporativo",
+                stat3_val: "OCR Automatizado",
+                stat3_lbl: "Conciliación Bancaria",
+                stat4_val: "Listo para QBO",
+                stat4_lbl: "Sincronización con QuickBooks",
+
+                services_badge: "Servicios Integrales",
+                services_title: "Servicios Tributarios y Contables",
+                services_subtitle: "Descubra nuestra gama completa de servicios especializados en preparación de declaraciones de impuestos, contabilidad comercial y cumplimiento regulatorio del IRS.",
+
+                s1_title: "Declaración de Impuestos Individuales",
+                s1_desc: "Preparación minuciosa de impuestos sobre la renta federales y estatales para individuos, familias, trabajadores independientes y propietarios únicos.",
+                s1_i1: "Declaraciones de Renta Federal y Estatal (Formulario 1040 / 1040-SR)",
+                s1_i2: "Anexo C: Impuestos por Trabajo por Cuenta Propia y Deducción de Gastos",
+                s1_i3: "Conciliación de Ingresos W-2, 1099-NEC, 1099-MISC y 1099-K",
+                s1_i4: "Deducciones Detalladas del Anexo A (Hipotecas, Impuestos, Caridad)",
+                s1_i5: "Maximización de Créditos Tributarios por Ingreso del Trabajo e Hijos",
+                s1_i6: "Autorización de Firma Electrónica Formulario 8879 y Envío al IRS",
+
+                s2_title: "Impuestos Corporativos y Comerciales",
+                s2_desc: "Preparación estratégica de impuestos, generación de Anexos K-1 y cumplimiento societario para Corporaciones C, S y LLCs.",
+                s2_i1: "Declaraciones Corporativas C (Formulario 1120) y Nómina de Oficiales",
+                s2_i2: "Declaraciones Corporativas S (Formulario 1120-S) y K-1 de Socios",
+                s2_i3: "Declaraciones de Sociedades y LLC Multimiembro (Formulario 1065)",
+                s2_i4: "Cálculo de Pagos Estimados Trimestrales y Compensación de Ejecutivos",
+                s2_i5: "Depreciación Acelerada y Sección 179 para Activos Comerciales",
+                s2_i6: "Declaración de Impuestos Estatales y Franquicia Anual Corporativa",
+
+                s3_title: "Contabilidad y Teneduría Automatizada",
+                s3_desc: "Gestión financiera durante todo el año impulsada por extracción de estados bancarios con IA OCR y sincronización con QuickBooks.",
+                s3_i1: "Extracción OCR con IA de Estados de Cuenta Bancarios en PDF e Imágenes",
+                s3_i2: "Informes Mensuales de Pérdidas y Ganancias (P&L) y Balance General",
+                s3_i3: "Conexión Directa OAuth y Catálogo de Cuentas de QuickBooks Online",
+                s3_i4: "Mantenimiento del Libro Mayor y Categorización de Transacciones",
+                s3_i5: "Conciliación Mensual de Cuentas Bancarias y Tarjetas de Crédito",
+                s3_i6: "Digitalización de Imágenes de Cheques y Archivo Histórico",
+
+                s4_title: "Nómina y Cumplimiento de Contratistas",
+                s4_desc: "Administración integral de impuestos de nómina, declaraciones federales trimestrales y emisión de formularios 1099 para contratistas.",
+                s4_i1: "Declaración Trimestral de Impuestos del Empleador (Formulario 941)",
+                s4_i2: "Conciliación del Impuesto Federal de Desempleo (Formulario 940)",
+                s4_i3: "Informes y Emisión de Formularios 1099-NEC y 1099-MISC a Contratistas",
+                s4_i4: "Procesamiento de Comprobantes Salariales W-2 y Formulario W-3",
+                s4_i5: "Seguro de Desempleo Estatal (SUI) e Impuestos Locales sobre Nómina",
+                s4_i6: "Exportación de Asientos Contables de Nómina hacia QuickBooks Online",
+
+                s5_title: "Cumplimiento del IRS y Firma Electrónica",
+                s5_desc: "Autorización de firma electrónica de e-file, extensiones automáticas de plazo y respuesta a notificaciones del IRS.",
+                s5_i1: "Flujo de Firma Electrónica Formulario 8879 y Autorización de Presentación",
+                s5_i2: "Procesamiento Automático de Extensiones (Formulario 4868 / 7004)",
+                s5_i3: "Asistencia para Alivio de Multas y Notificaciones del IRS",
+                s5_i4: "Poder Legal y Autorización de Representación (Formulario 2848 / 8821)",
+                s5_i5: "Análisis de Transcripción de Cuenta del IRS y Verificación de Ingresos",
+                s5_i6: "Seguimiento por Código de Referencia de Cliente (CUST-XXXX)",
+
+                s6_title: "Creación de Empresas y Asesoría Fiscal",
+                s6_desc: "Estructuración óptima de entidades corporativas, elección de régimen fiscal y planificación para reducción legal de impuestos.",
+                s6_i1: "Constitución y Registro de Empresas LLC, Corporaciones S y C",
+                s6_i2: "Elección de Régimen Tributario S-Corporation (Formulario IRS 2553)",
+                s6_i3: "Estructuración de Negocios Multiestatales y Revisión de Nexo Fiscal",
+                s6_i4: "Planificación Fiscal Proactiva de Fin de Año y Análisis de Deducciones",
+                s6_i5: "Pronóstico de Flujo de Caja y Análisis de Rendimiento Financiero",
+                s6_i6: "Almacenamiento Digital Seguro en la Nube y Archivo de Documentos",
+
+                wf_badge: "Proceso Rápido y Seguro",
+                wf_title: "Cómo Funciona Nuestro Proceso de Trabajo",
+                wf_subtitle: "Disfrute de un proceso digital seguro y sin complicaciones, desde el envío de documentos hasta la aceptación final por el IRS.",
+                wf1_title: "Recepción de Documentos",
+                wf1_desc: "Suba sus documentos tributarios a su carpeta del Portal de Clientes o envíelos por correo a <code>notification@vrtservices12.com</code> con su código de referencia (ej. <code>[Ref: CUST-1001]</code>).",
+                wf2_title: "Extracción OCR y Preparación",
+                wf2_desc: "Los estados bancarios se digitalizan con OCR. Nuestros asesores concilian la información, clasifican gastos y preparan sus declaraciones.",
+                wf3_title: "Revisión y Firma Electrónica 8879",
+                wf3_desc: "Revise sus declaraciones en el portal seguro. Firme digitalmente la autorización de envío electrónico del IRS (Formulario 8879) con un solo clic.",
+                wf4_title: "Presentación Inmediata al IRS",
+                wf4_desc: "Su declaración se envía electrónicamente al IRS y a las autoridades estatales. ¡Haga seguimiento en cualquier momento desde su panel!",
+
+                m_portal_title: "Acceso al Portal de Clientes",
+                m_portal_sub: "Ingrese su ID de Cliente para subir documentos directamente a su carpeta de entrada.",
+                m_portal_cid_lbl: "ID de Cliente o Código de Referencia",
+                m_portal_email_lbl: "Correo Electrónico Registrado",
+                m_portal_submit: "Entrar a la Carpeta ➔",
+                m_portal_hint: "💡 ¿No conoce su ID de Cliente? Revise su factura reciente o correo de VRT Services.",
+                m_exit: "Salir",
+                m_auth_badge: "AUTENTICADO",
+                m_inbox_badge: "📁 Carpeta Entrada",
+                m_logout: "🚪 Cerrar Sesión",
+                m_logout_exit: "🚪 Salir del Portal",
+                m_drag_title: "Arrastre y suelte sus archivos aquí, o <span style=\"color: #38bdf8; text-decoration: underline;\">haga clic para buscar</span>",
+                m_drag_sub: "Suba declaraciones en PDF, estados de cuenta, cheques, W-2s, 1099s o imágenes",
+                m_sel_files: "Archivos Seleccionados",
+                m_upload_btn: "🚀 Subir a la Carpeta",
+
+                m_contact_title: "Contáctenos",
+                m_contact_sub: "Envíenos un mensaje y nos comunicaremos con usted a la brevedad.",
+                m_contact_name_lbl: "Nombre Completo",
+                m_contact_email_lbl: "Correo Electrónico",
+                m_contact_msg_lbl: "Mensaje",
+                m_contact_submit: "Enviar Mensaje ➔",
+
+                footer_hours: "Horario: Lun – Vie, 8:00 AM – 6:00 PM EST"
+            }
+        };
+
+        let CURRENT_LANG = 'en';
+
+        function switchLanguage(lang) {
+            if (!I18N_TRANSLATIONS[lang]) return;
+            CURRENT_LANG = lang;
+            localStorage.setItem('vrt_lang', lang);
+            document.documentElement.lang = lang;
+
+            // Update switcher buttons UI
+            const btnEn = document.getElementById('btnLangEn');
+            const btnEs = document.getElementById('btnLangEs');
+            if (btnEn && btnEs) {
+                if (lang === 'es') {
+                    btnEs.classList.add('active');
+                    btnEn.classList.remove('active');
+                } else {
+                    btnEn.classList.add('active');
+                    btnEs.classList.remove('active');
+                }
+            }
+
+            // Update all DOM elements with data-i18n attributes
+            const elements = document.querySelectorAll('[data-i18n]');
+            elements.forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (I18N_TRANSLATIONS[lang] && I18N_TRANSLATIONS[lang][key] !== undefined) {
+                    el.innerHTML = I18N_TRANSLATIONS[lang][key];
+                }
+            });
+        }
+
+        // Initialize language based on URL query param (?lang=es) or localStorage or browser
+        (function initLanguage() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const paramLang = urlParams.get('lang');
+                const savedLang = localStorage.getItem('vrt_lang');
+                const browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase().startsWith('es') ? 'es' : 'en';
+
+                const targetLang = (paramLang === 'es' || paramLang === 'en') ? paramLang : (savedLang || browserLang);
+                if (targetLang === 'es') {
+                    switchLanguage('es');
+                }
+            } catch(e) {
+                console.error("Language init exception:", e);
+            }
+        })();
         // ── Contact Us Modal Logic ──────────────────────────────────────────
         function openContactUsModal() {
             let modal = document.getElementById('contactUsModal');
