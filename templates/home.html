@@ -254,26 +254,42 @@
             width: 100%;
             max-width: 1280px;
             margin: 0 auto;
-            padding: 40px 32px 80px 32px;
+            padding: 30px 32px 80px 32px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            text-align: center;
             z-index: 10;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 48px;
+            align-items: center;
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 50px;
+            text-align: left;
+        }
+
+        .hero-content-col {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .hero-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 20px;
+            padding: 8px 18px;
             background: rgba(56, 189, 248, 0.12);
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 30px;
             font-size: 0.82rem;
             font-weight: 800;
             color: #38bdf8;
-            margin-bottom: 28px;
+            margin-bottom: 22px;
             letter-spacing: 0.05em;
             text-transform: uppercase;
             box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);
@@ -282,15 +298,14 @@
 
         .hero-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 4rem;
+            font-size: 3.5rem;
             font-weight: 900;
-            line-height: 1.08;
-            margin-bottom: 24px;
+            line-height: 1.1;
+            margin-bottom: 20px;
             background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -0.03em;
-            max-width: 960px;
             animation: fadeInUp 0.7s ease-out;
         }
 
@@ -301,11 +316,10 @@
         }
 
         .hero-subtitle {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             color: var(--text-muted);
             line-height: 1.65;
-            max-width: 800px;
-            margin-bottom: 44px;
+            margin-bottom: 30px;
             font-weight: 400;
             animation: fadeInUp 0.8s ease-out;
         }
@@ -313,19 +327,18 @@
         .hero-buttons {
             display: flex;
             align-items: center;
-            gap: 18px;
+            gap: 16px;
             flex-wrap: wrap;
-            justify-content: center;
-            margin-bottom: 64px;
+            margin-bottom: 24px;
             animation: fadeInUp 0.9s ease-out;
         }
 
         .btn-primary-portal {
-            padding: 14px 32px;
+            padding: 14px 28px;
             background: linear-gradient(135deg, #0284c7, #2563eb);
             color: #ffffff;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.02rem;
+            font-size: 0.98rem;
             font-weight: 800;
             border-radius: 12px;
             text-decoration: none;
@@ -334,6 +347,8 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            cursor: pointer;
+            border: none;
         }
 
         .btn-primary-portal:hover {
@@ -342,27 +357,162 @@
         }
 
         .btn-secondary-action {
-            padding: 16px 30px;
+            padding: 14px 26px;
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             color: #ffffff;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.02rem;
+            font-size: 0.98rem;
             font-weight: 700;
-            border-radius: 14px;
+            border-radius: 12px;
             text-decoration: none;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
             backdrop-filter: blur(12px);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .btn-secondary-action:hover {
             background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.35);
             transform: translateY(-2px);
+        }
+
+        .hero-trust-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .trust-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.76rem;
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-weight: 600;
+        }
+
+        .trust-chip .dot {
+            color: #00f2fe;
+            font-weight: 900;
+        }
+
+        /* ── Hero Visual Showcase Column ─────────────────────────────── */
+        .hero-visual-col {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            animation: fadeInUp 0.9s ease-out;
+        }
+
+        .hero-image-frame {
+            position: relative;
+            width: 100%;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            background: rgba(18, 22, 33, 0.7);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(56, 189, 248, 0.18);
+            backdrop-filter: blur(12px);
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+        }
+
+        .hero-image-frame:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.8), 0 0 50px rgba(56, 189, 248, 0.3);
+        }
+
+        .hero-team-img {
+            width: 100%;
+            height: 420px;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.6s ease;
+        }
+
+        .hero-image-frame:hover .hero-team-img {
+            transform: scale(1.03);
+        }
+
+        .hero-image-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(8, 9, 13, 0.05) 0%, rgba(8, 9, 13, 0.68) 100%);
+            pointer-events: none;
+        }
+
+        .hero-float-badge {
+            position: absolute;
+            background: rgba(14, 19, 34, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 16px;
+            padding: 10px 16px;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.25);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .hero-float-badge:hover {
+            transform: translateY(-3px) scale(1.02);
+        }
+
+        .badge-top-right {
+            top: 18px;
+            right: 18px;
+            border-color: rgba(0, 242, 254, 0.4);
+        }
+
+        .badge-bottom-left {
+            bottom: 18px;
+            left: 18px;
+            max-width: 290px;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .hero-badge-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .hero-badge-text {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+
+        .hero-badge-title {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1.2;
+        }
+
+        .hero-badge-sub {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 2px;
+            line-height: 1.3;
         }
 
         /* ── Trust & Stats Bar ────────────────────────────────────────── */
@@ -700,6 +850,199 @@
             text-decoration: none;
         }
 
+        /* ── Advisory Team Section ───────────────────────────────────── */
+        .team-section {
+            width: 100%;
+            margin-top: 90px;
+            margin-bottom: 90px;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .team-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+
+        .team-card:hover {
+            transform: translateY(-6px);
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.2);
+            background: var(--card-hover);
+        }
+
+        .team-card-img-wrap {
+            position: relative;
+            width: 100%;
+            height: 240px;
+            overflow: hidden;
+            background: #0b0f19;
+        }
+
+        .team-card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s ease;
+        }
+
+        .team-card:hover .team-card-img {
+            transform: scale(1.06);
+        }
+
+        .team-card-img-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 40%, rgba(18, 22, 33, 0.95) 100%);
+        }
+
+        .team-card-tag {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 2;
+        }
+
+        .team-card-body {
+            padding: 24px 28px 28px 28px;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            text-align: left;
+        }
+
+        .team-card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 10px;
+            line-height: 1.25;
+        }
+
+        .team-card-desc {
+            font-size: 0.86rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+            margin-bottom: 20px;
+            flex: 1;
+        }
+
+        .team-card-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 16px;
+        }
+
+        .team-card-item {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .team-card-item .check {
+            color: #10b981;
+            font-weight: 800;
+        }
+
+        /* ── Consultation CTA Banner ─────────────────────────────────── */
+        .consultation-cta-banner {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(14, 21, 38, 0.9), rgba(18, 25, 45, 0.95));
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            border-radius: 28px;
+            padding: 44px 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 36px;
+            margin-top: 80px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 35px rgba(0, 242, 254, 0.15);
+            position: relative;
+            overflow: hidden;
+            text-align: left;
+        }
+
+        .consultation-cta-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -20%;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(0, 242, 254, 0.18) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-banner-content {
+            flex: 1;
+        }
+
+        .cta-banner-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            color: #38bdf8;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 20px;
+            padding: 4px 12px;
+            margin-bottom: 12px;
+        }
+
+        .cta-banner-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.85rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+
+        .cta-banner-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+            max-width: 650px;
+        }
+
+        .cta-banner-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
         /* ── Keyframe Animations ─────────────────────────────────────── */
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(20px); }
@@ -714,8 +1057,18 @@
             .nav-menu { display: none; }
             .nav-actions { gap: 8px; }
             .btn-header-portal, .btn-header-login { padding: 8px 14px; font-size: 0.8rem; }
+            .hero-grid { grid-template-columns: 1fr; text-align: center; gap: 36px; }
+            .hero-content-col { align-items: center; }
             .hero-title { font-size: 2.8rem; }
+            .hero-buttons { justify-content: center; }
+            .hero-trust-chips { justify-content: center; }
+            .hero-team-img { height: 340px; }
+            .badge-bottom-left { max-width: 250px; }
             .services-grid { grid-template-columns: 1fr; }
+            .team-grid { grid-template-columns: 1fr; }
+            .consultation-cta-banner { flex-direction: column; text-align: center; padding: 32px 24px; gap: 24px; }
+            .cta-banner-actions { width: 100%; flex-direction: column; }
+            .cta-banner-actions a, .cta-banner-actions button { width: 100%; justify-content: center; }
         }
 
         @media (max-width: 600px) {
@@ -726,6 +1079,13 @@
             .hero-title { font-size: 2.2rem; }
             .hero-buttons { flex-direction: column; width: 100%; }
             .btn-primary-portal, .btn-secondary-action { width: 100%; justify-content: center; }
+            .hero-team-img { height: 280px; }
+            .badge-top-right { top: 10px; right: 10px; padding: 8px 12px; }
+            .badge-bottom-left { bottom: 10px; left: 10px; padding: 8px 12px; max-width: 220px; }
+            .hero-badge-title { font-size: 0.75rem; }
+            .hero-badge-sub { font-size: 0.65rem; }
+            .hero-badge-icon { width: 32px; height: 32px; font-size: 1rem; }
+            .cta-banner-title { font-size: 1.45rem; }
             .portal-cta-banner { padding: 32px 20px; }
         }
     </style>
@@ -749,8 +1109,9 @@
 
         <ul class="nav-menu">
             <li><a href="#services" class="nav-link" data-i18n="nav_services">Our Services</a></li>
-            <li><a href="javascript:void(0)" onclick="openContactUsModal()" class="nav-link" data-i18n="nav_contact">Contact Us</a></li>
+            <li><a href="#team" class="nav-link" data-i18n="nav_team">Our Team</a></li>
             <li><a href="#workflow" class="nav-link" data-i18n="nav_process">Filing Process</a></li>
+            <li><a href="javascript:void(0)" onclick="openContactUsModal()" class="nav-link" data-i18n="nav_contact">Contact Us</a></li>
         </ul>
 
         <div class="nav-actions">
@@ -776,19 +1137,66 @@
 
     <!-- Main Content Hero Section -->
     <main class="main-content">
-        <div class="hero-badge" data-i18n="hero_badge">
-            🏛️ Enterprise Tax & Accounting Advisory Firm
+        <div class="hero-grid">
+            <div class="hero-content-col">
+                <div class="hero-badge" data-i18n="hero_badge">
+                    🏛️ Enterprise Tax & Accounting Advisory Firm
+                </div>
+
+                <h1 class="hero-title" data-i18n="hero_title">
+                    Full-Service Tax Preparation & <span>Accounting Solutions</span>
+                </h1>
+
+                <p class="hero-subtitle" data-i18n="hero_subtitle">
+                    Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.
+                </p>
+
+                <div class="hero-buttons">
+                    <button type="button" onclick="openClientPortalModal()" class="btn-primary-portal">
+                        📂 <span data-i18n="hero_cta_portal">Access Client Portal</span>
+                    </button>
+                    <button type="button" onclick="openContactUsModal()" class="btn-secondary-action">
+                        📞 <span data-i18n="hero_cta_contact">Schedule Consultation</span>
+                    </button>
+                </div>
+
+                <div class="hero-trust-chips">
+                    <div class="trust-chip"><span class="dot">✓</span> <span data-i18n="hero_chip1">IRS Authorized E-File Provider</span></div>
+                    <div class="trust-chip"><span class="dot">✓</span> <span data-i18n="hero_chip2">100% Confidential & Secure</span></div>
+                    <div class="trust-chip"><span class="dot">✓</span> <span data-i18n="hero_chip3">QuickBooks ProAdvisor Sync</span></div>
+                </div>
+            </div>
+
+            <!-- Hero Visual Column with Real Office Team Photography & Badges -->
+            <div class="hero-visual-col">
+                <div class="hero-image-frame">
+                    <img src="/static/images/hero-team.jpg" alt="VRT Services Professional Tax Advisory Team at Work" class="hero-team-img" fetchpriority="high">
+                    <div class="hero-image-overlay"></div>
+
+                    <!-- Top Floating Badge -->
+                    <div class="hero-float-badge badge-top-right">
+                        <div class="hero-badge-icon" style="background: rgba(0, 242, 254, 0.15); color: #00f2fe; border: 1px solid rgba(0, 242, 254, 0.3);">
+                            🛡️
+                        </div>
+                        <div class="hero-badge-text">
+                            <span class="hero-badge-title" data-i18n="hero_badge_enrolled">IRS Registered Advisory Team</span>
+                            <span class="hero-badge-sub" data-i18n="hero_badge_enrolled_sub">Decades of combined tax law experience</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Floating Badge -->
+                    <div class="hero-float-badge badge-bottom-left">
+                        <div class="hero-badge-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                            👥
+                        </div>
+                        <div class="hero-badge-text">
+                            <span class="hero-badge-title" data-i18n="hero_badge_review">100% Human Review</span>
+                            <span class="hero-badge-sub" data-i18n="hero_badge_review_sub">Every return audited by certified specialists</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <h1 class="hero-title" data-i18n="hero_title">
-            Full-Service Tax Preparation & <span>Accounting Solutions</span>
-        </h1>
-
-        <p class="hero-subtitle" data-i18n="hero_subtitle">
-            Empowering individuals, small businesses, and corporations with expert federal & state tax return preparation, automated bookkeeping, bank OCR statement reconciliation, and secure digital IRS filings.
-        </p>
-
-
 
         <!-- Trust & Highlights Bar -->
         <div class="stats-bar">
@@ -967,6 +1375,78 @@
                     </div>
                 </div>
 
+        </section>
+
+        <!-- Advisory Team & Specialists Section -->
+        <section id="team" class="team-section" style="width: 100%;">
+            <div class="section-header">
+                <span class="section-badge" data-i18n="team_badge">Dedicated Financial Professionals</span>
+                <h2 class="section-title" data-i18n="team_title">Experienced Tax Specialists & Advisory Team</h2>
+                <p class="section-subtitle" data-i18n="team_subtitle">
+                    Real human expertise powering your financial compliance. Our dedicated advisors bring precision and care to your individual returns, corporate accounts, and automated bookkeeping.
+                </p>
+            </div>
+
+            <div class="team-grid">
+                <!-- Team Card 1: Tax Preparation Specialist -->
+                <div class="team-card">
+                    <div class="team-card-img-wrap">
+                        <img src="/static/images/advisor-review.jpg" alt="Senior Tax Preparation Specialist" class="team-card-img" loading="lazy">
+                        <div class="team-card-img-overlay"></div>
+                        <span class="team-card-tag tag-cyan" data-i18n="t1_tag">Tax Compliance & Law</span>
+                    </div>
+                    <div class="team-card-body">
+                        <h3 class="team-card-title" data-i18n="t1_title">Senior Tax Preparation Specialists</h3>
+                        <p class="team-card-desc" data-i18n="t1_desc">
+                            Thorough examination of federal and multi-state tax codes to maximize allowable deductions, credits, and capital depreciation schedules.
+                        </p>
+                        <ul class="team-card-list">
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t1_i1">Form 1040, 1120 & 1120-S Filings</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t1_i2">Schedule C & K-1 Distribution Analysis</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t1_i3">IRS Form 8879 Direct E-File Signoff</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Team Card 2: Bookkeeping & OCR Specialist -->
+                <div class="team-card">
+                    <div class="team-card-img-wrap">
+                        <img src="/static/images/accountant-specialist.jpg" alt="Bookkeeping and OCR Financial Analyst" class="team-card-img" loading="lazy">
+                        <div class="team-card-img-overlay"></div>
+                        <span class="team-card-tag tag-purple" data-i18n="t2_tag">General Ledger & AI OCR</span>
+                    </div>
+                    <div class="team-card-body">
+                        <h3 class="team-card-title" data-i18n="t2_title">Bookkeeping & Reconciliation Experts</h3>
+                        <p class="team-card-desc" data-i18n="t2_desc">
+                            Bridging automated AI bank statement extraction with meticulous human reconciliation to ensure your financials balance to the cent.
+                        </p>
+                        <ul class="team-card-list">
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t2_i1">Monthly Bank & Credit Card Balancing</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t2_i2">P&L Statement & Balance Sheet Auditing</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t2_i3">QuickBooks Online Direct Integration</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Team Card 3: Business Strategic Advisor -->
+                <div class="team-card">
+                    <div class="team-card-img-wrap">
+                        <img src="/static/images/client-consultation.jpg" alt="Corporate Tax & Entity Advisor in Consultation" class="team-card-img" loading="lazy">
+                        <div class="team-card-img-overlay"></div>
+                        <span class="team-card-tag tag-blue" data-i18n="t3_tag">Corporate Advisory</span>
+                    </div>
+                    <div class="team-card-body">
+                        <h3 class="team-card-title" data-i18n="t3_title">Strategic Business Advisors</h3>
+                        <p class="team-card-desc" data-i18n="t3_desc">
+                            Providing proactive entity formation advisory, year-round tax mitigation planning, and dedicated corporate guidance.
+                        </p>
+                        <ul class="team-card-list">
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t3_i1">LLC & S-Corporation Election (Form 2553)</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t3_i2">Year-End Corporate Tax Projections</span></li>
+                            <li class="team-card-item"><span class="check">✓</span> <span data-i18n="t3_i3">Direct Bilingual Client Support (EN / ES)</span></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -1014,6 +1494,25 @@
                 </div>
             </div>
         </section>
+
+        <!-- Consultation & Portal CTA Banner -->
+        <div class="consultation-cta-banner">
+            <div class="cta-banner-content">
+                <span class="cta-banner-badge" data-i18n="cta_banner_badge">Get In Touch Today</span>
+                <h3 class="cta-banner-title" data-i18n="cta_banner_title">Ready to File Your Taxes or Reconcile Your Accounts?</h3>
+                <p class="cta-banner-subtitle" data-i18n="cta_banner_sub">
+                    Upload your documents directly to our secure portal or connect with our tax advisors for immediate guidance.
+                </p>
+            </div>
+            <div class="cta-banner-actions">
+                <button type="button" onclick="openClientPortalModal()" class="btn-primary-portal">
+                    📂 <span data-i18n="cta_banner_btn_portal">Upload to Client Portal</span>
+                </button>
+                <button type="button" onclick="openContactUsModal()" class="btn-secondary-action">
+                    ✉️ <span data-i18n="cta_banner_btn_contact">Contact Our Advisors</span>
+                </button>
+            </div>
+        </div>
 
     </main>
 
@@ -1182,11 +1681,22 @@
         const I18N_TRANSLATIONS = {
             en: {
                 nav_services: "Our Services",
+                nav_team: "Our Team",
                 nav_contact: "Contact Us",
                 nav_process: "Filing Process",
                 nav_portal: "Client Portal",
                 nav_dashboard: "Dashboard",
                 nav_login: "Login",
+
+                hero_cta_portal: "Access Client Portal",
+                hero_cta_contact: "Schedule Consultation",
+                hero_chip1: "IRS Authorized E-File Provider",
+                hero_chip2: "100% Confidential & Secure",
+                hero_chip3: "QuickBooks ProAdvisor Sync",
+                hero_badge_enrolled: "IRS Registered Advisory Team",
+                hero_badge_enrolled_sub: "Decades of combined tax law experience",
+                hero_badge_review: "100% Human Review",
+                hero_badge_review_sub: "Every return audited by certified specialists",
 
                 hero_badge: "🏛️ Enterprise Tax & Accounting Advisory Firm",
                 hero_title: "Full-Service Tax Preparation & <span>Accounting Solutions</span>",
@@ -1294,15 +1804,54 @@
                 m_contact_msg_lbl: "Message",
                 m_contact_submit: "Send Message ➔",
 
+                team_badge: "Dedicated Financial Professionals",
+                team_title: "Experienced Tax Specialists & Advisory Team",
+                team_subtitle: "Real human expertise powering your financial compliance. Our dedicated advisors bring precision and care to your individual returns, corporate accounts, and automated bookkeeping.",
+                t1_tag: "Tax Compliance & Law",
+                t1_title: "Senior Tax Preparation Specialists",
+                t1_desc: "Thorough examination of federal and multi-state tax codes to maximize allowable deductions, credits, and capital depreciation schedules.",
+                t1_i1: "Form 1040, 1120 & 1120-S Filings",
+                t1_i2: "Schedule C & K-1 Distribution Analysis",
+                t1_i3: "IRS Form 8879 Direct E-File Signoff",
+                t2_tag: "General Ledger & AI OCR",
+                t2_title: "Bookkeeping & Reconciliation Experts",
+                t2_desc: "Bridging automated AI bank statement extraction with meticulous human reconciliation to ensure your financials balance to the cent.",
+                t2_i1: "Monthly Bank & Credit Card Balancing",
+                t2_i2: "P&L Statement & Balance Sheet Auditing",
+                t2_i3: "QuickBooks Online Direct Integration",
+                t3_tag: "Corporate Advisory",
+                t3_title: "Strategic Business Advisors",
+                t3_desc: "Providing proactive entity formation advisory, year-round tax mitigation planning, and dedicated corporate guidance.",
+                t3_i1: "LLC & S-Corporation Election (Form 2553)",
+                t3_i2: "Year-End Corporate Tax Projections",
+                t3_i3: "Direct Bilingual Client Support (EN / ES)",
+
+                cta_banner_badge: "Get In Touch Today",
+                cta_banner_title: "Ready to File Your Taxes or Reconcile Your Accounts?",
+                cta_banner_sub: "Upload your documents directly to our secure portal or connect with our tax advisors for immediate guidance.",
+                cta_banner_btn_portal: "Upload to Client Portal",
+                cta_banner_btn_contact: "Contact Our Advisors",
+
                 footer_hours: "Hours: Mon – Fri, 8:00 AM – 6:00 PM EST"
             },
             es: {
                 nav_services: "Nuestros Servicios",
+                nav_team: "Nuestro Equipo",
                 nav_contact: "Contáctenos",
                 nav_process: "Proceso de Declaración",
                 nav_portal: "Portal de Clientes",
                 nav_dashboard: "Panel de Control",
                 nav_login: "Iniciar Sesión",
+
+                hero_cta_portal: "Acceder al Portal de Clientes",
+                hero_cta_contact: "Agendar Consulta",
+                hero_chip1: "Proveedor Autorizado de E-File del IRS",
+                hero_chip2: "100% Confidencial y Seguro",
+                hero_chip3: "Sincronización con QuickBooks",
+                hero_badge_enrolled: "Equipo Registrado ante el IRS",
+                hero_badge_enrolled_sub: "Años de experiencia combinada en leyes tributarias",
+                hero_badge_review: "Revisión 100% Humana",
+                hero_badge_review_sub: "Cada cálculo y libro auditado por asesores certificados",
 
                 hero_badge: "🏛️ Firma de Asesoría Tributaria y Contable para Empresas",
                 hero_title: "Preparación de Impuestos y <span>Soluciones Contables</span>",
@@ -1409,6 +1958,34 @@
                 m_contact_email_lbl: "Correo Electrónico",
                 m_contact_msg_lbl: "Mensaje",
                 m_contact_submit: "Enviar Mensaje ➔",
+
+                team_badge: "Profesionales Financieros Dedicados",
+                team_title: "Especialistas Tributarios y Asesores Contables",
+                team_subtitle: "Verdadera experiencia humana respaldando su cumplimiento financiero. Nuestros asesores aportan precisión y dedicación a sus declaraciones personales, cuentas corporativas y contabilidad automatizada.",
+                t1_tag: "Leyes y Cumplimiento Fiscal",
+                t1_title: "Especialistas en Preparación de Impuestos",
+                t1_desc: "Examen exhaustivo de códigos fiscales federales y multiestatales para maximizar deducciones permitidas, créditos y calendarios de depreciación.",
+                t1_i1: "Declaraciones Formulario 1040, 1120 y 1120-S",
+                t1_i2: "Análisis de Anexo C y Distribución K-1",
+                t1_i3: "Firma y Envío Directo con Formulario 8879",
+                t2_tag: "Libro Mayor e Inteligencia OCR",
+                t2_title: "Expertos en Contabilidad y Conciliación",
+                t2_desc: "Uniendo la extracción automatizada de estados bancarios con una conciliación humana meticulosa para cuadrar sus finanzas al centavo.",
+                t2_i1: "Conciliación Mensual de Bancos y Tarjetas",
+                t2_i2: "Auditoría de Estados de Ganancias y Pérdidas",
+                t2_i3: "Integración Directa con QuickBooks Online",
+                t3_tag: "Asesoría Corporativa",
+                t3_title: "Asesores Comerciales Estratégicos",
+                t3_desc: "Asesoría proactiva en creación de empresas, planificación para mitigación tributaria y guía corporativa personalizada.",
+                t3_i1: "Constitución de LLC y Elección S-Corp (2553)",
+                t3_i2: "Proyecciones Fiscales de Cierre de Año",
+                t3_i3: "Atención Personalizada Bilingüe (EN / ES)",
+
+                cta_banner_badge: "Contáctenos Hoy Mismo",
+                cta_banner_title: "¿Listo para Declarar sus Impuestos o Conciliar sus Cuentas?",
+                cta_banner_sub: "Suba sus documentos directamente a nuestro portal seguro o comuníquese con nuestros asesores para recibir orientación inmediata.",
+                cta_banner_btn_portal: "Subir al Portal de Clientes",
+                cta_banner_btn_contact: "Contactar a Nuestros Asesores",
 
                 footer_hours: "Horario: Lun – Vie, 8:00 AM – 6:00 PM EST"
             }

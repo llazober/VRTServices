@@ -29,6 +29,7 @@ from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks, Form, Cookie, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from fastapi.requests import Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 import traceback
@@ -706,6 +707,11 @@ def verify_and_consume_backup_code(username: str, code: str) -> bool:
 # ── Templates ──────────────────────────────────────────────────────────────────
 templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=templates_dir)
+
+# ── Static Files ───────────────────────────────────────────────────────────────
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def cleanup_temp_dir(path: str):
