@@ -17003,6 +17003,7 @@ async def get_extracted_data(customer_id: int, tax_year: int, request: Request):
 class ContactUsRequest(BaseModel):
     name: str
     email: str
+    phone: str = ""
     message: str
 
 @app.post("/api/contact-us")
@@ -17015,6 +17016,7 @@ async def contact_us(req: ContactUsRequest):
     <h3>New Contact Us Submission</h3>
     <p><strong>Name:</strong> {req.name}</p>
     <p><strong>Email:</strong> {req.email}</p>
+    <p><strong>Phone:</strong> {req.phone if req.phone.strip() else 'Not provided'}</p>
     <p><strong>Message:</strong></p>
     <p>{req.message.replace(chr(10), '<br>')}</p>
     """
