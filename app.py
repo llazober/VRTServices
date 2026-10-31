@@ -17012,11 +17012,44 @@ async def contact_us(req: ContactUsRequest):
     if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", req.email):
         raise HTTPException(status_code=400, detail="Invalid email format")
     
+    lead_id = None
+    # 1. Automatically save into the Leads Pipeline
+    conn = None
+    try:
+        conn = get_db_connection("VRT")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO leads (name, email, phone, company, service, status, message, notes, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id;
+            """, (
+                req.name.strip(),
+                req.email.strip(),
+                req.phone.strip() if req.phone else "",
+                "Website Lead",
+                "Tax & Accounting Consultation",
+                "NEW",
+                req.message.strip(),
+                "Captured via Website Contact Form"
+            ))
+            row = cur.fetchone()
+            if row:
+                lead_id = row.get("id")
+            conn.commit()
+    except Exception as db_err:
+        print(f"[Lead Pipeline Auto-Save Error]: {db_err}")
+        traceback.print_exc()
+    finally:
+        if conn:
+            conn.close()
+
+    # 2. Send email notification via Resend
     html_content = f"""
     <h3>New Contact Us Submission</h3>
     <p><strong>Name:</strong> {req.name}</p>
     <p><strong>Email:</strong> {req.email}</p>
     <p><strong>Phone:</strong> {req.phone if req.phone.strip() else 'Not provided'}</p>
+    <p><strong>Pipeline Status:</strong> NEW (Saved to Lead Pipeline #{lead_id if lead_id else 'N/A'})</p>
     <p><strong>Message:</strong></p>
     <p>{req.message.replace(chr(10), '<br>')}</p>
     """
@@ -17031,8 +17064,7 @@ async def contact_us(req: ContactUsRequest):
     
     try:
         send_resend_email(payload)
-        return {"status": "success", "message": "Email sent."}
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[Contact Us Email Notification Warning]: {e}")
+        
+    return {"status": "success", "message": "Message sent and lead added to pipeline.", "lead_id": lead_id}

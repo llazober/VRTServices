@@ -1284,7 +1284,8 @@
                             <div>
                                 <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">STATUS</label>
                                 <select id="add_lead_status" style="width: 100%; background: #0b0f17; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; cursor: pointer;">
-                                    <option value="IN_REVIEW" selected>In Review</option>
+                                    <option value="NEW" selected>New</option>
+                                    <option value="IN_REVIEW">In Review</option>
                                     <option value="CONTACTED">Contacted</option>
                                     <option value="BOOKED">Booked</option>
                                     <option value="MAYBE">Maybe</option>
@@ -1354,6 +1355,7 @@
                             <div>
                                 <label style="display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Status</label>
                                 <select id="edit_lead_status" style="width: 100%; background: #0b0f17; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 10px 14px; font-size: 0.88rem; color: #f8fafc; font-family: 'Outfit', sans-serif; outline: none; box-sizing: border-box; cursor: pointer;">
+                                    <option value="NEW">New</option>
                                     <option value="IN_REVIEW">In Review</option>
                                     <option value="CONTACTED">Contacted</option>
                                     <option value="BOOKED">Booked</option>
@@ -1603,6 +1605,7 @@
                                 </td>
                                 <td style="padding: 16px 20px;">
                                     <select onchange="handleLeadStatusChange(${lead.id}, this.value)" style="padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; outline: none; cursor: pointer; ${statusColor}">
+                                        <option value="NEW" ${normStatus === 'NEW' ? 'selected' : ''}>New</option>
                                         <option value="IN_REVIEW" ${normStatus === 'IN_REVIEW' ? 'selected' : ''}>In Review</option>
                                         <option value="CONTACTED" ${normStatus === 'CONTACTED' ? 'selected' : ''}>Contacted</option>
                                         <option value="BOOKED" ${normStatus === 'BOOKED' ? 'selected' : ''}>Booked 📅</option>
