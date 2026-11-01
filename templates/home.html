@@ -1620,6 +1620,11 @@
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                    <!-- Anti-bot Honeypot field (hidden from real users, traps automated bots) -->
+                    <div style="position: absolute; left: -9999px; top: -9999px; opacity: 0; pointer-events: none; width: 0; height: 0; overflow: hidden;" aria-hidden="true">
+                        <label for="contactWebsiteTrap">Website URL</label>
+                        <input type="text" id="contactWebsiteTrap" name="website_url" autocomplete="off" tabindex="-1">
+                    </div>
                     <div>
                         <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_contact_name_lbl">Full Name</label>
                         <input type="text" id="contactNameInput" placeholder="John Doe" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none;">
@@ -1635,6 +1640,20 @@
                     <div>
                         <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; display: block;" data-i18n="m_contact_msg_lbl">Message</label>
                         <textarea id="contactMessageInput" rows="4" placeholder="How can we help you?" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 0.92rem; font-weight: 600; outline: none; resize: none; font-family: inherit;"></textarea>
+                    </div>
+                    <!-- Dynamic Human Math Verification -->
+                    <div style="margin-top: 2px;">
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>🔒 <span data-i18n="m_contact_human_check">Human Verification</span></span>
+                            <span style="font-size: 0.74rem; color: #f472b6; font-weight: 600;" data-i18n="m_contact_human_hint">Please solve:</span>
+                        </label>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(236, 72, 153, 0.35); border-radius: 12px; padding: 10px 14px;">
+                            <span id="contactMathChallengeText" style="font-size: 0.95rem; font-weight: 800; color: #fff; letter-spacing: 0.5px;">What is 4 + 3?</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="number" id="contactMathAnswerInput" placeholder="?" style="width: 70px; background: rgba(255,255,255,0.08); border: 1px solid rgba(236, 72, 153, 0.5); border-radius: 8px; padding: 6px 8px; color: #fff; font-size: 0.95rem; font-weight: 800; text-align: center; outline: none;">
+                                <button type="button" onclick="generateContactMathChallenge()" title="Refresh challenge" style="background: transparent; border: none; color: #cbd5e1; font-size: 1.1rem; cursor: pointer; padding: 2px 4px; transition: transform 0.2s;" onmouseover="this.style.transform='rotate(45deg)'" onmouseout="this.style.transform='rotate(0deg)'">🔄</button>
+                            </div>
+                        </div>
                     </div>
                     <div id="contactUsError" style="display: none; font-size: 0.82rem; color: #fb7185; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
                     <div id="contactUsSuccess" style="display: none; font-size: 0.82rem; color: #34d399; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 10px 12px; border-radius: 8px; font-weight: 600; line-height: 1.4;"></div>
@@ -1791,6 +1810,8 @@
                 m_contact_email_lbl: "Email Address",
                 m_contact_phone_lbl: "Phone Number",
                 m_contact_msg_lbl: "Message",
+                m_contact_human_check: "Human Verification",
+                m_contact_human_hint: "Please solve:",
                 m_contact_submit: "Send Message ➔",
 
                 team_badge: "Dedicated Financial Professionals",
@@ -1947,6 +1968,8 @@
                 m_contact_email_lbl: "Correo Electrónico",
                 m_contact_phone_lbl: "Número de Teléfono",
                 m_contact_msg_lbl: "Mensaje",
+                m_contact_human_check: "Verificación Humana",
+                m_contact_human_hint: "Por favor resuelva:",
                 m_contact_submit: "Enviar Mensaje ➔",
 
                 team_badge: "Profesionales Financieros Dedicados",
@@ -2010,6 +2033,14 @@
                     el.innerHTML = I18N_TRANSLATIONS[lang][key];
                 }
             });
+
+            // Update contact math challenge text if initialized
+            if (typeof CONTACT_MATH_N1 !== 'undefined' && CONTACT_MATH_N1 > 0) {
+                const labelEl = document.getElementById('contactMathChallengeText');
+                if (labelEl) {
+                    labelEl.innerText = (lang === 'es') ? `¿Cuánto es ${CONTACT_MATH_N1} + ${CONTACT_MATH_N2}?` : `What is ${CONTACT_MATH_N1} + ${CONTACT_MATH_N2}?`;
+                }
+            }
         }
 
         // Initialize language based on URL query param (?lang=es) or localStorage or browser
@@ -2028,7 +2059,22 @@
                 console.error("Language init exception:", e);
             }
         })();
-        // ── Contact Us Modal Logic ──────────────────────────────────────────
+                // ── Contact Us Modal Logic ──────────────────────────────────────────
+        let CONTACT_MATH_N1 = 0;
+        let CONTACT_MATH_N2 = 0;
+
+        function generateContactMathChallenge() {
+            CONTACT_MATH_N1 = Math.floor(Math.random() * 8) + 2;
+            CONTACT_MATH_N2 = Math.floor(Math.random() * 8) + 1;
+            const labelEl = document.getElementById('contactMathChallengeText');
+            if (labelEl) {
+                const isEs = (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'es');
+                labelEl.innerText = isEs ? `¿Cuánto es ${CONTACT_MATH_N1} + ${CONTACT_MATH_N2}?` : `What is ${CONTACT_MATH_N1} + ${CONTACT_MATH_N2}?`;
+            }
+            const ansInput = document.getElementById('contactMathAnswerInput');
+            if (ansInput) ansInput.value = '';
+        }
+
         function openContactUsModal() {
             let modal = document.getElementById('contactUsModal');
             if (!modal) return;
@@ -2043,11 +2089,13 @@
             document.getElementById('contactEmailInput').value = '';
             if (document.getElementById('contactPhoneInput')) document.getElementById('contactPhoneInput').value = '';
             document.getElementById('contactMessageInput').value = '';
+            if (document.getElementById('contactWebsiteTrap')) document.getElementById('contactWebsiteTrap').value = '';
             document.getElementById('contactUsError').style.display = 'none';
             document.getElementById('contactUsSuccess').style.display = 'none';
+            generateContactMathChallenge();
             const btn = document.getElementById('btnContactUsSubmit');
             btn.disabled = false;
-            btn.innerHTML = 'Send Message ➔';
+            btn.innerHTML = (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'es') ? 'Enviar Mensaje ➔' : 'Send Message ➔';
         }
 
         function closeContactUsModal() {
@@ -2056,72 +2104,108 @@
         }
 
         async function submitContactUsForm() {
+            const honeypot = document.getElementById('contactWebsiteTrap') ? document.getElementById('contactWebsiteTrap').value.trim() : '';
             const name = document.getElementById('contactNameInput').value.trim();
             const email = document.getElementById('contactEmailInput').value.trim();
             const phone = document.getElementById('contactPhoneInput') ? document.getElementById('contactPhoneInput').value.trim() : '';
             const message = document.getElementById('contactMessageInput').value.trim();
+            const mathAnsVal = document.getElementById('contactMathAnswerInput') ? document.getElementById('contactMathAnswerInput').value.trim() : '';
             const errEl = document.getElementById('contactUsError');
             const successEl = document.getElementById('contactUsSuccess');
             const btn = document.getElementById('btnContactUsSubmit');
+            const isEs = (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'es');
 
             errEl.style.display = 'none';
             successEl.style.display = 'none';
 
+            // Technique A: Silent drop for automated bots that fill the invisible honeypot trap
+            if (honeypot) {
+                btn.disabled = true;
+                btn.innerHTML = isEs ? '⏳ Enviando...' : '⏳ Sending...';
+                setTimeout(() => {
+                    successEl.innerText = isEs ? 'Su mensaje ha sido enviado exitosamente. ¡Nos comunicaremos con usted pronto!' : 'Your message has been sent successfully. We will get back to you soon!';
+                    successEl.style.display = 'block';
+                    btn.innerHTML = isEs ? 'Enviado ✓' : 'Sent ✓';
+                    setTimeout(closeContactUsModal, 2000);
+                }, 600);
+                return;
+            }
+
             if (!name) {
-                errEl.innerText = 'Please enter your name.';
+                errEl.innerText = isEs ? 'Por favor ingrese su nombre.' : 'Please enter your name.';
                 errEl.style.display = 'block';
                 return;
             }
             if (!email) {
-                errEl.innerText = 'Please enter your email address.';
+                errEl.innerText = isEs ? 'Por favor ingrese su correo electrónico.' : 'Please enter your email address.';
                 errEl.style.display = 'block';
                 return;
             }
             // Basic email validation regex
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
-                errEl.innerText = 'Please enter a valid email address format.';
+                errEl.innerText = isEs ? 'Por favor ingrese un formato de correo válido.' : 'Please enter a valid email address format.';
                 errEl.style.display = 'block';
                 return;
             }
             if (!message) {
-                errEl.innerText = 'Please enter a message.';
+                errEl.innerText = isEs ? 'Por favor ingrese un mensaje.' : 'Please enter a message.';
                 errEl.style.display = 'block';
                 return;
             }
 
+            // Technique B: Validate Human Math challenge
+            const mathAnsNum = parseInt(mathAnsVal, 10);
+            if (isNaN(mathAnsNum) || mathAnsNum !== (CONTACT_MATH_N1 + CONTACT_MATH_N2)) {
+                errEl.innerText = isEs ? 'Verificación humana incorrecta. Por favor resuelva la suma matemática.' : 'Incorrect human verification. Please solve the math challenge.';
+                errEl.style.display = 'block';
+                generateContactMathChallenge();
+                return;
+            }
+
             btn.disabled = true;
-            btn.innerHTML = '⏳ Sending...';
+            btn.innerHTML = isEs ? '⏳ Enviando...' : '⏳ Sending...';
 
             try {
                 const res = await fetch('/api/contact-us', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, email: email, phone: phone, message: message })
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        phone: phone,
+                        message: message,
+                        honeypot: honeypot,
+                        math_num1: CONTACT_MATH_N1,
+                        math_num2: CONTACT_MATH_N2,
+                        math_answer: mathAnsNum
+                    })
                 });
                 
                 if (!res.ok) {
                     const data = await res.json();
-                    throw new Error(data.detail || 'Failed to send message.');
+                    throw new Error(data.detail || (isEs ? 'Error al enviar el mensaje.' : 'Failed to send message.'));
                 }
 
-                successEl.innerText = 'Your message has been sent successfully. We will get back to you soon!';
+                successEl.innerText = isEs ? 'Su mensaje ha sido enviado exitosamente. ¡Nos comunicaremos con usted pronto!' : 'Your message has been sent successfully. We will get back to you soon!';
                 successEl.style.display = 'block';
-                btn.innerHTML = 'Sent ✓';
+                btn.innerHTML = isEs ? 'Enviado ✓' : 'Sent ✓';
 
                 // Clear input fields
                 if (document.getElementById('contactNameInput')) document.getElementById('contactNameInput').value = '';
                 if (document.getElementById('contactEmailInput')) document.getElementById('contactEmailInput').value = '';
                 if (document.getElementById('contactPhoneInput')) document.getElementById('contactPhoneInput').value = '';
                 if (document.getElementById('contactMessageInput')) document.getElementById('contactMessageInput').value = '';
+                if (document.getElementById('contactMathAnswerInput')) document.getElementById('contactMathAnswerInput').value = '';
                 
                 // Hide modal after 3 seconds on success
                 setTimeout(closeContactUsModal, 3000);
             } catch (err) {
-                errEl.innerText = err.message || 'An error occurred while sending your message.';
+                errEl.innerText = err.message || (isEs ? 'Ocurrió un error al enviar el mensaje.' : 'An error occurred while sending your message.');
                 errEl.style.display = 'block';
                 btn.disabled = false;
-                btn.innerHTML = 'Send Message ➔';
+                btn.innerHTML = isEs ? 'Enviar Mensaje ➔' : 'Send Message ➔';
+                generateContactMathChallenge();
             }
         }
 

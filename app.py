@@ -17073,10 +17073,27 @@ class ContactUsRequest(BaseModel):
     email: str
     phone: str = ""
     message: str
+    honeypot: str = ""
+    math_num1: int | None = None
+    math_num2: int | None = None
+    math_answer: int | None = None
 
 @app.post("/api/contact-us")
 async def contact_us(req: ContactUsRequest):
     import re
+
+    # 0. Anti-Bot Protection (Honeypot silent-drop & Human Math Challenge verification)
+    if req.honeypot and req.honeypot.strip():
+        print(f"[BOT BLOCKED - HONEYPOT]: Automated bot filled honeypot trap '{req.honeypot}'. Dropped silently.")
+        return {"status": "success", "message": "Message received"}
+
+    if req.math_num1 is not None and req.math_num2 is not None:
+        expected_math = req.math_num1 + req.math_num2
+        if req.math_answer != expected_math:
+            raise HTTPException(status_code=400, detail="Human verification failed. Incorrect math challenge answer.")
+    else:
+        raise HTTPException(status_code=400, detail="Human verification required. Please solve the math verification.")
+
     if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", req.email):
         raise HTTPException(status_code=400, detail="Invalid email format")
     
