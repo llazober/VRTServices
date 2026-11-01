@@ -3917,6 +3917,41 @@ pause
 
 
 # ── Public Client Portal API Routes ─────────────────────────────────────────
+def generate_portal_upload_token(customer_id: int, email: str) -> str:
+    """Generates an HMAC-SHA256 signed portal session token for verified customer uploads."""
+    secret = (os.environ.get("SECRET_KEY") or os.environ.get("TAX_ID_ENCRYPTION_KEY") or "vrt_portal_secure_token_secret_2026").encode("utf-8")
+    ts = int(time.time())
+    clean_email = (email or "").strip().lower()
+    raw = f"{customer_id}:{ts}:{clean_email}".encode("utf-8")
+    sig = hmac.new(secret, raw, hashlib.sha256).hexdigest()
+    return f"{customer_id}.{ts}.{sig}"
+
+
+def verify_portal_upload_token(token: str, customer_id: int, email: str = "") -> bool:
+    """Verifies that an upload token is valid, properly signed, and not expired (24h validity)."""
+    try:
+        if not token or not isinstance(token, str):
+            return False
+        parts = token.strip().split(".")
+        if len(parts) != 3:
+            return False
+        t_cid, t_ts, t_sig = parts
+        if int(t_cid) != int(customer_id):
+            return False
+        ts_val = int(t_ts)
+        now_ts = time.time()
+        # Valid for 24 hours (86400s) with 5-minute clock drift margin
+        if now_ts - ts_val > 86400 or now_ts - ts_val < -300:
+            return False
+        secret = (os.environ.get("SECRET_KEY") or os.environ.get("TAX_ID_ENCRYPTION_KEY") or "vrt_portal_secure_token_secret_2026").encode("utf-8")
+        clean_email = (email or "").strip().lower()
+        raw = f"{customer_id}:{ts_val}:{clean_email}".encode("utf-8")
+        expected_sig = hmac.new(secret, raw, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected_sig, t_sig)
+    except Exception:
+        return False
+
+
 @app.api_route("/api/portal/verify-customer", methods=["GET", "POST"])
 async def portal_verify_customer(request: Request, customer_id: str = "", email: str = ""):
     cid_raw = customer_id.strip()
@@ -3978,14 +4013,17 @@ async def portal_verify_customer(request: Request, customer_id: str = "", email:
                     )
 
             ref_code = cust.get("custumer_number") or f"CUST-{cust['id']}"
+            cust_email = (cust.get("email") or "").strip().lower()
+            upload_token = generate_portal_upload_token(cust["id"], cust_email)
             return {
                 "status": "ok",
+                "upload_token": upload_token,
                 "customer": {
                     "id": cust["id"],
                     "legal_name": cust.get("legal_name") or f"Customer #{cust['id']}",
                     "custumer_number": cust.get("custumer_number") or ref_code,
                     "reference_code": ref_code,
-                    "email": cust.get("email") or "",
+                    "email": cust_email,
                     "parent_name": cust.get("parent_name") or "VRT Services"
                 }
             }
@@ -4135,7 +4173,9 @@ async def portal_upload_file(
     background_tasks: BackgroundTasks,
     customer_id: str = Form(...),
     file: UploadFile = File(...),
-    subfolder: str = Form("Inbox")
+    subfolder: str = Form("Inbox"),
+    upload_token: str = Form(None),
+    email: str = Form(None)
 ):
     cid_raw = customer_id.strip()
     if not cid_raw:
@@ -4163,6 +4203,61 @@ async def portal_upload_file(
             if not cust:
                 raise HTTPException(status_code=404, detail="Customer record not found.")
 
+        # ── Security & Authentication Verification ──
+        # 1. Staff / Admin session check
+        username = get_current_username(request)
+        is_authenticated = bool(username)
+
+        # 2. Signed portal token check
+        cust_email = (cust.get("email") or "").strip().lower()
+        if not is_authenticated and upload_token:
+            if verify_portal_upload_token(upload_token, cust["id"], cust_email):
+                is_authenticated = True
+
+        # 3. Verified email fallback check
+        if not is_authenticated and email:
+            clean_input_email = parse_clean_email(email).strip().lower()
+            if clean_input_email and cust_email and clean_input_email == cust_email:
+                is_authenticated = True
+
+        if not is_authenticated:
+            print(f"[SECURITY ALERT] Unauthorized unauthenticated upload attempt blocked for Customer ID: {cid_raw} (Subfolder: {subfolder})")
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication failed: Valid portal verification session or registered account email is required to upload files."
+            )
+
+        # ── Subfolder Sanitization & Whitelist ──
+        ALLOWED_SUBFOLDERS = {"Inbox", "Tax Documents", "Bookkeeping", "Payroll", "General"}
+        raw_folder = (subfolder or "Inbox").strip().strip("/\\")
+        # Neutralize any shell characters, command substitutions, or path traversals
+        if re.search(r'[\$\(\);|&`><\'"\\/\.\.]', raw_folder):
+            raw_folder = "Inbox"
+        if raw_folder not in ALLOWED_SUBFOLDERS:
+            raw_folder = "Inbox"
+        folder_name = raw_folder
+
+        # ── Filename Sanitization & Extension Restriction ──
+        raw_fname = os.path.basename(file.filename or "uploaded_file").strip()
+        # Remove shell injection characters and newline/carriage returns
+        clean_fname = re.sub(r'[\r\n\t\\/<>:"|?*$`\(\);&]', '_', raw_fname)
+        clean_fname = re.sub(r'_+', '_', clean_fname).strip("._")
+        if not clean_fname:
+            clean_fname = "document.pdf"
+
+        disallowed_exts = {
+            ".exe", ".bat", ".cmd", ".sh", ".bash", ".ps1", ".vbs", ".js", ".jar",
+            ".php", ".php3", ".php4", ".php5", ".phtml", ".py", ".pl", ".cgi",
+            ".asp", ".aspx", ".jsp", ".dll", ".so", ".bin", ".scr", ".msi"
+        }
+        file_ext = os.path.splitext(clean_fname)[1].lower()
+        if file_ext in disallowed_exts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Security rejection: Uploading files with extension '{file_ext}' is prohibited."
+            )
+        filename = clean_fname
+
         root_folder = get_customer_root_folder_path(cust)
         if not root_folder:
             parent = (cust.get("parent_name") or "VRT Services").strip()
@@ -4172,10 +4267,7 @@ async def portal_upload_file(
         if not root_folder.endswith('/'):
             root_folder += '/'
 
-        folder_name = (subfolder or "Inbox").strip().strip('/')
         target_prefix = f"{root_folder}{folder_name}/"
-
-        filename = os.path.basename(file.filename)
         file_key = f"{target_prefix}{filename}"
 
         client, err = get_s3_client()

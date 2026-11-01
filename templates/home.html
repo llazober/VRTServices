@@ -2143,6 +2143,7 @@
 
         // ── Client Portal Modal Logic ───────────────────────────────────────
         let PORTAL_CURRENT_CUSTOMER = null;
+        let PORTAL_UPLOAD_TOKEN = null;
         let PORTAL_SELECTED_FILES = [];
 
         window.openClientPortalModal = function() {
@@ -2188,6 +2189,7 @@
 
         window.resetClientPortalModal = function() {
             PORTAL_CURRENT_CUSTOMER = null;
+            PORTAL_UPLOAD_TOKEN = null;
             PORTAL_SELECTED_FILES = [];
             const cidEl = document.getElementById('portalCustomerIdInput');
             const emailEl = document.getElementById('portalEmailInput');
@@ -2250,6 +2252,7 @@
                 }
 
                 PORTAL_CURRENT_CUSTOMER = data.customer;
+                PORTAL_UPLOAD_TOKEN = data.upload_token || null;
                 showPortalStep2();
             } catch (err) {
                 errEl.innerText = err.message;
@@ -2375,6 +2378,10 @@
                 const file = PORTAL_SELECTED_FILES[i];
                 const formData = new FormData();
                 formData.append('customer_id', PORTAL_CURRENT_CUSTOMER.id);
+                formData.append('email', PORTAL_CURRENT_CUSTOMER.email || '');
+                if (typeof PORTAL_UPLOAD_TOKEN !== 'undefined' && PORTAL_UPLOAD_TOKEN) {
+                    formData.append('upload_token', PORTAL_UPLOAD_TOKEN);
+                }
                 formData.append('file', file);
                 formData.append('subfolder', 'Inbox');
 
