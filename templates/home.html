@@ -1119,19 +1119,6 @@
                 <button type="button" class="lang-btn active" id="btnLangEn" onclick="switchLanguage('en')">EN</button>
                 <button type="button" class="lang-btn" id="btnLangEs" onclick="switchLanguage('es')">ES</button>
             </div>
-
-            <a href="javascript:void(0)" onclick="openClientPortalModal()" class="btn-header-portal">
-                📂 <span data-i18n="nav_portal">Client Portal</span>
-            </a>
-            {% if username and username != 'user' %}
-                <a href="/dashboard" class="btn-header-login">
-                    <span data-i18n="nav_dashboard">Dashboard</span>
-                </a>
-            {% else %}
-                <a href="/login" class="btn-header-login">
-                    <span data-i18n="nav_login">Login</span>
-                </a>
-            {% endif %}
         </div>
     </header>
 
@@ -1152,11 +1139,8 @@
                 </p>
 
                 <div class="hero-buttons">
-                    <button type="button" onclick="openClientPortalModal()" class="btn-primary-portal">
-                        📂 <span data-i18n="hero_cta_portal">Access Client Portal</span>
-                    </button>
-                    <button type="button" onclick="openContactUsModal()" class="btn-secondary-action">
-                        📞 <span data-i18n="hero_cta_contact">Schedule Free Consultation !!!</span>
+                    <button type="button" onclick="openContactUsModal()" class="btn-primary-portal">
+                        📞 <span data-i18n="hero_cta_contact">Schedule Free Consultation</span>
                     </button>
                 </div>
 
@@ -1505,10 +1489,7 @@
                 </p>
             </div>
             <div class="cta-banner-actions">
-                <button type="button" onclick="openClientPortalModal()" class="btn-primary-portal">
-                    📂 <span data-i18n="cta_banner_btn_portal">Upload to Client Portal</span>
-                </button>
-                <button type="button" onclick="openContactUsModal()" class="btn-secondary-action">
+                <button type="button" onclick="openContactUsModal()" class="btn-primary-portal">
                     ✉️ <span data-i18n="cta_banner_btn_contact">Contact Our Advisors</span>
                 </button>
             </div>
@@ -1674,7 +1655,10 @@
                 <span class="footer-copy">© 2026 VRT Services. All Rights Reserved. Authorised IRS E-File Provider.</span>
             </div>
             <div class="footer-contacts">
-                <span><a href="javascript:void(0)" onclick="openContactUsModal()" style="color:#00f2fe; text-decoration:none; font-weight:700;" data-i18n="nav_contact">Contact Us</a></span>
+                <span><a href="javascript:void(0)" onclick="openClientPortalModal()" style="color: #64748b; text-decoration: none; font-size: 0.85rem; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#94a3b8'" onmouseout="this.style.color='#64748b'" data-i18n="nav_portal">📁 Client Portal</a></span>
+                <span style="color: #334155; margin: 0 4px;">•</span>
+                <span><a href="javascript:void(0)" onclick="openContactUsModal()" style="color:#00f2fe; text-decoration:none; font-weight:700; font-size: 0.85rem;" data-i18n="nav_contact">Contact Us</a></span>
+                <span style="color: #334155; margin: 0 4px;">•</span>
                 <span data-i18n="footer_hours">Hours: Mon – Fri, 8:00 AM – 6:00 PM EST</span>
             </div>
         </div>
