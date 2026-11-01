@@ -757,29 +757,10 @@ def get_tax_id_cipher():
     return _TAX_ID_CIPHER
 
 def encrypt_tax_id(val: str) -> str:
-    if not val or not str(val).strip():
-        return None
-    val = str(val).strip()
-    if val.startswith("gAAAAA"):
-        return val
-    try:
-        cipher = get_tax_id_cipher()
-        return cipher.encrypt(val.encode()).decode()
-    except Exception as e:
-        print(f"Error encrypting tax_id: {e}")
-        return val
+    return None
 
 def decrypt_tax_id(val: str) -> str:
-    if not val or not str(val).strip():
-        return None
-    val = str(val).strip()
-    if not val.startswith("gAAAAA"):
-        return val
-    try:
-        cipher = get_tax_id_cipher()
-        return cipher.decrypt(val.encode()).decode()
-    except Exception:
-        return val
+    return None
 
 def log_audit_event(
     username: str | None = None,
@@ -920,6 +901,7 @@ def init_customer_table():
                 );
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS parent_name VARCHAR(200);
                 ALTER TABLE customer ALTER COLUMN tax_id TYPE VARCHAR(255);
+                UPDATE customer SET tax_id = NULL WHERE tax_id IS NOT NULL;
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS billing_email VARCHAR(255);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_folder_path VARCHAR(300);
                 ALTER TABLE customer ADD COLUMN IF NOT EXISTS do_storage_status VARCHAR(50);
@@ -6893,8 +6875,7 @@ async def get_customers(request: Request, query: str = "", parentName: str = "",
                     row["created_at"] = str(row["created_at"])
                 if row.get("updated_at"):
                     row["updated_at"] = str(row["updated_at"])
-                if row.get("tax_id"):
-                    row["tax_id"] = decrypt_tax_id(row["tax_id"])
+                row["tax_id"] = None
                 row["tax_services_fee"] = float(row.get("tax_services_fee") or 0.0)
                 result.append(row)
             return {"customers": result}
@@ -6924,8 +6905,7 @@ async def get_single_customer_by_id(customer_id: int, request: Request):
                 row["created_at"] = str(row["created_at"])
             if row.get("updated_at"):
                 row["updated_at"] = str(row["updated_at"])
-            if row.get("tax_id"):
-                row["tax_id"] = decrypt_tax_id(row["tax_id"])
+            row["tax_id"] = None
             row["tax_services_fee"] = float(row.get("tax_services_fee") or 0.0)
             return {"customer": row}
     except HTTPException:
@@ -6948,8 +6928,7 @@ async def create_customer(request: Request):
     customer_type = (data.get("customer_type") or "Business").strip()
     legal_name = (data.get("legal_name") or "").strip()
     display_name = (data.get("display_name") or "").strip() or None
-    tax_id_raw = (data.get("tax_id") or "").strip() or None
-    tax_id = encrypt_tax_id(tax_id_raw) if tax_id_raw else None
+    tax_id = None
     status = (data.get("status") or "Active").strip()
     assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
@@ -7001,8 +6980,7 @@ async def create_customer(request: Request):
                 second_signer_id_type, second_signer_id_state, second_signer_id_expiration, second_signer_id_last4
             ))
             new_record = dict(cur.fetchone())
-            if new_record.get("tax_id"):
-                new_record["tax_id"] = decrypt_tax_id(new_record["tax_id"])
+            new_record["tax_id"] = None
             new_record["tax_services_fee"] = float(new_record.get("tax_services_fee") or 0.0)
 
             # Auto-create parent mapping for the new customer
@@ -9079,8 +9057,7 @@ async def update_customer(customer_id: str, request: Request):
     customer_type = (data.get("customer_type") or "Business").strip()
     legal_name = (data.get("legal_name") or "").strip()
     display_name = (data.get("display_name") or "").strip() or None
-    tax_id_raw = (data.get("tax_id") or "").strip() or None
-    tax_id = encrypt_tax_id(tax_id_raw) if tax_id_raw else None
+    tax_id = None
     status = (data.get("status") or "Active").strip()
     assigned_user_id = str(data.get("assigned_user_id") or "").strip() or None
     phone = (data.get("phone") or "").strip() or None
@@ -9155,8 +9132,7 @@ async def update_customer(customer_id: str, request: Request):
             updated_record = cur.fetchone()
             if not updated_record:
                 raise HTTPException(status_code=404, detail="Customer not found")
-            if updated_record.get("tax_id"):
-                updated_record["tax_id"] = decrypt_tax_id(updated_record["tax_id"])
+            updated_record["tax_id"] = None
 
             # Cascade Tax Prep assignment to all compliance calendar events for this customer
             try:

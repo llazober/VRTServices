@@ -2105,13 +2105,6 @@
                         <input type="text" id="customerPageFormDisplayName" placeholder="e.g. Acme Corp" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: var(--text-main);">
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Tax ID / EIN / SSN</label>
-                        <div style="position: relative; display: flex; align-items: center;">
-                            <input type="password" id="customerPageFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 36px 8px 12px; font-size: 0.88rem; color: var(--text-main);">
-                            <button type="button" onclick="toggleTaxIdVisibility('customerPageFormTaxId', this)" style="position: absolute; right: 8px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 2px 6px;" title="Show Tax ID">👁️</button>
-                        </div>
-                    </div>
-                    <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Assigned Tax Prep</label>
                         <select id="customerPageFormAssignedUserId" style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; color: var(--text-main);">
                             <option value="">-- Unassigned --</option>
@@ -4442,13 +4435,6 @@
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Display Name</label>
                     <input type="text" id="customerFormDisplayName" placeholder="e.g. Acme Corp" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: var(--text-main);">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Tax ID / EIN / SSN</label>
-                    <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="customerFormTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 34px 7px 10px; font-size: 0.85rem; color: var(--text-main);">
-                        <button type="button" onclick="toggleTaxIdVisibility('customerFormTaxId', this)" style="position: absolute; right: 6px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.95rem; padding: 2px 5px;" title="Show Tax ID">👁️</button>
-                    </div>
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Assigned Tax Prep</label>
@@ -10528,8 +10514,6 @@ function filterBillingTable(resetPages = true) {
                 setVal('customerFormSecondSignerPhone', '');
                 setVal('customerFormLegalName', '');
                 setVal('customerFormDisplayName', '');
-                setVal('customerFormTaxId', '');
-                resetTaxIdVisibility('customerFormTaxId');
                 setVal('customerFormAssignedUserId', '');
                 setVal('customerFormStatus', 'Active');
                 setVal('customerFormPhone', '');
@@ -10567,8 +10551,6 @@ function filterBillingTable(resetPages = true) {
                 setVal('customerPageFormSecondSignerPhone', '');
                 setVal('customerPageFormLegalName', '');
                 setVal('customerPageFormDisplayName', '');
-                setVal('customerPageFormTaxId', '');
-                resetTaxIdVisibility('customerPageFormTaxId');
                 setVal('customerPageFormAssignedUserId', '');
                 setVal('customerPageFormStatus', 'Active');
                 setVal('customerPageFormPhone', '');
@@ -10610,7 +10592,6 @@ function filterBillingTable(resetPages = true) {
                 second_signer_phone: getVal('SecondSignerPhone'),
                 legal_name: getVal('LegalName'),
                 display_name: getVal('DisplayName'),
-                tax_id: getVal('TaxId'),
                 assigned_user_id: getVal('AssignedUserId'),
                 status: getVal('Status'),
                 phone: getVal('Phone'),
@@ -10683,8 +10664,6 @@ function filterBillingTable(resetPages = true) {
             setVal('SecondSignerPhone', rec.second_signer_phone || '');
             setVal('LegalName', rec.legal_name || '');
             setVal('DisplayName', rec.display_name || '');
-            setVal('TaxId', rec.tax_id || '');
-            resetTaxIdVisibility('editCustModalTaxId');
             setVal('AssignedUserId', rec.assigned_user_id || '');
             setVal('Status', rec.status || 'Active');
             setVal('Phone', rec.phone || '');
@@ -10718,7 +10697,6 @@ function filterBillingTable(resetPages = true) {
                 second_signer_phone: getVal('SecondSignerPhone'),
                 legal_name: getVal('LegalName'),
                 display_name: getVal('DisplayName'),
-                tax_id: getVal('TaxId'),
                 assigned_user_id: getVal('AssignedUserId'),
                 status: getVal('Status') || 'Active',
                 phone: getVal('Phone'),
@@ -13730,13 +13708,6 @@ function filterBillingTable(resetPages = true) {
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Display Name</label>
                 <input type="text" id="editCustModalDisplayName" placeholder="e.g. Acme Corp" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; color: var(--text-main);">
-            </div>
-            <div>
-                <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Tax ID / EIN / SSN</label>
-                <div style="position: relative; display: flex; align-items: center;">
-                    <input type="password" id="editCustModalTaxId" placeholder="e.g. 12-3456789" style="width: 100%; background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 34px 7px 10px; font-size: 0.85rem; color: var(--text-main);">
-                    <button type="button" onclick="toggleTaxIdVisibility('editCustModalTaxId', this)" style="position: absolute; right: 6px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.95rem; padding: 2px 5px;" title="Show Tax ID">👁️</button>
-                </div>
             </div>
             <div>
                 <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Assigned Tax Prep</label>
