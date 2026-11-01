@@ -2601,7 +2601,8 @@
                     <button id="mgmtTabBtn-rag" onclick="switchMgmtTab('rag')" class="mgmt-tab-btn" style="padding: 10px 20px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-color); background: var(--subtle-bg); color: var(--text-muted); transition: all 0.2s ease;">
                         📚 Knowledge Base & RAG
                     </button>
-                    <button id="mgmtTabBtn-esign" onclick="switchMgmtTab('esign')" class="mgmt-tab-btn" style="padding: 10px 20px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-color); background: var(--subtle-bg); color: var(--text-muted); transition: all 0.2s ease;">
+                    <!-- E-Signatures (DocuSeal) tab button hidden as requested (preserved for future use) -->
+                    <button id="mgmtTabBtn-esign" onclick="switchMgmtTab('esign')" class="mgmt-tab-btn" style="display: none !important; padding: 10px 20px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 0.88rem; cursor: pointer; align-items: center; gap: 8px; border: 1px solid var(--border-color); background: var(--subtle-bg); color: var(--text-muted); transition: all 0.2s ease;">
                         ✍️ E-Signatures (DocuSeal)
                     </button>
                 </div>
@@ -5553,6 +5554,9 @@
                 const btn = document.getElementById(`mgmtTabBtn-${t}`);
                 const panel = document.getElementById(`mgmtPanel-${t}`);
                 if (btn) {
+                    if (t === 'esign') {
+                        btn.style.display = 'none';
+                    }
                     if (t === tabName) {
                         btn.classList.add('active');
                         btn.style.background = activeStyles[t].bg;
