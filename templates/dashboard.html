@@ -1234,12 +1234,13 @@
                                     <th style="padding: 16px 20px; font-weight: 700;">COMPANY / SERVICE</th>
                                     <th style="padding: 16px 20px; font-weight: 700;">MESSAGE / INTERNAL NOTES</th>
                                     <th style="padding: 16px 20px; font-weight: 700;">STATUS</th>
+                                    <th style="padding: 16px 20px; font-weight: 700;">DAYS IN STATUS</th>
                                     <th style="padding: 16px 20px; font-weight: 700; text-align: right;">ACTIONS</th>
                                 </tr>
                             </thead>
                             <tbody id="leadsTableBody">
                                 <tr>
-                                    <td colspan="5" style="padding: 40px; text-align: center; color: #64748b;">
+                                    <td colspan="6" style="padding: 40px; text-align: center; color: #64748b;">
                                         Loading lead pipeline...
                                     </td>
                                 </tr>
@@ -1364,6 +1365,7 @@
                                     <option value="LOST">Lost</option>
                                     <option value="PROCESSED">Processed</option>
                                 </select>
+                                <div id="edit_lead_status_info" style="font-size: 0.73rem; color: #38bdf8; margin-top: 5px;"></div>
                             </div>
                         </div>
 
@@ -1543,6 +1545,37 @@
                     }
                 }
 
+                function formatEasternDateTimeLead(dateInput) {
+                    if (!dateInput) return '';
+                    try {
+                        if (typeof formatEasternDateTime === 'function') {
+                            return formatEasternDateTime(dateInput);
+                        }
+                    } catch (_) {}
+                    try {
+                        let str = String(dateInput).trim();
+                        if (!str) return '';
+                        let d;
+                        if (str.includes('Z') || str.includes('+') || str.match(/-\d{2}:\d{2}$/)) {
+                            d = new Date(str);
+                        } else {
+                            d = new Date(str.replace(' ', 'T'));
+                        }
+                        if (isNaN(d.getTime())) return str;
+                        return d.toLocaleString('en-US', {
+                            timeZone: 'America/New_York',
+                            month: 'numeric',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                    } catch (err) {
+                        return String(dateInput);
+                    }
+                }
+
                 async function loadLeads() {
                     const tbody = document.getElementById('leadsTableBody');
                     if (!tbody) return;
@@ -1551,7 +1584,7 @@
                         const res = await fetch('/api/leads');
                         const data = await res.json();
                         if (!data.success) {
-                            tbody.innerHTML = '<tr><td colspan="5" style="padding: 32px; text-align: center; color: #f87171;">Failed to load leads: ' + (data.error || 'Server error') + '</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="6" style="padding: 32px; text-align: center; color: #f87171;">Failed to load leads: ' + (data.error || 'Server error') + '</td></tr>';
                             return;
                         }
 
@@ -1566,7 +1599,7 @@
                         }
 
                         if (currentLeads.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="5" style="padding: 40px; text-align: center; color: #64748b;">No leads found in pipeline. Click <strong>+ ADD LEAD</strong> to get started.</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="6" style="padding: 40px; text-align: center; color: #64748b;">No leads found in pipeline. Click <strong>+ ADD LEAD</strong> to get started.</td></tr>';
                             return;
                         }
 
@@ -1580,6 +1613,21 @@
 
                             const normStatus = (lead.status || 'IN_REVIEW').toUpperCase();
                             const statusColor = getLeadStatusColor(normStatus);
+
+                            // Calculate days in current status
+                            let daysCount = (lead.days_in_status !== undefined && lead.days_in_status !== null) ? parseInt(lead.days_in_status, 10) : null;
+                            if (isNaN(daysCount) || daysCount === null) {
+                                if (lead.status_changed_at) {
+                                    const changedDate = new Date(String(lead.status_changed_at).replace(' ', 'T'));
+                                    const now = new Date();
+                                    const diffMs = Math.max(0, now - changedDate);
+                                    daysCount = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                } else {
+                                    daysCount = 0;
+                                }
+                            }
+
+                            const statusDateDisplay = lead.status_changed_at ? formatEasternDateTimeLead(lead.status_changed_at) : (lead.created_at ? formatEasternDateTimeLead(lead.created_at) : 'Just now');
 
                             tr.innerHTML = `
                                 <td style="padding: 16px 20px;">
@@ -1615,6 +1663,14 @@
                                         <option value="PROCESSED" ${normStatus === 'PROCESSED' ? 'selected' : ''}>Processed</option>
                                     </select>
                                 </td>
+                                <td style="padding: 16px 20px; white-space: nowrap;">
+                                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; font-size: 0.82rem; font-weight: 800; background: ${daysCount === 0 ? 'rgba(56, 189, 248, 0.15)' : (daysCount >= 7 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)')}; color: ${daysCount === 0 ? '#38bdf8' : (daysCount >= 7 ? '#f87171' : '#fbbf24')}; border: 1px solid ${daysCount === 0 ? 'rgba(56, 189, 248, 0.35)' : (daysCount >= 7 ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.35)')};">
+                                        <span>⏱️</span> <span>${daysCount} ${daysCount === 1 ? 'day' : 'days'}</span>
+                                    </div>
+                                    <div style="color: #64748b; font-size: 0.73rem; margin-top: 5px; display: flex; align-items: center; gap: 4px;" title="Status last updated (US Eastern Time)">
+                                        <span>📅</span> <span>${statusDateDisplay}</span>
+                                    </div>
+                                </td>
                                 <td style="padding: 16px 20px; text-align: right;">
                                     <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
                                         <button type="button" onclick="openConvertClientModal(${lead.id})" title="Convert to Customer" style="background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(147,51,234,0.3)';" onmouseout="this.style.background='rgba(147,51,234,0.15)';">
@@ -1644,7 +1700,7 @@
                         });
                     } catch (e) {
                         console.error('Error in loadLeads:', e);
-                        tbody.innerHTML = '<tr><td colspan="5" style="padding: 32px; text-align: center; color: #f87171;">Connection error loading leads.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" style="padding: 32px; text-align: center; color: #f87171;">Connection error loading leads.</td></tr>';
                     }
                 }
 
@@ -1712,6 +1768,13 @@
                     document.getElementById('edit_lead_message').value = lead.message || '';
                     document.getElementById('edit_lead_notes').value = lead.notes || '';
                     document.getElementById('edit_lead_ai_proposal').value = lead.ai_proposal || '';
+
+                    const statusInfoEl = document.getElementById('edit_lead_status_info');
+                    if (statusInfoEl) {
+                        const dCount = (lead.days_in_status !== undefined && lead.days_in_status !== null) ? parseInt(lead.days_in_status, 10) : 0;
+                        const dtStr = lead.status_changed_at ? formatEasternDateTimeLead(lead.status_changed_at) : (lead.created_at ? formatEasternDateTimeLead(lead.created_at) : 'Just now');
+                        statusInfoEl.innerHTML = `⏱️ In status for <strong>${dCount} ${dCount === 1 ? 'day' : 'days'}</strong> (changed ${dtStr})`;
+                    }
 
                     document.getElementById('editLeadModal').style.display = 'flex';
                 }
@@ -1886,7 +1949,7 @@
                             body: JSON.stringify({ status: newStatus })
                         });
                         if (res.ok) {
-                            showLeadToast(`Status updated to ${newStatus}`);
+                            showLeadToast(`Status updated to ${newStatus} (tracker reset to 0 days)`);
                             loadLeads();
                         } else {
                             showLeadToast('Failed to update status', 'error');

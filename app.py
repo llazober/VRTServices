@@ -1615,9 +1615,12 @@ def init_leads_table():
                     message             TEXT,
                     notes               TEXT,
                     ai_proposal         TEXT,
+                    status_changed_at   TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                UPDATE leads SET status_changed_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE status_changed_at IS NULL;
             """)
             conn.commit()
     except Exception as e:
@@ -11939,7 +11942,15 @@ async def list_leads_endpoint(request: Request):
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                UPDATE leads SET status_changed_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE status_changed_at IS NULL;
+            """)
+            conn.commit()
+
+            cur.execute("""
                 SELECT id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                       to_char(status_changed_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as status_changed_at,
+                       GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(status_changed_at, created_at, CURRENT_TIMESTAMP))) / 86400))::int as days_in_status,
                        to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at,
                        to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at
                 FROM leads
@@ -11992,9 +12003,11 @@ async def create_lead_endpoint(request: Request):
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                INSERT INTO leads (name, email, phone, company, service, status, message, notes, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO leads (name, email, phone, company, service, status, message, notes, status_changed_at, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                          to_char(status_changed_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as status_changed_at,
+                          0 as days_in_status,
                           to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at;
             """, (name, email, phone, company, service, status, message, notes))
             new_lead = dict(cur.fetchone())
@@ -12048,6 +12061,8 @@ async def get_lead_endpoint(lead_id: str, request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                       to_char(status_changed_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as status_changed_at,
+                       GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(status_changed_at, created_at, CURRENT_TIMESTAMP))) / 86400))::int as days_in_status,
                        to_char(created_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as created_at,
                        to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at
                 FROM leads WHERE id = %s;
@@ -12075,6 +12090,15 @@ async def update_lead_endpoint(lead_id: str, request: Request):
     try:
         conn = get_db_connection("VRT")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT status FROM leads WHERE id = %s;", (int(lead_id),))
+            curr = cur.fetchone()
+            if not curr:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+            old_status = (curr.get("status") or "").strip().upper()
+            new_status = (body.get("status") or "").strip().upper() if body.get("status") is not None else None
+            status_is_changing = bool(new_status and new_status != old_status)
+
             cur.execute("""
                 UPDATE leads
                 SET name = COALESCE(%s, name),
@@ -12083,16 +12107,19 @@ async def update_lead_endpoint(lead_id: str, request: Request):
                     company = COALESCE(%s, company),
                     service = COALESCE(%s, service),
                     status = COALESCE(%s, status),
+                    status_changed_at = CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE status_changed_at END,
                     message = COALESCE(%s, message),
                     notes = COALESCE(%s, notes),
                     ai_proposal = COALESCE(%s, ai_proposal),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 RETURNING id, name, email, phone, company, service, status, message, notes, ai_proposal,
+                          to_char(status_changed_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as status_changed_at,
+                          GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(status_changed_at, CURRENT_TIMESTAMP))) / 86400))::int as days_in_status,
                           to_char(updated_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as updated_at;
             """, (
                 body.get("name"), body.get("email"), body.get("phone"), body.get("company"),
-                body.get("service"), body.get("status"), body.get("message"), body.get("notes"),
+                body.get("service"), body.get("status"), status_is_changing, body.get("message"), body.get("notes"),
                 body.get("aiProposal") or body.get("ai_proposal"), int(lead_id)
             ))
             updated = cur.fetchone()
@@ -12108,7 +12135,7 @@ async def update_lead_endpoint(lead_id: str, request: Request):
 
 @app.patch("/api/leads/{lead_id}/status")
 async def update_lead_status_endpoint(lead_id: str, request: Request):
-    """Updates only the lead status."""
+    """Updates only the lead status and resets status_changed_at timestamp to now."""
     username = get_current_username(request)
     if not username:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -12124,9 +12151,13 @@ async def update_lead_status_endpoint(lead_id: str, request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 UPDATE leads
-                SET status = %s, updated_at = CURRENT_TIMESTAMP
+                SET status = %s,
+                    status_changed_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
-                RETURNING id, name, email, status;
+                RETURNING id, name, email, status,
+                          to_char(status_changed_at AT TIME ZONE 'America/New_York', 'YYYY-MM-DD HH24:MI:SS') as status_changed_at,
+                          0 as days_in_status;
             """, (new_status, int(lead_id)))
             updated = cur.fetchone()
             conn.commit()
@@ -12454,6 +12485,7 @@ async def send_lead_custom_email_endpoint(lead_id: str, request: Request):
             cur.execute("""
                 UPDATE leads
                 SET status = CASE WHEN status = 'IN_REVIEW' THEN 'CONTACTED' ELSE status END,
+                    status_changed_at = CASE WHEN status = 'IN_REVIEW' THEN CURRENT_TIMESTAMP ELSE status_changed_at END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s;
             """, (clean_id,))
@@ -12520,7 +12552,7 @@ async def send_lead_proposal_endpoint(lead_id: str, request: Request):
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE leads
-                SET status = 'PROCESSED', ai_proposal = %s, updated_at = CURRENT_TIMESTAMP
+                SET status = 'PROCESSED', status_changed_at = CURRENT_TIMESTAMP, ai_proposal = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s;
             """, (content, int(lead_id)))
             conn.commit()
@@ -12579,7 +12611,7 @@ async def send_discovery_link_endpoint(lead_id: str, request: Request):
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE leads
-                SET status = 'CONTACTED', updated_at = CURRENT_TIMESTAMP
+                SET status = 'CONTACTED', status_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s;
             """, (int(lead_id),))
             conn.commit()
@@ -12655,7 +12687,7 @@ async def convert_lead_to_client_endpoint(request: Request):
                     clean_lead_id = int(str(lead_id).strip())
                     cur.execute("""
                         UPDATE leads
-                        SET status = 'WON', updated_at = CURRENT_TIMESTAMP
+                        SET status = 'WON', status_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                         WHERE id = %s;
                     """, (clean_lead_id,))
                 except (ValueError, TypeError):
